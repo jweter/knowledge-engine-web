@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Knowledge Engine -- {{ claim.evidence_record_id }}</title>
+  </head>
+  <body>
+    <h1>{{ claim.evidence_record_id }}</h1>
+    <p><a href="/claims">Back to claims</a> | <a href="/graph">Graph summary</a></p>
+    <p>
+      This page displays stored graph rows only -- nothing here is
+      inferred or synthesized.
+    </p>
+
+    <h2>Concepts</h2>
+    {% if claim.concepts %}
+    <ul>
+      {% for concept in claim.concepts %}
+      <li>
+        <strong>{{ concept.edge_role }}</strong>: {{ concept.label }}
+        ({{ concept.source }}{% if concept.source_reference_id %}, {{ concept.source_reference_id }}{% endif %})
+        {% if concept.definition %}<br />{{ concept.definition }}{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No concepts are linked to this claim.</p>
+    {% endif %}
+
+    <h2>Relationships</h2>
+    {% if claim.relationships %}
+    <ul>
+      {% for relationship in claim.relationships %}
+      <li>
+        <strong>{{ relationship.relationship_type }}</strong> ({{ relationship.direction }}) --
+        <a href="/claims/{{ relationship.other_evidence_record_id }}">{{ relationship.other_evidence_record_id }}</a><br />
+        {{ relationship.rationale }}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No relationship edges are linked to this claim.</p>
+    {% endif %}
+  </body>
+</html>
