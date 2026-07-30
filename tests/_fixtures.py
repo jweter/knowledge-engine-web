@@ -29,12 +29,14 @@ def create_graph_tables(engine: Engine, *, include_citations: bool = True) -> Me
         Column("label", Text, nullable=False),
         Column("source", String(16), nullable=False),
         Column("source_reference_id", String(64)),
+        Column("definition", Text),
     )
     Table(
         "graph_claims",
         metadata,
         Column("id", Integer, primary_key=True),
         Column("evidence_record_id", String(128), nullable=False),
+        Column("created_at", String(32), nullable=False, default="2026-01-01T00:00:00Z"),
     )
     Table(
         "graph_claim_concepts",
@@ -52,6 +54,7 @@ def create_graph_tables(engine: Engine, *, include_citations: bool = True) -> Me
         Column("source_claim_id", Integer, nullable=False),
         Column("target_claim_id", Integer, nullable=False),
         Column("relationship_type", String(16), nullable=False),
+        Column("rationale", Text, nullable=False, default=""),
     )
     if include_citations:
         Table(

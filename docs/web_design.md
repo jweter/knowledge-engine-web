@@ -75,7 +75,12 @@ written specifically so a consumer does not have to reverse-engineer
   graph-relationship-candidates`, `ke graph-unconfirmed-claims` all have
   page-shaped equivalents worth building) -- not attempted in this first
   milestone, which exists to prove the read-only database-access pattern
-  end to end on the simplest possible page first.
+  end to end on the simplest possible page first. **Claim listing and
+  detail were built next**, immediately after this milestone proved the
+  pattern: `GET /claims` and `GET /claims/{evidence_record_id}`, reusing
+  `_reflect_graph_tables` and the same "missing table means empty, not
+  an error" posture. Paper/citation detail, relationship-candidate, and
+  unconfirmed-claims pages remain real next slices.
 - **`EvidenceRecord`/`RelationshipRecord` rendering.** These are JSONL
   files, not SQL rows, and `core` does not publish a single canonical
   path to one -- a real, separate design question (does this project

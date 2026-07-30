@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Knowledge Engine -- Claims</title>
+  </head>
+  <body>
+    <h1>Claims</h1>
+    <p><a href="/graph">Back to graph summary</a></p>
+
+    {% if claims %}
+    <ul>
+      {% for claim in claims %}
+      <li><a href="/claims/{{ claim.evidence_record_id }}">{{ claim.evidence_record_id }}</a></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No claims in the graph yet.</p>
+    {% endif %}
+  </body>
+</html>

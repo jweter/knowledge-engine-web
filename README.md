@@ -76,10 +76,12 @@ This project reads, but never writes, two kinds of `core` data:
 ## Roadmap
 
 - `GET /graph` -- corpus-wide graph summary (done).
-- Claim detail, paper/citation detail, relationship-candidate, and
-  unconfirmed-claims pages -- real next slices, each with a `core` CLI
-  equivalent already built (`ke graph-report`, `ke
-  graph-relationship-candidates`, `ke graph-unconfirmed-claims`).
+- `GET /claims` / `GET /claims/{evidence_record_id}` -- claim listing and
+  detail: concepts by PICO role, relationship edges (done).
+- Paper/citation detail, relationship-candidate, and unconfirmed-claims
+  pages -- real next slices, each with a `core` CLI equivalent already
+  built (`ke graph-report --paper-id`, `ke graph-relationship-candidates`,
+  `ke graph-unconfirmed-claims`).
 - Evidence Record rendering -- needs its own design pass first (see
   `docs/web_design.md`'s Out of Scope).
 

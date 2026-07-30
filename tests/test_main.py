@@ -71,3 +71,89 @@ def test_graph_page_escapes_a_malicious_concept_source(
     assert response.status_code == 200
     assert "<script>" not in response.text
     assert "&lt;script&gt;" in response.text
+
+
+def test_claims_list_page_renders_no_claims(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/claims")
+
+    assert response.status_code == 200
+    assert "No claims in the graph yet." in response.text
+
+
+def test_claims_list_page_links_to_each_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/claims")
+
+    assert response.status_code == 200
+    assert '<a href="/claims/ev-1">ev-1</a>' in response.text
+
+
+def test_claim_detail_page_renders_concepts_and_relationships(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [{"id": 1, "label": "Semaglutide", "source": "rxnorm"}],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-1"},
+                {"id": 2, "evidence_record_id": "ev-2"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_concepts"]),
+            [{"id": 1, "claim_id": 1, "concept_id": 1, "edge_role": "intervention"}],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 1,
+                    "target_claim_id": 2,
+                    "relationship_type": "supports",
+                    "rationale": "Both report the same direction.",
+                }
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/claims/ev-1")
+
+    assert response.status_code == 200
+    assert "intervention" in response.text
+    assert "Semaglutide" in response.text
+    assert "supports" in response.text
+    assert "ev-2" in response.text
+
+
+def test_claim_detail_page_404s_for_an_unknown_evidence_record_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    create_graph_tables(engine)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/claims/ev-does-not-exist")
+
+    assert response.status_code == 404
