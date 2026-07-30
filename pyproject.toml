@@ -1,0 +1,49 @@
+[tool.poetry]
+name = "knowledge-engine-web"
+version = "0.1.0a1"
+description = "Read-only web interface for the Knowledge Engine: renders core's validated evidence and knowledge graph for a person."
+authors = ["Knowledge Engine Contributors"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "knowledge_engine_web" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.121.0"
+jinja2 = "^3.1.4"
+uvicorn = "^0.34.0"
+pydantic-settings = "^2.3.0"
+sqlalchemy = "^2.0.31"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^2.1.0"
+pytest = "^9.1.1"
+ruff = "0.15.20"
+httpx = "^0.28.0"
+
+[tool.poetry.scripts]
+knowledge-engine-web = "knowledge_engine_web.main:run"
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
