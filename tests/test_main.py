@@ -157,3 +157,52 @@ def test_claim_detail_page_404s_for_an_unknown_evidence_record_id(
     response = TestClient(app).get("/claims/ev-does-not-exist")
 
     assert response.status_code == 404
+
+
+def test_unconfirmed_claims_page_excludes_a_claim_with_a_relationship_edge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-confirmed-source"},
+                {"id": 2, "evidence_record_id": "ev-confirmed-target"},
+                {"id": 3, "evidence_record_id": "ev-unconfirmed"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 1,
+                    "target_claim_id": 2,
+                    "relationship_type": "supports",
+                    "rationale": "Both report the same direction.",
+                }
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/unconfirmed-claims")
+
+    assert response.status_code == 200
+    assert "ev-unconfirmed" in response.text
+    assert "ev-confirmed-source" not in response.text
+    assert "ev-confirmed-target" not in response.text
+
+
+def test_unconfirmed_claims_page_renders_when_every_claim_is_confirmed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/unconfirmed-claims")
+
+    assert response.status_code == 200
+    assert "Every claim in the graph has at least one relationship edge." in response.text

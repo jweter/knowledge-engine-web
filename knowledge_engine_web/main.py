@@ -16,7 +16,12 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine, create_engine
 
 from knowledge_engine_web.config import Settings
-from knowledge_engine_web.graph_reader import list_claims, read_claim_detail, read_graph_summary
+from knowledge_engine_web.graph_reader import (
+    list_claims,
+    list_unconfirmed_claims,
+    read_claim_detail,
+    read_graph_summary,
+)
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -46,7 +51,42 @@ def claims_list(request: Request) -> HTMLResponse:
 
     claims = list_claims(_engine())
     return templates.TemplateResponse(
-        request=request, name="claims_list.html", context={"claims": claims}
+        request=request,
+        name="claims_list.html",
+        context={
+            "claims": claims,
+            "heading": "Claims",
+            "description": None,
+            "empty_message": "No claims in the graph yet.",
+        },
+    )
+
+
+@app.get("/unconfirmed-claims", response_class=HTMLResponse)
+def unconfirmed_claims(request: Request) -> HTMLResponse:
+    """Render every claim with zero relationship edges of any type.
+
+    Mirrors `ke graph-unconfirmed-claims` -- the only "gap" this project
+    can honestly surface without guessing. A claim listed here has no
+    `supports`/`contradicts`/`qualifies`/`contextualizes`/`supersedes`
+    edge yet, meaning no second claim has been reviewed and explicitly
+    related to it. Not a judgment about the underlying science.
+    """
+
+    claims = list_unconfirmed_claims(_engine())
+    return templates.TemplateResponse(
+        request=request,
+        name="claims_list.html",
+        context={
+            "claims": claims,
+            "heading": "Unconfirmed Claims",
+            "description": (
+                "A claim listed here has no relationship edge yet -- meaning no "
+                "second claim has been reviewed and explicitly related to it, "
+                "nothing more. Not a judgment about the underlying science."
+            ),
+            "empty_message": "Every claim in the graph has at least one relationship edge.",
+        },
     )
 
 

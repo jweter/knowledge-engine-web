@@ -5,6 +5,7 @@ from sqlalchemy import insert
 from knowledge_engine_web.graph_reader import (
     GraphSummary,
     list_claims,
+    list_unconfirmed_claims,
     read_claim_detail,
     read_graph_summary,
 )
@@ -194,3 +195,44 @@ def test_read_claim_detail_groups_concepts_and_relationships(tmp_path: Path) -> 
     assert len(other_detail.relationships) == 1
     assert other_detail.relationships[0].direction == "target"
     assert other_detail.relationships[0].other_evidence_record_id == "ev-1"
+
+
+def test_list_unconfirmed_claims_excludes_claims_with_a_relationship_edge(
+    tmp_path: Path,
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-confirmed-source"},
+                {"id": 2, "evidence_record_id": "ev-confirmed-target"},
+                {"id": 3, "evidence_record_id": "ev-unconfirmed"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 1,
+                    "target_claim_id": 2,
+                    "relationship_type": "supports",
+                    "rationale": "Both report the same direction.",
+                }
+            ],
+        )
+
+    claims = list_unconfirmed_claims(engine)
+
+    assert [claim.evidence_record_id for claim in claims] == ["ev-unconfirmed"]
+
+
+def test_list_unconfirmed_claims_on_a_database_with_no_graph_tables_yet(
+    tmp_path: Path,
+) -> None:
+    engine = build_engine(tmp_path)
+
+    assert list_unconfirmed_claims(engine) == []

@@ -141,6 +141,42 @@ def list_claims(engine: Engine) -> list[ClaimListItem]:
     ]
 
 
+def list_unconfirmed_claims(engine: Engine) -> list[ClaimListItem]:
+    """Return every claim with zero relationship edges of any type, ordered by ID.
+
+    Mirrors `ke graph-unconfirmed-claims`: the only "gap" this project can
+    honestly surface without guessing -- a real structural fact the graph
+    already stores, not a judgment about the underlying science. See
+    `docs/stability_and_tracking_design.md` in `knowledge-engine-core`.
+    """
+
+    tables = _reflect_graph_tables(engine)
+    claims = tables.get("graph_claims")
+    relationships = tables.get("graph_claim_relationships")
+    if claims is None:
+        return []
+    if relationships is None:
+        return list_claims(engine)
+
+    with engine.connect() as connection:
+        confirmed_ids = set(
+            connection.execute(select(relationships.c.source_claim_id)).scalars()
+        ) | set(connection.execute(select(relationships.c.target_claim_id)).scalars())
+
+        rows = connection.execute(
+            select(claims.c.id, claims.c.evidence_record_id, claims.c.created_at).order_by(
+                claims.c.id
+            )
+        ).all()
+    return [
+        ClaimListItem(
+            id=row.id, evidence_record_id=row.evidence_record_id, created_at=row.created_at
+        )
+        for row in rows
+        if row.id not in confirmed_ids
+    ]
+
+
 def read_claim_detail(engine: Engine, evidence_record_id: str) -> ClaimDetail | None:
     """Return one claim's concepts (by PICO role) and relationship edges, or `None` if not found.
 
