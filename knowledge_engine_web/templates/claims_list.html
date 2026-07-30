@@ -2,11 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Knowledge Engine -- Claims</title>
+    <title>Knowledge Engine -- {{ heading }}</title>
   </head>
   <body>
-    <h1>Claims</h1>
-    <p><a href="/graph">Back to graph summary</a></p>
+    <h1>{{ heading }}</h1>
+    <p><a href="/claims">All claims</a> | <a href="/graph">Graph summary</a></p>
+    {% if description %}<p>{{ description }}</p>{% endif %}
 
     {% if claims %}
     <ul>
@@ -15,7 +16,7 @@
       {% endfor %}
     </ul>
     {% else %}
-    <p>No claims in the graph yet.</p>
+    <p>{{ empty_message }}</p>
     {% endif %}
   </body>
 </html>
