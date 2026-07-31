@@ -82,8 +82,9 @@ This project reads, but never writes, two kinds of `core` data:
   any type (done).
 - `GET /relationship-candidates` -- claim pairs sharing a PICO-resolved
   concept, for a human to review (done).
-- Paper/citation detail page -- real next slice, with a `core` CLI
-  equivalent already built (`ke graph-report --paper-id`).
+- `GET /papers/{paper_id}` -- one paper's citation edges, as citer and
+  as cited (done). This completes every page named in this roadmap's
+  original list.
 - Evidence Record rendering -- needs its own design pass first (see
   `docs/web_design.md`'s Out of Scope).
 

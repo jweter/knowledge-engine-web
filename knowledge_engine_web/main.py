@@ -22,6 +22,7 @@ from knowledge_engine_web.graph_reader import (
     list_unconfirmed_claims,
     read_claim_detail,
     read_graph_summary,
+    read_paper_detail,
 )
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -117,6 +118,18 @@ def claim_detail(request: Request, evidence_record_id: str) -> HTMLResponse:
         raise HTTPException(status_code=404, detail="No claim found for that evidence record ID.")
     return templates.TemplateResponse(
         request=request, name="claim_detail.html", context={"claim": detail}
+    )
+
+
+@app.get("/papers/{paper_id}", response_class=HTMLResponse)
+def paper_detail(request: Request, paper_id: int) -> HTMLResponse:
+    """Render one paper's citation edges, as citer and as cited."""
+
+    detail = read_paper_detail(_engine(), paper_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="No paper found with that database ID.")
+    return templates.TemplateResponse(
+        request=request, name="paper_detail.html", context={"paper": detail}
     )
 
 

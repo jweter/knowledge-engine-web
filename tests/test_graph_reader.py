@@ -9,8 +9,9 @@ from knowledge_engine_web.graph_reader import (
     list_unconfirmed_claims,
     read_claim_detail,
     read_graph_summary,
+    read_paper_detail,
 )
-from tests._fixtures import build_engine, create_graph_tables
+from tests._fixtures import build_engine, create_graph_tables, create_papers_table
 
 
 def test_read_graph_summary_on_a_database_with_no_graph_tables_yet(tmp_path: Path) -> None:
@@ -321,3 +322,54 @@ def test_list_relationship_candidates_on_a_database_with_no_graph_tables_yet(
     engine = build_engine(tmp_path)
 
     assert list_relationship_candidates(engine) == []
+
+
+def test_read_paper_detail_returns_none_when_papers_table_is_missing(tmp_path: Path) -> None:
+    engine = build_engine(tmp_path)
+
+    assert read_paper_detail(engine, 1) is None
+
+
+def test_read_paper_detail_returns_none_for_an_unknown_paper_id(tmp_path: Path) -> None:
+    engine = build_engine(tmp_path)
+    create_papers_table(engine)
+
+    assert read_paper_detail(engine, 999) is None
+
+
+def test_read_paper_detail_shows_citation_edges_from_both_sides(tmp_path: Path) -> None:
+    engine = build_engine(tmp_path)
+    papers_metadata = create_papers_table(engine)
+    graph_metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(papers_metadata.tables["papers"]),
+            [
+                {"id": 1, "title": "Citing Paper", "doi": "10.1/a"},
+                {"id": 2, "title": "Cited Paper", "doi": "10.1/b"},
+            ],
+        )
+        connection.execute(
+            insert(graph_metadata.tables["graph_citations"]),
+            [
+                {
+                    "id": 1,
+                    "citing_paper_id": 1,
+                    "cited_paper_id": 2,
+                    "raw_citation_text": "1. Cited Paper. doi: 10.1/b",
+                }
+            ],
+        )
+
+    citing_detail = read_paper_detail(engine, 1)
+    assert citing_detail is not None
+    assert citing_detail.title == "Citing Paper"
+    assert len(citing_detail.cites) == 1
+    assert citing_detail.cites[0].title == "Cited Paper"
+    assert not citing_detail.cited_by
+
+    cited_detail = read_paper_detail(engine, 2)
+    assert cited_detail is not None
+    assert len(cited_detail.cited_by) == 1
+    assert cited_detail.cited_by[0].title == "Citing Paper"
+    assert not cited_detail.cites
