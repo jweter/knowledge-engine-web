@@ -63,6 +63,22 @@ def create_graph_tables(engine: Engine, *, include_citations: bool = True) -> Me
             Column("id", Integer, primary_key=True),
             Column("citing_paper_id", Integer, nullable=False),
             Column("cited_paper_id", Integer, nullable=False),
+            Column("raw_citation_text", Text, nullable=False, default=""),
         )
+    metadata.create_all(engine)
+    return metadata
+
+
+def create_papers_table(engine: Engine) -> MetaData:
+    """Create a `papers` table matching `core`'s real, minimal column names."""
+
+    metadata = MetaData()
+    Table(
+        "papers",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("title", String(1024), nullable=False),
+        Column("doi", String(256)),
+    )
     metadata.create_all(engine)
     return metadata

@@ -69,6 +69,27 @@ class RelationshipCandidate:
 
 
 @dataclass(frozen=True)
+class PaperCitationEdge:
+    """One citation edge and the paper on its other side."""
+
+    paper_id: int
+    title: str
+    doi: str | None
+    raw_citation_text: str
+
+
+@dataclass(frozen=True)
+class PaperDetail:
+    """The same detail `ke graph-report --paper-id` prints."""
+
+    id: int
+    title: str
+    doi: str | None
+    cites: list[PaperCitationEdge] = field(default_factory=list)
+    cited_by: list[PaperCitationEdge] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ClaimDetail:
     """The same detail `ke graph-report --evidence-record-id` prints."""
 
@@ -291,6 +312,69 @@ def _read_relationship_edges(
 
     edges.sort(key=lambda item: item[0])
     return [edge for _relationship_id, edge in edges]
+
+
+def read_paper_detail(engine: Engine, paper_id: int) -> PaperDetail | None:
+    """Return one paper's citation edges, as citer and as cited, or `None` if not found.
+
+    Mirrors `ke graph-report --paper-id`'s content exactly. `papers` is
+    reflected separately from `_GRAPH_TABLE_NAMES` -- it predates Phase 4
+    and is not itself a graph table, but citation edges reference it.
+    """
+
+    existing_table_names = set(inspect(engine).get_table_names())
+    if "papers" not in existing_table_names:
+        return None
+
+    metadata = MetaData()
+    papers = Table("papers", metadata, autoload_with=engine)
+
+    with engine.connect() as connection:
+        paper_row = connection.execute(
+            select(papers.c.id, papers.c.title, papers.c.doi).where(papers.c.id == paper_id)
+        ).first()
+        if paper_row is None:
+            return None
+
+        cites: list[PaperCitationEdge] = []
+        cited_by: list[PaperCitationEdge] = []
+        if "graph_citations" in existing_table_names:
+            citations = Table("graph_citations", metadata, autoload_with=engine)
+            for direction, own_column, other_column in (
+                ("cites", citations.c.citing_paper_id, citations.c.cited_paper_id),
+                ("cited_by", citations.c.cited_paper_id, citations.c.citing_paper_id),
+            ):
+                rows = connection.execute(
+                    select(
+                        papers.c.id,
+                        papers.c.title,
+                        papers.c.doi,
+                        citations.c.raw_citation_text,
+                    )
+                    .select_from(citations.join(papers, papers.c.id == other_column))
+                    .where(own_column == paper_id)
+                ).all()
+                edges = [
+                    PaperCitationEdge(
+                        paper_id=row.id,
+                        title=row.title,
+                        doi=row.doi,
+                        raw_citation_text=row.raw_citation_text,
+                    )
+                    for row in rows
+                ]
+                if direction == "cites":
+                    cites = edges
+                else:
+                    cited_by = edges
+
+        return PaperDetail(
+            id=paper_row.id,
+            title=paper_row.title,
+            doi=paper_row.doi,
+            cites=cites,
+            cited_by=cited_by,
+        )
 
 
 def list_relationship_candidates(

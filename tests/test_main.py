@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import insert
 
 from knowledge_engine_web.main import app
-from tests._fixtures import build_engine, create_graph_tables
+from tests._fixtures import build_engine, create_graph_tables, create_papers_table
 
 
 def _database_url(tmp_path: Path, name: str = "fixture") -> str:
@@ -252,3 +252,49 @@ def test_relationship_candidates_page_renders_no_candidates(
 
     assert response.status_code == 200
     assert "No claim pairs share a concept" in response.text
+
+
+def test_paper_detail_page_renders_citation_edges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    papers_metadata = create_papers_table(engine)
+    graph_metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(papers_metadata.tables["papers"]),
+            [
+                {"id": 1, "title": "Citing Paper", "doi": "10.1/a"},
+                {"id": 2, "title": "Cited Paper", "doi": "10.1/b"},
+            ],
+        )
+        connection.execute(
+            insert(graph_metadata.tables["graph_citations"]),
+            [
+                {
+                    "id": 1,
+                    "citing_paper_id": 1,
+                    "cited_paper_id": 2,
+                    "raw_citation_text": "1. Cited Paper. doi: 10.1/b",
+                }
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/papers/1")
+
+    assert response.status_code == 200
+    assert "Cites (1)" in response.text
+    assert "Cited Paper" in response.text
+
+
+def test_paper_detail_page_404s_for_an_unknown_paper_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    create_papers_table(engine)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/papers/999")
+
+    assert response.status_code == 404
