@@ -18,6 +18,7 @@ from sqlalchemy import Engine, create_engine
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.graph_reader import (
     list_claims,
+    list_relationship_candidates,
     list_unconfirmed_claims,
     read_claim_detail,
     read_graph_summary,
@@ -87,6 +88,23 @@ def unconfirmed_claims(request: Request) -> HTMLResponse:
             ),
             "empty_message": "Every claim in the graph has at least one relationship edge.",
         },
+    )
+
+
+@app.get("/relationship-candidates", response_class=HTMLResponse)
+def relationship_candidates(request: Request) -> HTMLResponse:
+    """Render claim pairs sharing a PICO-resolved concept, for a human to review.
+
+    Mirrors `ke graph-relationship-candidates`. Structural overlap only:
+    never infers, detects, or suggests a relationship type or rationale
+    -- that judgment call stays entirely with the human.
+    """
+
+    candidates = list_relationship_candidates(_engine())
+    return templates.TemplateResponse(
+        request=request,
+        name="relationship_candidates.html",
+        context={"candidates": candidates},
     )
 
 

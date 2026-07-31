@@ -9,7 +9,9 @@ out of sync silently.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
+from itertools import combinations
 
 from sqlalchemy import Engine, MetaData, Table, func, inspect, select
 from sqlalchemy.engine import Connection
@@ -55,6 +57,15 @@ class RelationshipEdge:
     direction: str
     rationale: str
     other_evidence_record_id: str
+
+
+@dataclass(frozen=True)
+class RelationshipCandidate:
+    """One claim pair sharing at least one PICO-resolved concept, with no relationship edge yet."""
+
+    claim_a_evidence_record_id: str
+    claim_b_evidence_record_id: str
+    shared_concept_labels: list[str]
 
 
 @dataclass(frozen=True)
@@ -280,6 +291,76 @@ def _read_relationship_edges(
 
     edges.sort(key=lambda item: item[0])
     return [edge for _relationship_id, edge in edges]
+
+
+def list_relationship_candidates(
+    engine: Engine, *, minimum_shared_concepts: int = 1
+) -> list[RelationshipCandidate]:
+    """Return claim pairs sharing at least `minimum_shared_concepts` concepts.
+
+    Mirrors `ke graph-relationship-candidates` / `core`'s
+    `GraphRepository.relationship_candidates` exactly: structural overlap
+    only -- never a relationship type or rationale. A pair already linked
+    by an existing relationship edge, in either direction, is excluded,
+    since a human has already made that call for it. See
+    `docs/m49_graph_relationship_candidates.md` in `knowledge-engine-core`.
+    """
+
+    tables = _reflect_graph_tables(engine)
+    claims = tables.get("graph_claims")
+    claim_concepts = tables.get("graph_claim_concepts")
+    concepts = tables.get("graph_concepts")
+    if claims is None or claim_concepts is None or concepts is None:
+        return []
+
+    with engine.connect() as connection:
+        claims_by_concept: dict[int, set[int]] = defaultdict(set)
+        for concept_id, claim_id in connection.execute(
+            select(claim_concepts.c.concept_id, claim_concepts.c.claim_id).distinct()
+        ):
+            claims_by_concept[concept_id].add(claim_id)
+
+        shared_concepts_by_pair: dict[tuple[int, int], set[int]] = defaultdict(set)
+        for concept_id, claim_ids in claims_by_concept.items():
+            for claim_a_id, claim_b_id in combinations(sorted(claim_ids), 2):
+                shared_concepts_by_pair[(claim_a_id, claim_b_id)].add(concept_id)
+
+        existing_edges: set[frozenset[int]] = set()
+        if (relationships := tables.get("graph_claim_relationships")) is not None:
+            existing_edges = {
+                frozenset((source_id, target_id))
+                for source_id, target_id in connection.execute(
+                    select(relationships.c.source_claim_id, relationships.c.target_claim_id)
+                )
+            }
+
+        evidence_ids_by_claim_id: dict[int, str] = {
+            row.id: row.evidence_record_id
+            for row in connection.execute(select(claims.c.id, claims.c.evidence_record_id))
+        }
+        labels_by_concept_id: dict[int, str] = {
+            row.id: row.label for row in connection.execute(select(concepts.c.id, concepts.c.label))
+        }
+
+        ranked_pairs: list[tuple[int, int, int, list[str]]] = []
+        for (claim_a_id, claim_b_id), concept_ids in shared_concepts_by_pair.items():
+            if len(concept_ids) < minimum_shared_concepts:
+                continue
+            if frozenset((claim_a_id, claim_b_id)) in existing_edges:
+                continue
+            labels = [labels_by_concept_id[cid] for cid in sorted(concept_ids)]
+            ranked_pairs.append((len(concept_ids), claim_a_id, claim_b_id, labels))
+
+        ranked_pairs.sort(key=lambda item: (-item[0], item[1], item[2]))
+
+    return [
+        RelationshipCandidate(
+            claim_a_evidence_record_id=evidence_ids_by_claim_id[claim_a_id],
+            claim_b_evidence_record_id=evidence_ids_by_claim_id[claim_b_id],
+            shared_concept_labels=labels,
+        )
+        for _count, claim_a_id, claim_b_id, labels in ranked_pairs
+    ]
 
 
 def _count_rows(connection: Connection, table: Table | None) -> int:

@@ -5,6 +5,7 @@ from sqlalchemy import insert
 from knowledge_engine_web.graph_reader import (
     GraphSummary,
     list_claims,
+    list_relationship_candidates,
     list_unconfirmed_claims,
     read_claim_detail,
     read_graph_summary,
@@ -236,3 +237,87 @@ def test_list_unconfirmed_claims_on_a_database_with_no_graph_tables_yet(
     engine = build_engine(tmp_path)
 
     assert list_unconfirmed_claims(engine) == []
+
+
+def test_list_relationship_candidates_surfaces_a_pair_sharing_a_concept(
+    tmp_path: Path,
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [{"id": 1, "label": "Semaglutide", "source": "rxnorm"}],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-a"},
+                {"id": 2, "evidence_record_id": "ev-b"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_concepts"]),
+            [
+                {"id": 1, "claim_id": 1, "concept_id": 1, "edge_role": "intervention"},
+                {"id": 2, "claim_id": 2, "concept_id": 1, "edge_role": "intervention"},
+            ],
+        )
+
+    candidates = list_relationship_candidates(engine)
+
+    assert len(candidates) == 1
+    assert {candidates[0].claim_a_evidence_record_id, candidates[0].claim_b_evidence_record_id} == {
+        "ev-a",
+        "ev-b",
+    }
+    assert candidates[0].shared_concept_labels == ["Semaglutide"]
+
+
+def test_list_relationship_candidates_excludes_a_pair_with_an_existing_relationship(
+    tmp_path: Path,
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [{"id": 1, "label": "Obesity", "source": "mesh"}],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-a"},
+                {"id": 2, "evidence_record_id": "ev-b"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_concepts"]),
+            [
+                {"id": 1, "claim_id": 1, "concept_id": 1, "edge_role": "population"},
+                {"id": 2, "claim_id": 2, "concept_id": 1, "edge_role": "population"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 1,
+                    "target_claim_id": 2,
+                    "relationship_type": "supports",
+                    "rationale": "A reviewer already linked these two records.",
+                }
+            ],
+        )
+
+    assert list_relationship_candidates(engine) == []
+
+
+def test_list_relationship_candidates_on_a_database_with_no_graph_tables_yet(
+    tmp_path: Path,
+) -> None:
+    engine = build_engine(tmp_path)
+
+    assert list_relationship_candidates(engine) == []
