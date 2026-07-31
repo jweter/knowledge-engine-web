@@ -206,3 +206,49 @@ def test_unconfirmed_claims_page_renders_when_every_claim_is_confirmed(
 
     assert response.status_code == 200
     assert "Every claim in the graph has at least one relationship edge." in response.text
+
+
+def test_relationship_candidates_page_lists_a_shared_concept_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [{"id": 1, "label": "Semaglutide", "source": "rxnorm"}],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-a"},
+                {"id": 2, "evidence_record_id": "ev-b"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_concepts"]),
+            [
+                {"id": 1, "claim_id": 1, "concept_id": 1, "edge_role": "intervention"},
+                {"id": 2, "claim_id": 2, "concept_id": 1, "edge_role": "intervention"},
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/relationship-candidates")
+
+    assert response.status_code == 200
+    assert "ev-a" in response.text
+    assert "ev-b" in response.text
+    assert "Semaglutide" in response.text
+
+
+def test_relationship_candidates_page_renders_no_candidates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/relationship-candidates")
+
+    assert response.status_code == 200
+    assert "No claim pairs share a concept" in response.text

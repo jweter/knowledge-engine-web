@@ -80,9 +80,10 @@ This project reads, but never writes, two kinds of `core` data:
   detail: concepts by PICO role, relationship edges (done).
 - `GET /unconfirmed-claims` -- claims with zero relationship edges of
   any type (done).
-- Paper/citation detail and relationship-candidate pages -- real next
-  slices, each with a `core` CLI equivalent already built (`ke
-  graph-report --paper-id`, `ke graph-relationship-candidates`).
+- `GET /relationship-candidates` -- claim pairs sharing a PICO-resolved
+  concept, for a human to review (done).
+- Paper/citation detail page -- real next slice, with a `core` CLI
+  equivalent already built (`ke graph-report --paper-id`).
 - Evidence Record rendering -- needs its own design pass first (see
   `docs/web_design.md`'s Out of Scope).
 
