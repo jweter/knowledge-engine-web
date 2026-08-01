@@ -440,6 +440,167 @@ def test_root_redirects_to_graph(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert response.headers["location"] == "/graph"
 
 
+def test_roadmap_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/roadmap")
+
+    assert response.status_code == 200
+    assert "Roadmap" in response.text
+    assert "Not live" in response.text
+
+
+def test_concept_preview_static_file_is_served(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/static/concept-preview.html")
+
+    assert response.status_code == 200
+    assert "Concept preview -- not live." in response.text
+
+
+def test_reports_index_lists_every_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports")
+
+    assert response.status_code == 200
+    assert '<a href="/reports/graph">Graph Report</a>' in response.text
+    assert '<a href="/reports/relationship-candidates">Relationship Candidates Report</a>' in (
+        response.text
+    )
+    assert '<a href="/reports/unconfirmed-claims">Unconfirmed Claims Report</a>' in response.text
+
+
+def test_graph_report_view_renders_populated_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [{"id": 1, "label": "Semaglutide", "source": "rxnorm"}],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/graph")
+
+    assert response.status_code == 200
+    assert "# Knowledge Engine Graph Report" in response.text
+    assert "Concepts: 1 (rxnorm: 1)" in response.text
+    assert "Download as Markdown" in response.text
+
+
+def test_graph_report_download_returns_markdown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/graph.md")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert "attachment" in response.headers["content-disposition"]
+    assert response.text.startswith("# Knowledge Engine Graph Report")
+
+
+def test_relationship_candidates_report_view_lists_a_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [{"id": 1, "label": "Semaglutide", "source": "rxnorm"}],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-a"},
+                {"id": 2, "evidence_record_id": "ev-b"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_concepts"]),
+            [
+                {"id": 1, "claim_id": 1, "concept_id": 1, "edge_role": "intervention"},
+                {"id": 2, "claim_id": 2, "concept_id": 1, "edge_role": "intervention"},
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/relationship-candidates")
+
+    assert response.status_code == 200
+    assert "# Knowledge Engine Graph Relationship Candidates" in response.text
+    assert "ev-a" in response.text
+    assert "ev-b" in response.text
+
+
+def test_unconfirmed_claims_report_view_lists_a_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/unconfirmed-claims")
+
+    assert response.status_code == 200
+    assert "# Knowledge Engine Graph Unconfirmed Claims" in response.text
+    assert "ev-1" in response.text
+
+
+def test_report_view_404s_for_an_unknown_report_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/does-not-exist")
+
+    assert response.status_code == 404
+
+
+def test_report_download_404s_for_an_unknown_report_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/does-not-exist.md")
+
+    assert response.status_code == 404
+
+
+def test_graph_report_escapes_a_malicious_concept_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A concept `source` value cannot inject HTML into the rendered report page."""
+
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [{"id": 1, "label": "Semaglutide", "source": "<script>alert(1)</script>"}],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/graph")
+
+    assert response.status_code == 200
+    assert "<script>" not in response.text
+    assert "&lt;script&gt;" in response.text
+
+
 def test_static_stylesheet_is_served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
 
