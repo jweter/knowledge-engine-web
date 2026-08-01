@@ -118,17 +118,10 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Create stub data snapshot
-        # The Dockerfile bundles a real snapshot (see
-        # scripts/refresh-alpha-snapshot.sh); CI has no corpus to
-        # refresh from, so this only proves the image actually builds
-        # and starts, not that the real snapshot's schema matches.
-        run: |
-          mkdir -p data
-          python3 -c "import sqlite3; sqlite3.connect('data/knowledge_engine.sqlite3').close()"
-          touch data/evidence_records.jsonl
-
       - name: Build image
+        # data/ is committed to the repo (see scripts/build_alpha_snapshot.py
+        # and docs/deployment.md) -- checkout already has the real trimmed
+        # snapshot, the same one Render's build uses. No stub needed.
         run: docker build -t knowledge-engine-web-alpha:ci .
 
       - name: Smoke-test the container starts and serves a request

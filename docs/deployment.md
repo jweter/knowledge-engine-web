@@ -86,24 +86,39 @@ not the eventual public architecture (see "What this does not cover"
 below for what real public hosting still needs).
 
 **This deployment serves a point-in-time snapshot, not live data.**
-`core`'s SQLite database and `evidence_records.jsonl` are baked into the
-Docker image at build time -- there is no live connection back to a
-`core` checkout. Refreshing the alpha means re-running the snapshot
-script and rebuilding/redeploying the image. This is a deliberate,
-documented limitation, not an oversight: a real API/shared-database
-boundary between `web` and `core` (rather than `web` reading `core`'s
-SQLite file directly) is real, separate infrastructure work for the
-eventual public platform, out of scope for a first alpha test.
+A trimmed copy of `core`'s database and evidence file live in this
+repo's `data/` directory and are baked into the Docker image at build
+time -- there is no live connection back to a `core` checkout.
+Refreshing the alpha means re-running the snapshot script and
+committing/pushing the result. This is a deliberate, documented
+limitation, not an oversight: a real API/shared-database boundary
+between `web` and `core` (rather than `web` reading `core`'s SQLite
+file directly) is real, separate infrastructure work for the eventual
+public platform, out of scope for a first alpha test.
+
+**The snapshot is committed to the repo, not gitignored.** Render's
+Docker build clones this repo directly from GitHub with no way to run
+a pre-build script -- a gitignored local `data/` directory (the
+original approach) can never reach it, which broke the alpha's first
+real deploy (`COPY data ./data` failing with `"/data": not found`).
+`scripts/build_alpha_snapshot.py` keeps this safe to commit: it copies
+only the tables `knowledge_engine_web` actually reads (graph tables,
+`papers`, `journals` for a foreign-key reference) out of `core`'s full
+database, which is hundreds of megabytes of raw paper text and
+embeddings this app never touches. The trimmed result is a few
+megabytes -- small enough to commit directly.
 
 ### 1. Refresh the data snapshot
 
 ```bash
 scripts/refresh-alpha-snapshot.sh /path/to/knowledge-engine-core
+git add data/ && git commit -m "Refresh alpha snapshot" && git push
 ```
 
-Copies `core`'s current database and evidence file into `./data/`
-(gitignored -- never committed, but present in the Docker build
-context; see `.dockerignore`).
+Rebuilds `./data/knowledge_engine.sqlite3` (trimmed, via
+`scripts/build_alpha_snapshot.py`) and copies `evidence_records.jsonl`
+verbatim. Commit and push both -- Render redeploys automatically on a
+push to the connected branch.
 
 ### 2. Set alpha credentials
 
