@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Copy a point-in-time snapshot of core's database and evidence file into
-# ./data/, ready for `docker build` (see ../Dockerfile and
+# Refresh the committed alpha-deployment snapshot in ./data/ from a real
+# core checkout, ready to commit and push (see ../Dockerfile and
 # ../docs/deployment.md's "Alpha hosting (Render)" section).
+#
+# The database snapshot is trimmed to only the tables the web app reads
+# (scripts/build_alpha_snapshot.py) -- small enough to commit directly,
+# since Render's Docker build clones this repo from GitHub with no way
+# to run a pre-build script against a gitignored local file.
 #
 # Usage: scripts/refresh-alpha-snapshot.sh /path/to/knowledge-engine-core [corpus-name]
 #   corpus-name defaults to glp1_weight_loss, core's real corpus today.
@@ -29,8 +34,8 @@ for path in "$database_source" "$evidence_source"; do
 done
 
 mkdir -p "$web_root/data"
-cp "$database_source" "$web_root/data/knowledge_engine.sqlite3"
+python3 "$script_dir/build_alpha_snapshot.py" "$database_source" "$web_root/data/knowledge_engine.sqlite3"
 cp "$evidence_source" "$web_root/data/evidence_records.jsonl"
 
 echo "Snapshot refreshed in $web_root/data/ from $core_path (corpus: $corpus_name)."
-echo "This is a point-in-time copy -- rerun this script and rebuild the image to update it."
+echo "This is a point-in-time copy -- commit and push ./data/ to update the deployed alpha."

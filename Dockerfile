@@ -19,8 +19,11 @@ RUN poetry install --only main --no-root
 COPY knowledge_engine_web ./knowledge_engine_web
 RUN poetry install --only main
 
-# Snapshot data, populated by scripts/refresh-alpha-snapshot.sh before
-# `docker build` -- gitignored, not part of the repository itself.
+# Snapshot data, refreshed with scripts/refresh-alpha-snapshot.sh and
+# committed to the repo -- Render's Docker build clones straight from
+# GitHub, so this must already be in the repo, not populated locally
+# before `docker build` (that gitignored-local approach broke the first
+# real deploy; see docs/deployment.md).
 COPY data ./data
 
 ENV KE_WEB_DATABASE_URL=sqlite:////app/data/knowledge_engine.sqlite3 \

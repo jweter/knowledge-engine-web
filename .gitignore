@@ -29,7 +29,11 @@ Thumbs.db
 *.db-*
 *.log
 
-# Alpha-deployment data snapshot -- populated locally by
-# scripts/refresh-alpha-snapshot.sh, never committed; see
-# docs/deployment.md's "Alpha hosting (Render)" section.
-/data/
+# Alpha-deployment data snapshot IS committed (small, trimmed -- see
+# scripts/build_alpha_snapshot.py and docs/deployment.md's "Alpha
+# hosting (Render)" section): Render's Docker build clones this repo
+# straight from GitHub, so a gitignored local file can never reach it.
+# Un-ignore it from the broader *.sqlite3 rule above.
+!/data/
+!/data/knowledge_engine.sqlite3
+!/data/evidence_records.jsonl
