@@ -12,6 +12,54 @@
       inferred or synthesized.
     </p>
 
+    <h2>Evidence Record</h2>
+    {% if evidence %}
+    <p><strong>Research question:</strong> {{ evidence.research_question or "(not recorded)" }}</p>
+    <p><strong>Claim:</strong> {{ evidence.claim_text or "(not recorded)" }}</p>
+    <p><strong>Direction:</strong> {{ evidence.evidence_direction or "(not recorded)" }}</p>
+    <table>
+      <tr><th>Population</th><td>{{ evidence.population or "--" }}</td></tr>
+      <tr><th>Intervention</th><td>{{ evidence.intervention or "--" }}</td></tr>
+      <tr><th>Comparator</th><td>{{ evidence.comparator or "--" }}</td></tr>
+      <tr><th>Outcome</th><td>{{ evidence.outcome or "--" }}</td></tr>
+    </table>
+    <p><strong>Result:</strong> {{ evidence.result_summary or "(not recorded)" }}</p>
+    {% if evidence.short_source_excerpt %}
+    <p><strong>Source excerpt:</strong> &ldquo;{{ evidence.short_source_excerpt }}&rdquo;</p>
+    {% endif %}
+    {% if evidence.limitations %}
+    <p><strong>Limitations:</strong></p>
+    <ul>
+      {% for limitation in evidence.limitations %}
+      <li>{{ limitation }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if evidence.uncertainty_notes %}
+    <p><strong>Uncertainty notes:</strong> {{ evidence.uncertainty_notes }}</p>
+    {% endif %}
+    {% if evidence.confidence_note %}
+    <p>
+      <strong>Confidence note</strong> (`core`'s own stored text, not a
+      score this project computes): {{ evidence.confidence_note }}
+    </p>
+    {% endif %}
+    <p>
+      Source: {{ evidence.source_title or "(untitled)" }}
+      {% if evidence.source_doi %}(DOI: {{ evidence.source_doi }}){% endif %}
+      -- {{ evidence.study_type or evidence.source_type or "unspecified type" }},
+      extracted via {{ evidence.extraction_method or "unknown method" }}
+      ({{ evidence.extraction_status or "status unknown" }}; review status:
+      {{ evidence.review_status or "unknown" }}).
+    </p>
+    {% else %}
+    <p>
+      Evidence-record content is not configured for this deployment. Set
+      <code>KE_WEB_EVIDENCE_RECORDS_PATH</code> to `core`'s
+      <code>evidence_records.jsonl</code> to show it here.
+    </p>
+    {% endif %}
+
     <h2>Concepts</h2>
     {% if claim.concepts %}
     <ul>

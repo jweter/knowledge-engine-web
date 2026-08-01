@@ -81,12 +81,16 @@ written specifically so a consumer does not have to reverse-engineer
   `_reflect_graph_tables` and the same "missing table means empty, not
   an error" posture. Paper/citation detail, relationship-candidate, and
   unconfirmed-claims pages remain real next slices.
-- **`EvidenceRecord`/`RelationshipRecord` rendering.** These are JSONL
-  files, not SQL rows, and `core` does not publish a single canonical
-  path to one -- a real, separate design question (does this project
-  read a path from its own config, shell out to `ke evidence-report
-  --output`, or something else?) deliberately deferred rather than
-  guessed here.
+- **`RelationshipRecord` rendering.** Still deferred -- no page yet reads
+  or shows relationship-record JSONL content (as opposed to the
+  `graph_claim_relationships` SQL edges the claim-detail page already
+  renders).
+  `EvidenceRecord` rendering **was built**: `GET /claims/{evidence_record_id}`
+  now shows `claim_text`, `research_question`, `evidence_direction`,
+  PICO fields, `result_summary`, `limitations`, `uncertainty_notes`, and
+  `confidence_note` when `KE_WEB_EVIDENCE_RECORDS_PATH` is configured --
+  see `knowledge_engine_web/evidence_reader.py` and the resolved Open
+  Question below.
 - **Any confidence rating, synthesis, or judgment about what a claim or
   relationship means.** `core_interface_contract.md`'s "the seam"
   applies here exactly as it applies to `core` itself: this project
@@ -193,10 +197,17 @@ duplicated schema definitions.
   multi-corpus or multi-operator future.** Today: one env var, one
   database. Real enough for a first slice; revisit once a second real
   deployment scenario exists.
-- **Whether `EvidenceRecord`/`RelationshipRecord` rendering shells out
-  to `ke` or reads JSONL directly.** Named in Out of Scope above;
-  belongs to whichever milestone actually builds an evidence-record
-  page, not this one.
+- **Resolved: `EvidenceRecord` rendering reads its JSONL file directly**,
+  via a new optional `KE_WEB_EVIDENCE_RECORDS_PATH` setting
+  (`knowledge_engine_web/evidence_reader.py`), not by shelling out to
+  `ke evidence-report --output`. This keeps the whole read path
+  process-free and consistent with `graph_reader.py`'s direct-SQLite
+  approach -- no subprocess, no dependency on `ke` being installed or on
+  its stdout format staying stable. The setting is optional and a
+  missing file/unset path renders as "not configured" rather than an
+  error, matching `graph_reader`'s "missing table means empty" posture.
+  `RelationshipRecord` rendering is unresolved and remains open -- no
+  page reads relationship-record JSONL content yet.
 - **HTML template structure once a second page exists** (shared layout,
   navigation). Not designed against one page; revisit at the second
   page, the same "don't design for a hypothetical" discipline `core`

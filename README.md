@@ -8,10 +8,12 @@ relationship means.
 
 ## Status
 
-Early. One page exists: a read-only summary of `core`'s Phase 4
-knowledge graph. See `docs/web_design.md` for the design this project
-follows, and `core`'s own `docs/roadmap.md` for where this project fits
-in the larger Knowledge Engine roadmap (Phase 5).
+Early, but every page in this roadmap's original list is built: graph
+summary, claims list/detail (now including evidence-record content),
+unconfirmed claims, relationship candidates, and paper detail. See
+`docs/web_design.md` for the design this project follows, and `core`'s
+own `docs/roadmap.md` for where this project fits in the larger
+Knowledge Engine roadmap (Phase 5).
 
 ## The Seam
 
@@ -50,6 +52,17 @@ poetry run knowledge-engine-web
 
 Then open `http://127.0.0.1:8000/graph` for the graph summary page.
 
+To also show evidence-record content (the actual `claim_text`,
+`research_question`, `evidence_direction`, and so on) on claim detail
+pages, point this project at `core`'s `evidence_records.jsonl` too:
+
+```bash
+export KE_WEB_EVIDENCE_RECORDS_PATH="/path/to/data/corpora/glp1_weight_loss/evidence_records.jsonl"
+```
+
+This is optional -- without it, claim detail pages still render graph
+structure (concepts, relationships) exactly as before.
+
 ## Architecture
 
 This project reads `core`'s SQLite database directly, read-only, via
@@ -69,9 +82,12 @@ This project reads, but never writes, two kinds of `core` data:
 - **The knowledge graph** (`graph_concepts`/`graph_claims`/
   `graph_claim_concepts`/`graph_claim_relationships`/`graph_citations`)
   -- SQL tables in `core`'s SQLite database, read via reflection.
-- **Evidence Records / Relationship Records** -- plain JSONL files `core`
-  produces, not yet rendered by any page here (see `docs/web_design.md`'s
-  Out of Scope).
+- **Evidence Records** -- plain JSONL files `core` produces (e.g.
+  `evidence_records.jsonl`), read directly via a configured path
+  (`KE_WEB_EVIDENCE_RECORDS_PATH`), never imported from `core`. Rendered
+  on claim detail pages when configured (`knowledge_engine_web/evidence_reader.py`).
+- **Relationship Records** -- plain JSONL files `core` produces, not yet
+  rendered by any page here (see `docs/web_design.md`'s Out of Scope).
 
 ## Roadmap
 
@@ -85,7 +101,11 @@ This project reads, but never writes, two kinds of `core` data:
 - `GET /papers/{paper_id}` -- one paper's citation edges, as citer and
   as cited (done). This completes every page named in this roadmap's
   original list.
-- Evidence Record rendering -- needs its own design pass first (see
+- Evidence Record rendering on claim detail pages -- `claim_text`,
+  `research_question`, `evidence_direction`, PICO fields,
+  `result_summary`, `limitations`, and more, read directly from
+  `evidence_records.jsonl` (done; optional via `KE_WEB_EVIDENCE_RECORDS_PATH`).
+- Relationship Record rendering -- still needs its own design pass (see
   `docs/web_design.md`'s Out of Scope).
 
 ## Repository Family

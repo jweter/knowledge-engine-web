@@ -15,5 +15,6 @@ class Settings(BaseSettings):
     """Runtime settings for Knowledge Engine Web."""
 
     database_url: str = "sqlite:///data/knowledge_engine.sqlite3"
+    evidence_records_path: str | None = None
 
     model_config = SettingsConfigDict(env_prefix="KE_WEB_", env_file=".env", extra="ignore")
