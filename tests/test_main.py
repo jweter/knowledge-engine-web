@@ -431,6 +431,15 @@ def test_about_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert "The seam" in response.text
 
 
+def test_root_redirects_to_graph(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/", follow_redirects=False)
+
+    assert response.status_code in (302, 307)
+    assert response.headers["location"] == "/graph"
+
+
 def test_static_stylesheet_is_served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
 

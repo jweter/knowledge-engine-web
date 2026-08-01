@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine, create_engine
@@ -41,6 +41,18 @@ def _engine() -> Engine:
     """Return an engine bound to `core`'s configured database, read-only by convention."""
 
     return create_engine(Settings().database_url)
+
+
+@app.get("/", include_in_schema=False)
+def index() -> RedirectResponse:
+    """Redirect the bare domain to /graph -- the site's actual home page.
+
+    Without this, a first-time visitor hitting the root URL (the normal
+    thing to do) got FastAPI's default {"detail": "Not Found"} JSON,
+    since no route was ever defined for "/" itself.
+    """
+
+    return RedirectResponse(url="/graph")
 
 
 @app.get("/about", response_class=HTMLResponse)
