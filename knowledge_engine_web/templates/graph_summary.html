@@ -1,37 +1,27 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Knowledge Engine -- Graph Summary</title>
-  </head>
-  <body>
-    <h1>Knowledge Engine Graph Summary</h1>
-    <p>
-      <a href="/claims">View claims</a> |
-      <a href="/unconfirmed-claims">Unconfirmed claims</a> |
-      <a href="/relationship-candidates">Relationship candidates</a>
-    </p>
-    <p>
-      This page displays the graph's current, actual row counts only --
-      nothing here is inferred or synthesized.
-    </p>
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Graph Summary{% endblock %}
+{% block content %}
+<h1>Graph Summary</h1>
+<p class="disclaimer">
+  This page displays the graph's current, actual row counts only --
+  nothing here is inferred or synthesized.
+</p>
 
-    <h2>Corpus Totals</h2>
-    <ul>
-      <li>Concepts: {{ summary.concepts_total }}</li>
-      <li>Claims: {{ summary.claims_total }}</li>
-      <li>Claim-concept edges: {{ summary.claim_concept_edges_total }}</li>
-      <li>Relationship edges: {{ summary.relationship_edges_total }}</li>
-      <li>Citation edges: {{ summary.citation_edges_total }}</li>
-    </ul>
+<h2>Corpus Totals</h2>
+<ul>
+  <li>Concepts: {{ summary.concepts_total }}</li>
+  <li>Claims: {{ summary.claims_total }}</li>
+  <li>Claim-concept edges: {{ summary.claim_concept_edges_total }}</li>
+  <li>Relationship edges: {{ summary.relationship_edges_total }}</li>
+  <li>Citation edges: {{ summary.citation_edges_total }}</li>
+</ul>
 
-    {% if summary.concepts_by_source %}
-    <h2>Concepts by Source</h2>
-    <ul>
-      {% for source, count in summary.concepts_by_source.items() | sort %}
-      <li>{{ source }}: {{ count }}</li>
-      {% endfor %}
-    </ul>
-    {% endif %}
-  </body>
-</html>
+{% if summary.concepts_by_source %}
+<h2>Concepts by Source</h2>
+<ul>
+  {% for source, count in summary.concepts_by_source.items() | sort %}
+  <li>{{ source }}: {{ count }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

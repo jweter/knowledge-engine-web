@@ -419,3 +419,22 @@ def test_run_binds_to_a_configured_host_and_port(monkeypatch: pytest.MonkeyPatch
     run()
 
     assert calls == [(app, "0.0.0.0", 9000)]
+
+
+def test_about_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/about")
+
+    assert response.status_code == 200
+    assert "About Knowledge Engine" in response.text
+    assert "The seam" in response.text
+
+
+def test_static_stylesheet_is_served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/static/style.css")
+
+    assert response.status_code == 200
+    assert "text/css" in response.headers["content-type"]

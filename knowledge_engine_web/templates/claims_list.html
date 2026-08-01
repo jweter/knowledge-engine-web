@@ -1,22 +1,16 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Knowledge Engine -- {{ heading }}</title>
-  </head>
-  <body>
-    <h1>{{ heading }}</h1>
-    <p><a href="/claims">All claims</a> | <a href="/graph">Graph summary</a></p>
-    {% if description %}<p>{{ description }}</p>{% endif %}
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- {{ heading }}{% endblock %}
+{% block content %}
+<h1>{{ heading }}</h1>
+{% if description %}<p class="disclaimer">{{ description }}</p>{% endif %}
 
-    {% if claims %}
-    <ul>
-      {% for claim in claims %}
-      <li><a href="/claims/{{ claim.evidence_record_id }}">{{ claim.evidence_record_id }}</a></li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <p>{{ empty_message }}</p>
-    {% endif %}
-  </body>
-</html>
+{% if claims %}
+<ul>
+  {% for claim in claims %}
+  <li><a href="/claims/{{ claim.evidence_record_id }}">{{ claim.evidence_record_id }}</a></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty-state">{{ empty_message }}</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="{% block description %}Knowledge Engine: a read-only, evidence-first view of validated scientific claims. Every value traces back to its source -- nothing inferred, nothing synthesized.{% endblock %}"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{% block og_title %}Knowledge Engine{% endblock %}" />
+    <meta
+      property="og:description"
+      content="{% block og_description %}A read-only, evidence-first view of validated scientific claims. Every value traces back to its source.{% endblock %}"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CjxjaXJjbGUgY3g9IjgiIGN5PSIyNCIgcj0iNCIgZmlsbD0iIzFmNmY3OCIvPgo8Y2lyY2xlIGN4PSIyNCIgY3k9IjI0IiByPSI0IiBmaWxsPSIjMWY2Zjc4Ii8+CjxjaXJjbGUgY3g9IjE2IiBjeT0iOCIgcj0iNCIgZmlsbD0iIzFmNmY3OCIvPgo8bGluZSB4MT0iOCIgeTE9IjI0IiB4Mj0iMTYiIHkyPSI4IiBzdHJva2U9IiMxZjZmNzgiIHN0cm9rZS13aWR0aD0iMiIvPgo8bGluZSB4MT0iMjQiIHkxPSIyNCIgeDI9IjE2IiB5Mj0iOCIgc3Ryb2tlPSIjMWY2Zjc4IiBzdHJva2Utd2lkdGg9IjIiLz4KPGxpbmUgeDE9IjgiIHkxPSIyNCIgeDI9IjI0IiB5Mj0iMjQiIHN0cm9rZT0iIzFmNmY3OCIgc3Ryb2tlLXdpZHRoPSIyIi8+Cjwvc3ZnPg=="
+    />
+    <link rel="stylesheet" href="/static/style.css" />
+    <title>{% block title %}Knowledge Engine{% endblock %}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-title" href="/graph">Knowledge Engine</a>
+      <span class="alpha-badge">alpha</span>
+      <nav>
+        <a href="/graph">Graph</a>
+        <a href="/claims">Claims</a>
+        <a href="/unconfirmed-claims">Unconfirmed</a>
+        <a href="/relationship-candidates">Relationship candidates</a>
+        <a href="/about">About</a>
+      </nav>
+    </header>
+    <main>{% block content %}{% endblock %}</main>
+    <footer class="site-footer">
+      <p>
+        Read-only. Every value traced back to a stored row -- nothing
+        inferred or synthesized. See <a href="/about">About</a> for what
+        Knowledge Engine is and isn't, and
+        <a href="https://github.com/jweter/knowledge-engine-core">the source</a>.
+      </p>
+    </footer>
+  </body>
+</html>
