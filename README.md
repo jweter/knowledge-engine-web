@@ -2,8 +2,10 @@
 
 Read-only web interface for the [Knowledge Engine](https://github.com/jweter/knowledge-engine-core)
 project. Renders what `knowledge-engine-core` ("`core`") has already
-validated -- for a person, in a browser, instead of a terminal. Adds no
-synthesis, no confidence rating, no judgment about what a claim or
+validated -- for a person, in a browser, instead of a terminal. As of M1,
+claim detail pages also show a deterministic, no-LLM Evidence
+Intelligence confidence score (see "The Seam" below); nothing else here
+adds synthesis, narration, or judgment about what a claim or
 relationship means.
 
 ## Status
@@ -21,11 +23,23 @@ Knowledge Engine roadmap (Phase 5).
 that evidence means for a person's actual question -- see
 `knowledge-engine-core/docs/core_interface_contract.md`'s "The seam"
 section. This project holds the exact same boundary: it never sets or
-infers a `research_question`, an `evidence_direction`, or any confidence
-rating beyond what `core` already stores as a free-text
-`confidence_note`. That judgment belongs to the future
-`knowledge-engine-ai` layer, not this one. See `CONTRIBUTING.md` before
-adding anything that might blur this line.
+infers a `research_question`, an `evidence_direction`, or authors a
+`RelationshipRecord`.
+
+**Revised for Evidence Intelligence (M1):** claim detail pages now show
+a deterministic, no-LLM confidence score (Evidence Quality, Evidence
+Consensus, Claim Confidence, Evidence Coverage --
+`knowledge_engine_web/evidence_intelligence.py`, independently
+rebuilding `core`'s own `docs/evidence_intelligence_design.md` formula).
+This is a location change, not a loosening of the seam: the computation
+is fully deterministic, reads only already-stored, already-human-reviewed
+fields, and never involves an LLM or a judgment call this project makes
+itself. See `docs/web_design.md`'s Out of Scope section for the full
+rationale, and `core_interface_contract.md`'s own "Revised in M58" note
+for the matching change on `core`'s side. What's still the future
+`knowledge-engine-ai` layer's job: narrating what a number means, and
+anything beyond the Clinical Medicine confidence profile. See
+`CONTRIBUTING.md` before adding anything that might blur this line.
 
 ## Requirements
 
@@ -125,6 +139,11 @@ This project reads, but never writes, two kinds of `core` data:
   and viewable or downloadable as `.md` (done).
 - `GET /roadmap` -- what's shipped, what's next, and a clearly-labeled,
   non-functional concept preview of a possible future answer view (done).
+- Evidence Intelligence rendering on claim detail pages -- deterministic,
+  no-LLM Evidence Quality/Consensus/Claim Confidence/Coverage scores,
+  computed from the same stored fields as the Evidence Record section
+  above it (done; see "The Seam" above and
+  `knowledge_engine_web/evidence_intelligence.py`).
 
 ## Repository Family
 

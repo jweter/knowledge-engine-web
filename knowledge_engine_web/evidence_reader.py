@@ -48,6 +48,7 @@ class EvidenceRecordDetail:
     extraction_method: str | None
     extraction_status: str | None
     review_status: str | None
+    review_checklist: dict[str, Any]
 
 
 def read_evidence_record(path: Path, evidence_record_id: str) -> EvidenceRecordDetail | None:
@@ -78,8 +79,28 @@ def read_evidence_record(path: Path, evidence_record_id: str) -> EvidenceRecordD
     return None
 
 
+def count_evidence_records(path: Path) -> int:
+    """Return the total number of records in an `EvidenceRecord` JSONL file.
+
+    Used only for corpus-relative Evidence Coverage
+    (`knowledge_engine_web/evidence_intelligence.py`) -- a missing file
+    counts as zero rather than raising, matching `read_evidence_record`'s
+    own "missing file is a real, expected state" posture.
+    """
+
+    if not path.exists():
+        return 0
+    count = 0
+    with path.open(encoding="utf-8") as handle:
+        for raw_line in handle:
+            if raw_line.strip():
+                count += 1
+    return count
+
+
 def _to_detail(record: dict[str, Any]) -> EvidenceRecordDetail:
     limitations = record.get("limitations")
+    review_checklist = record.get("review_checklist")
     return EvidenceRecordDetail(
         evidence_record_id=str(record["evidence_record_id"]),
         research_question=record.get("research_question"),
@@ -101,4 +122,5 @@ def _to_detail(record: dict[str, Any]) -> EvidenceRecordDetail:
         extraction_method=record.get("extraction_method"),
         extraction_status=record.get("extraction_status"),
         review_status=record.get("review_status"),
+        review_checklist=review_checklist if isinstance(review_checklist, dict) else {},
     )
