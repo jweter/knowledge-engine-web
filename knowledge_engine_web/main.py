@@ -150,8 +150,14 @@ def paper_detail(request: Request, paper_id: int) -> HTMLResponse:
 
 
 def run() -> None:
-    """Entry point for `poetry run knowledge-engine-web` -- starts a local dev server."""
+    """Entry point for `poetry run knowledge-engine-web` -- starts a local dev server.
+
+    Binds to `127.0.0.1:8000` by default -- override via `KE_WEB_HOST`/
+    `KE_WEB_PORT` to serve beyond localhost (e.g. on a local network),
+    see `docs/deployment.md`.
+    """
 
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    settings = Settings()
+    uvicorn.run(app, host=settings.host, port=settings.port)
