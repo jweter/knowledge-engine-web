@@ -387,3 +387,35 @@ def test_paper_detail_page_404s_for_an_unknown_paper_id(
     response = TestClient(app).get("/papers/999")
 
     assert response.status_code == 404
+
+
+def test_run_binds_to_the_default_host_and_port_when_unconfigured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from knowledge_engine_web.main import run
+
+    calls: list[tuple[object, str, int]] = []
+    monkeypatch.setattr(
+        "uvicorn.run", lambda application, host, port: calls.append((application, host, port))
+    )
+    monkeypatch.delenv("KE_WEB_HOST", raising=False)
+    monkeypatch.delenv("KE_WEB_PORT", raising=False)
+
+    run()
+
+    assert calls == [(app, "127.0.0.1", 8000)]
+
+
+def test_run_binds_to_a_configured_host_and_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    from knowledge_engine_web.main import run
+
+    calls: list[tuple[object, str, int]] = []
+    monkeypatch.setattr(
+        "uvicorn.run", lambda application, host, port: calls.append((application, host, port))
+    )
+    monkeypatch.setenv("KE_WEB_HOST", "0.0.0.0")
+    monkeypatch.setenv("KE_WEB_PORT", "9000")
+
+    run()
+
+    assert calls == [(app, "0.0.0.0", 9000)]

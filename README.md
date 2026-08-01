@@ -63,6 +63,10 @@ export KE_WEB_EVIDENCE_RECORDS_PATH="/path/to/data/corpora/glp1_weight_loss/evid
 This is optional -- without it, claim detail pages still render graph
 structure (concepts, relationships) exactly as before.
 
+By default this binds to `127.0.0.1:8000` (local machine only). To
+serve on a local network, or run as a persistent systemd service, see
+`docs/deployment.md`.
+
 ## Architecture
 
 This project reads `core`'s SQLite database directly, read-only, via
@@ -107,6 +111,8 @@ This project reads, but never writes, two kinds of `core` data:
   `evidence_records.jsonl` (done; optional via `KE_WEB_EVIDENCE_RECORDS_PATH`).
 - Relationship Record rendering -- still needs its own design pass (see
   `docs/web_design.md`'s Out of Scope).
+- `KE_WEB_HOST`/`KE_WEB_PORT` and a systemd service example for running
+  as a persistent local server (done; see `docs/deployment.md`).
 
 ## Repository Family
 
