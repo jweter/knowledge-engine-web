@@ -18,5 +18,7 @@ class Settings(BaseSettings):
     evidence_records_path: str | None = None
     host: str = "127.0.0.1"
     port: int = 8000
+    alpha_username: str | None = None
+    alpha_password: str | None = None
 
     model_config = SettingsConfigDict(env_prefix="KE_WEB_", env_file=".env", extra="ignore")

@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine, create_engine
 
+from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.evidence_reader import read_evidence_record
 from knowledge_engine_web.graph_reader import (
@@ -29,6 +30,7 @@ from knowledge_engine_web.graph_reader import (
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 app = FastAPI(title="Knowledge Engine Web")
+app.add_middleware(AlphaBasicAuthMiddleware)
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 

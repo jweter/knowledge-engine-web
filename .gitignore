@@ -28,3 +28,8 @@ Thumbs.db
 *.db
 *.db-*
 *.log
+
+# Alpha-deployment data snapshot -- populated locally by
+# scripts/refresh-alpha-snapshot.sh, never committed; see
+# docs/deployment.md's "Alpha hosting (Render)" section.
+/data/

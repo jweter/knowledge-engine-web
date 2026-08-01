@@ -1,0 +1,17 @@
+# Render Blueprint for the alpha deployment -- see docs/deployment.md's
+# "Alpha hosting (Render)" section. New -> Blueprint in the Render
+# dashboard, point at this repository; Render reads this file.
+services:
+  - type: web
+    name: knowledge-engine-web-alpha
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    envVars:
+      # Required together -- set both in the Render dashboard's
+      # Environment tab. sync: false means Render prompts for these
+      # rather than storing them in this file.
+      - key: KE_WEB_ALPHA_USERNAME
+        sync: false
+      - key: KE_WEB_ALPHA_PASSWORD
+        sync: false

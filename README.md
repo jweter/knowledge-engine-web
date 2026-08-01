@@ -113,6 +113,12 @@ This project reads, but never writes, two kinds of `core` data:
   `docs/web_design.md`'s Out of Scope).
 - `KE_WEB_HOST`/`KE_WEB_PORT` and a systemd service example for running
   as a persistent local server (done; see `docs/deployment.md`).
+- A password-gated alpha deployment on Render (`Dockerfile`,
+  `render.yaml`, `KE_WEB_ALPHA_USERNAME`/`KE_WEB_ALPHA_PASSWORD`) for
+  testing hosting, browsers, and real-world latency outside a local
+  network -- done; see `docs/deployment.md`'s "Alpha hosting (Render)"
+  section. Serves a point-in-time snapshot, not a live connection to
+  `core` -- a real API boundary remains future work.
 
 ## Repository Family
 
@@ -120,8 +126,10 @@ This project reads, but never writes, two kinds of `core` data:
   -- offline scientific document ingestion, evidence validation, and the
   knowledge graph this project renders.
 - `knowledge-engine-web` (this repository) -- read-only presentation.
-- `knowledge-engine-ai` (future) -- the judgment layer: research-question
-  crafting, evidence synthesis, confidence rating.
+- [`knowledge-engine-ai`](https://github.com/jweter/knowledge-engine-ai)
+  -- the judgment layer: Retrieval/Evidence/Analytical/Discovery
+  intelligences, research-question crafting, evidence synthesis,
+  confidence rating.
 
 ## License
 
