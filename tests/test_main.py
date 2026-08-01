@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -157,6 +158,94 @@ def test_claim_detail_page_404s_for_an_unknown_evidence_record_id(
     response = TestClient(app).get("/claims/ev-does-not-exist")
 
     assert response.status_code == 404
+
+
+def test_claim_detail_page_omits_evidence_content_when_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.delenv("KE_WEB_EVIDENCE_RECORDS_PATH", raising=False)
+
+    response = TestClient(app).get("/claims/ev-1")
+
+    assert response.status_code == 200
+    assert "KE_WEB_EVIDENCE_RECORDS_PATH" in response.text
+
+
+def test_claim_detail_page_renders_evidence_record_content_when_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_record_id": "ev-1",
+                "research_question": "Does X reduce Y?",
+                "claim_text": "X reduces Y in adults.",
+                "evidence_direction": "supports",
+                "population": "Adults with Y.",
+                "intervention": "X, once weekly.",
+                "comparator": "Placebo.",
+                "outcome": "Change in Y.",
+                "result_summary": "X reduced Y by 10% versus placebo.",
+                "limitations": ["Single trial."],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/claims/ev-1")
+
+    assert response.status_code == 200
+    assert "Does X reduce Y?" in response.text
+    assert "X reduces Y in adults." in response.text
+    assert "X reduced Y by 10% versus placebo." in response.text
+    assert "Single trial." in response.text
+
+
+def test_claim_detail_page_escapes_evidence_record_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_record_id": "ev-1",
+                "claim_text": "<script>alert(1)</script>",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/claims/ev-1")
+
+    assert response.status_code == 200
+    assert "<script>" not in response.text
+    assert "&lt;script&gt;" in response.text
 
 
 def test_unconfirmed_claims_page_excludes_a_claim_with_a_relationship_edge(

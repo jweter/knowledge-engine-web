@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine, create_engine
 
 from knowledge_engine_web.config import Settings
+from knowledge_engine_web.evidence_reader import read_evidence_record
 from knowledge_engine_web.graph_reader import (
     list_claims,
     list_relationship_candidates,
@@ -111,13 +112,28 @@ def relationship_candidates(request: Request) -> HTMLResponse:
 
 @app.get("/claims/{evidence_record_id}", response_class=HTMLResponse)
 def claim_detail(request: Request, evidence_record_id: str) -> HTMLResponse:
-    """Render one claim's concepts (by PICO role) and relationship edges."""
+    """Render one claim's concepts (by PICO role), relationship edges, and evidence-record content.
+
+    Evidence-record content (`claim_text`, `research_question`, and so
+    on) is only shown if `KE_WEB_EVIDENCE_RECORDS_PATH` is configured --
+    it is optional, since not every deployment has that JSONL file
+    available alongside `core`'s database.
+    """
 
     detail = read_claim_detail(_engine(), evidence_record_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="No claim found for that evidence record ID.")
+
+    settings = Settings()
+    evidence = (
+        read_evidence_record(Path(settings.evidence_records_path), evidence_record_id)
+        if settings.evidence_records_path
+        else None
+    )
     return templates.TemplateResponse(
-        request=request, name="claim_detail.html", context={"claim": detail}
+        request=request,
+        name="claim_detail.html",
+        context={"claim": detail, "evidence": evidence},
     )
 
 
