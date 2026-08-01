@@ -1,50 +1,43 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Knowledge Engine -- {{ paper.title }}</title>
-  </head>
-  <body>
-    <h1>{{ paper.title }}</h1>
-    <p><a href="/graph">Graph summary</a></p>
-    <p>
-      Paper ID: {{ paper.id }} |
-      DOI: {{ paper.doi if paper.doi else "n/a" }}
-    </p>
-    <p>
-      This page displays stored citation edges only, from `ke
-      graph-citations-build`'s DOI-identity matching -- nothing here is
-      inferred or synthesized.
-    </p>
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- {{ paper.title }}{% endblock %}
+{% block content %}
+<h1>{{ paper.title }}</h1>
+<p class="disclaimer">
+  Paper ID: {{ paper.id }} | DOI: {{ paper.doi if paper.doi else "n/a" }}
+</p>
+<p class="disclaimer">
+  This page displays stored citation edges only, from `ke
+  graph-citations-build`'s DOI-identity matching -- nothing here is
+  inferred or synthesized.
+</p>
 
-    <h2>Cites ({{ paper.cites | length }})</h2>
-    {% if paper.cites %}
-    <ul>
-      {% for edge in paper.cites %}
-      <li>
-        <a href="/papers/{{ edge.paper_id }}">{{ edge.title }}</a>
-        ({{ edge.doi if edge.doi else "n/a" }})<br />
-        {{ edge.raw_citation_text }}
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <p>This paper cites no other corpus paper in the graph yet.</p>
-    {% endif %}
+<h2>Cites ({{ paper.cites | length }})</h2>
+{% if paper.cites %}
+<ul>
+  {% for edge in paper.cites %}
+  <li>
+    <a href="/papers/{{ edge.paper_id }}">{{ edge.title }}</a>
+    ({{ edge.doi if edge.doi else "n/a" }})<br />
+    {{ edge.raw_citation_text }}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty-state">This paper cites no other corpus paper in the graph yet.</p>
+{% endif %}
 
-    <h2>Cited By ({{ paper.cited_by | length }})</h2>
-    {% if paper.cited_by %}
-    <ul>
-      {% for edge in paper.cited_by %}
-      <li>
-        <a href="/papers/{{ edge.paper_id }}">{{ edge.title }}</a>
-        ({{ edge.doi if edge.doi else "n/a" }})<br />
-        {{ edge.raw_citation_text }}
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <p>No other corpus paper cites this paper in the graph yet.</p>
-    {% endif %}
-  </body>
-</html>
+<h2>Cited By ({{ paper.cited_by | length }})</h2>
+{% if paper.cited_by %}
+<ul>
+  {% for edge in paper.cited_by %}
+  <li>
+    <a href="/papers/{{ edge.paper_id }}">{{ edge.title }}</a>
+    ({{ edge.doi if edge.doi else "n/a" }})<br />
+    {{ edge.raw_citation_text }}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty-state">No other corpus paper cites this paper in the graph yet.</p>
+{% endif %}
+{% endblock %}

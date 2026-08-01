@@ -12,9 +12,11 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine, create_engine
 
+from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.evidence_reader import read_evidence_record
 from knowledge_engine_web.graph_reader import (
@@ -27,8 +29,11 @@ from knowledge_engine_web.graph_reader import (
 )
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
+_STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="Knowledge Engine Web")
+app.add_middleware(AlphaBasicAuthMiddleware)
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 
@@ -36,6 +41,13 @@ def _engine() -> Engine:
     """Return an engine bound to `core`'s configured database, read-only by convention."""
 
     return create_engine(Settings().database_url)
+
+
+@app.get("/about", response_class=HTMLResponse)
+def about(request: Request) -> HTMLResponse:
+    """Explain what this site is, the seam it holds, and what "alpha" means here."""
+
+    return templates.TemplateResponse(request=request, name="about.html", context={})
 
 
 @app.get("/graph", response_class=HTMLResponse)

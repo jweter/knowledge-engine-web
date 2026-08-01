@@ -1,31 +1,25 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Knowledge Engine -- Relationship Candidates</title>
-  </head>
-  <body>
-    <h1>Relationship Candidates</h1>
-    <p><a href="/claims">All claims</a> | <a href="/graph">Graph summary</a></p>
-    <p>
-      This page surfaces structural overlap only -- which claims share a
-      PICO-resolved concept. It never infers, detects, or suggests a
-      relationship type or rationale; that remains a human judgment call.
-    </p>
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Relationship Candidates{% endblock %}
+{% block content %}
+<h1>Relationship Candidates</h1>
+<p class="disclaimer">
+  This page surfaces structural overlap only -- which claims share a
+  PICO-resolved concept. It never infers, detects, or suggests a
+  relationship type or rationale; that remains a human judgment call.
+</p>
 
-    {% if candidates %}
-    <ul>
-      {% for candidate in candidates %}
-      <li>
-        <a href="/claims/{{ candidate.claim_a_evidence_record_id }}">{{ candidate.claim_a_evidence_record_id }}</a>
-        &lt;-&gt;
-        <a href="/claims/{{ candidate.claim_b_evidence_record_id }}">{{ candidate.claim_b_evidence_record_id }}</a>
-        -- shared concepts: {{ candidate.shared_concept_labels | join(", ") }}
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <p>No claim pairs share a concept without an existing relationship yet.</p>
-    {% endif %}
-  </body>
-</html>
+{% if candidates %}
+<ul>
+  {% for candidate in candidates %}
+  <li>
+    <a href="/claims/{{ candidate.claim_a_evidence_record_id }}">{{ candidate.claim_a_evidence_record_id }}</a>
+    &lt;-&gt;
+    <a href="/claims/{{ candidate.claim_b_evidence_record_id }}">{{ candidate.claim_b_evidence_record_id }}</a>
+    -- shared concepts: {{ candidate.shared_concept_labels | join(", ") }}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty-state">No claim pairs share a concept without an existing relationship yet.</p>
+{% endif %}
+{% endblock %}
