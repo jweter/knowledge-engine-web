@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Roadmap{% endblock %}
+{% block content %}
+<h1>Roadmap</h1>
+<p class="disclaimer">
+  What's shipped, what's next, and one clearly-labeled preview of a
+  future feature that does not exist yet.
+</p>
+
+<h2>Shipped</h2>
+<ul>
+  <li>
+    <code>knowledge-engine-core</code>: scientific-literature discovery,
+    licensing checks, PDF acquisition, evidence extraction and review,
+    and a knowledge graph (claims, PICO-resolved concepts, relationship
+    and citation edges) -- all offline and human-auditable.
+  </li>
+  <li>
+    <code>knowledge-engine-web</code> (this site): a read-only view of
+    that graph -- Graph Summary, Claims, Unconfirmed Claims,
+    Relationship Candidates, paper detail, and now these Reports --
+    plus a password-gated alpha deployment for testing hosting,
+    browsers, and real-world latency outside a local machine.
+  </li>
+  <li>
+    <code>knowledge-engine-ai</code>: a first Retrieval Intelligence
+    slice (<code>ke-ai ask</code>) -- a natural-language question to
+    ranked, source-linked evidence, no synthesis yet.
+  </li>
+</ul>
+
+<h2>Near-term</h2>
+<ul>
+  <li>Relationship Record rendering on this site (still needs its own design pass).</li>
+  <li>
+    A real API boundary between this site and <code>core</code>, so the
+    alpha can serve current data instead of a point-in-time snapshot
+    that has to be manually refreshed and redeployed.
+  </li>
+  <li>
+    Growing the corpus and relationship-edge coverage beyond today's
+    GLP-1 vertical slice.
+  </li>
+</ul>
+
+<h2>Longer-term</h2>
+<p>
+  <code>knowledge-engine-ai</code> is designed to add judgment in
+  stages, each one only after the stage before it is real and
+  verified against actual data -- never guessed ahead of what
+  <code>core</code> can already support:
+</p>
+<ul>
+  <li><strong>Retrieval Intelligence</strong> (started) -- question to ranked evidence, no synthesis.</li>
+  <li><strong>Evidence Intelligence</strong> -- structured comparison across multiple evidence records for one question.</li>
+  <li><strong>Analytical Intelligence</strong> -- weighing evidence quality, direction, and disagreement.</li>
+  <li><strong>Discovery Intelligence</strong> -- surfacing open questions the corpus doesn't answer yet.</li>
+</ul>
+<p>
+  The concept preview below shows what the far end of that road could
+  eventually look like -- not a commitment to a specific design, and
+  not built yet.
+</p>
+
+<h2>Concept Preview</h2>
+<p class="disclaimer">
+  <strong>Not live.</strong> The frame below is a static mockup of a
+  possible future answer view, isolated in its own page so it can
+  never be mistaken for a working feature. The question and evidence
+  shown are real, drawn from this site's actual corpus -- the
+  confidence score and gap tracking are illustrative only; no code
+  computes them today.
+</p>
+<iframe
+  src="/static/concept-preview.html"
+  title="Concept preview: a possible future answer view (not live)"
+  class="concept-preview-frame"
+  loading="lazy"
+></iframe>
+<p>
+  <a href="/static/concept-preview.html" target="_blank" rel="noopener">
+    Open the concept preview full-size in a new tab
+  </a>
+</p>
+{% endblock %}

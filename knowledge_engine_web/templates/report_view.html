@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- {{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p class="disclaimer">
+  <a href="/reports">All reports</a> --
+  <a href="/reports/{{ report_slug }}.md">Download as Markdown (.md)</a>
+</p>
+<pre class="report">{{ report_text }}</pre>
+{% endblock %}

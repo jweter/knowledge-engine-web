@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Reports{% endblock %}
+{% block content %}
+<h1>Reports</h1>
+<p class="disclaimer">
+  Each report mirrors what `core`'s own CLI (`ke graph-report`,
+  `ke graph-relationship-candidates`, `ke graph-unconfirmed-claims`)
+  prints -- the same stored data, formatted as a document. View it here
+  or download it as a plain <code>.md</code> file.
+</p>
+
+<ul class="report-list">
+  {% for report in reports %}
+  <li>
+    <a href="/reports/{{ report.slug }}">{{ report.title }}</a>
+    (<a href="/reports/{{ report.slug }}.md">.md</a>)
+    <br />
+    {{ report.description }}
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

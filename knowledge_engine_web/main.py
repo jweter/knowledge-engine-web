@@ -8,9 +8,10 @@ persisted.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -26,6 +27,11 @@ from knowledge_engine_web.graph_reader import (
     read_claim_detail,
     read_graph_summary,
     read_paper_detail,
+)
+from knowledge_engine_web.report_renderer import (
+    render_graph_summary_report,
+    render_relationship_candidates_report,
+    render_unconfirmed_claims_report,
 )
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -60,6 +66,20 @@ def about(request: Request) -> HTMLResponse:
     """Explain what this site is, the seam it holds, and what "alpha" means here."""
 
     return templates.TemplateResponse(request=request, name="about.html", context={})
+
+
+@app.get("/roadmap", response_class=HTMLResponse)
+def roadmap(request: Request) -> HTMLResponse:
+    """Show what's shipped, what's next, and a clearly-labeled preview of a future feature.
+
+    The embedded concept preview (static/concept-preview.html) shows a
+    synthesized answer to a research question -- a deliberate departure
+    from this site's "nothing inferred or synthesized" rule everywhere
+    else, so it's isolated in its own iframe and banner-labeled as a
+    non-functional mockup, never presented as a working feature.
+    """
+
+    return templates.TemplateResponse(request=request, name="roadmap.html", context={})
 
 
 @app.get("/graph", response_class=HTMLResponse)
@@ -131,6 +151,82 @@ def relationship_candidates(request: Request) -> HTMLResponse:
         request=request,
         name="relationship_candidates.html",
         context={"candidates": candidates},
+    )
+
+
+_REPORTS: dict[str, tuple[str, str, Callable[[Engine], str]]] = {
+    "graph": (
+        "Graph Report",
+        "The corpus-wide population counts -- the same report `ke graph-report` prints.",
+        lambda engine: render_graph_summary_report(read_graph_summary(engine)),
+    ),
+    "relationship-candidates": (
+        "Relationship Candidates Report",
+        "Claim pairs sharing a PICO-resolved concept with no relationship edge yet.",
+        lambda engine: render_relationship_candidates_report(list_relationship_candidates(engine)),
+    ),
+    "unconfirmed-claims": (
+        "Unconfirmed Claims Report",
+        "Claims with no relationship edge of any type yet.",
+        lambda engine: render_unconfirmed_claims_report(list_unconfirmed_claims(engine)),
+    ),
+}
+
+
+@app.get("/reports", response_class=HTMLResponse)
+def reports_index(request: Request) -> HTMLResponse:
+    """List the available Markdown reports, each viewable and downloadable.
+
+    These mirror `core`'s `ke graph-report`/`ke graph-relationship-candidates`/
+    `ke graph-unconfirmed-claims` Markdown output exactly, rebuilt here
+    from the same data the rest of this site already reads -- not by
+    shelling out to `ke`, which the alpha deployment doesn't have.
+    """
+
+    reports = [
+        {"slug": slug, "title": title, "description": description}
+        for slug, (title, description, _) in _REPORTS.items()
+    ]
+    return templates.TemplateResponse(
+        request=request, name="reports_index.html", context={"reports": reports}
+    )
+
+
+@app.get("/reports/{report_slug}.md")
+def report_download(report_slug: str) -> Response:
+    """Download one report as a raw `.md` file.
+
+    Registered before the bare `/reports/{report_slug}` route below --
+    Starlette matches path routes in registration order, and its simple
+    string path converter would otherwise let that route's `report_slug`
+    swallow the literal `.md` suffix too.
+    """
+
+    entry = _REPORTS.get(report_slug)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="No report with that name.")
+    _, _, render = entry
+    report_text = render(_engine())
+    return Response(
+        content=report_text,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{report_slug}-report.md"'},
+    )
+
+
+@app.get("/reports/{report_slug}", response_class=HTMLResponse)
+def report_view(request: Request, report_slug: str) -> HTMLResponse:
+    """Render one report as a page, with a link to download it as Markdown."""
+
+    entry = _REPORTS.get(report_slug)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="No report with that name.")
+    title, _, render = entry
+    report_text = render(_engine())
+    return templates.TemplateResponse(
+        request=request,
+        name="report_view.html",
+        context={"title": title, "report_slug": report_slug, "report_text": report_text},
     )
 
 

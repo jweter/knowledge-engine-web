@@ -119,6 +119,12 @@ This project reads, but never writes, two kinds of `core` data:
   network -- done; see `docs/deployment.md`'s "Alpha hosting (Render)"
   section. Serves a point-in-time snapshot, not a live connection to
   `core` -- a real API boundary remains future work.
+- `GET /reports` and `GET /reports/{graph,relationship-candidates,unconfirmed-claims}`
+  -- the same Markdown reports `ke graph-report`/`ke graph-relationship-candidates`/
+  `ke graph-unconfirmed-claims` print, rebuilt from this site's own data
+  and viewable or downloadable as `.md` (done).
+- `GET /roadmap` -- what's shipped, what's next, and a clearly-labeled,
+  non-functional concept preview of a possible future answer view (done).
 
 ## Repository Family
 

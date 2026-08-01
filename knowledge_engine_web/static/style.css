@@ -166,3 +166,37 @@ th {
 .empty-state {
   color: var(--text-muted);
 }
+
+.report-list li {
+  margin: 1rem 0;
+}
+
+.report {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.25rem;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.concept-preview-frame {
+  display: block;
+  width: 100vw;
+  max-width: 1200px;
+  margin-left: calc(50% - 50vw);
+  height: 1820px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+@media (max-width: 900px) {
+  .concept-preview-frame {
+    height: 2900px;
+  }
+}
