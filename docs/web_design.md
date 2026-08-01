@@ -1,13 +1,19 @@
 # Web Design: Phase 5, First Slice
 
 Status: this is the design sketch for `knowledge-engine-web`'s first
-milestone, written before any application code, the same role
-`knowledge-engine-core`'s own `docs/phase1_design.md`/`docs/phase4_design.md`
-played for their phases. `docs/roadmap.md`'s Phase 5 bullet says this
-project's job is where the future `knowledge-engine-ai`/`-web`/`-agents`
-layers' work "actually reaches a person" -- this document scopes the
-smallest honest version of that: a read-only page showing what `core`'s
-graph already contains, with zero synthesis or judgment added.
+milestone (a single `GET /graph` page), written before any application
+code, the same role `knowledge-engine-core`'s own
+`docs/phase1_design.md`/`docs/phase4_design.md` played for their
+phases. Much more has shipped since -- claims, unconfirmed claims,
+relationship candidates, paper detail, Evidence Record rendering,
+Markdown reports, a Roadmap page, and a password-gated alpha
+deployment. **For current scope, see this repo's own `README.md`
+Roadmap section**, kept up to date as features ship. What follows
+below is the original first-slice scope and the architectural
+decisions made reaching it -- most still hold true (the SQLAlchemy
+reflection decision, the JSONL-not-shell-out decision for Evidence
+Records) even though the page inventory it describes is now smaller
+than what actually exists.
 
 ## Mission
 
@@ -67,43 +73,41 @@ written specifically so a consumer does not have to reverse-engineer
   `knowledge-engine-core`'s own M46-M51 live verifications) renders
   correctly as a small, honest number, not an error or a placeholder.
 
-## Out of Scope (this milestone)
+## Out of Scope (original first milestone)
 
-- **Claim detail, paper/citation detail, relationship-candidate, or
-  unconfirmed-claims pages.** Real, valuable next slices (`ke
-  graph-report --evidence-record-id`/`--paper-id`, `ke
-  graph-relationship-candidates`, `ke graph-unconfirmed-claims` all have
-  page-shaped equivalents worth building) -- not attempted in this first
-  milestone, which exists to prove the read-only database-access pattern
-  end to end on the simplest possible page first. **Claim listing and
-  detail were built next**, immediately after this milestone proved the
-  pattern: `GET /claims` and `GET /claims/{evidence_record_id}`, reusing
-  `_reflect_graph_tables` and the same "missing table means empty, not
-  an error" posture. Paper/citation detail, relationship-candidate, and
-  unconfirmed-claims pages remain real next slices.
-- **`RelationshipRecord` rendering.** Still deferred -- no page yet reads
-  or shows relationship-record JSONL content (as opposed to the
+What this section originally excluded, and what's true of each today:
+
+- **Claim detail, paper/citation detail, relationship-candidate, and
+  unconfirmed-claims pages.** All since built: `GET /claims`,
+  `GET /claims/{evidence_record_id}`, `GET /papers/{paper_id}`,
+  `GET /relationship-candidates`, `GET /unconfirmed-claims` -- all
+  reusing `_reflect_graph_tables` and the same "missing table means
+  empty, not an error" posture this milestone established.
+- **`EvidenceRecord` rendering.** Since built: `GET /claims/{evidence_record_id}`
+  shows `claim_text`, `research_question`, `evidence_direction`, PICO
+  fields, `result_summary`, `limitations`, `uncertainty_notes`, and
+  `confidence_note` when `KE_WEB_EVIDENCE_RECORDS_PATH` is configured
+  -- see `knowledge_engine_web/evidence_reader.py`.
+- **`RelationshipRecord` rendering.** Still not built -- no page reads
+  relationship-record JSONL content (as opposed to the
   `graph_claim_relationships` SQL edges the claim-detail page already
-  renders).
-  `EvidenceRecord` rendering **was built**: `GET /claims/{evidence_record_id}`
-  now shows `claim_text`, `research_question`, `evidence_direction`,
-  PICO fields, `result_summary`, `limitations`, `uncertainty_notes`, and
-  `confidence_note` when `KE_WEB_EVIDENCE_RECORDS_PATH` is configured --
-  see `knowledge_engine_web/evidence_reader.py` and the resolved Open
-  Question below.
+  renders). Still needs its own design pass; see this repo's
+  `README.md` Roadmap.
 - **Any confidence rating, synthesis, or judgment about what a claim or
-  relationship means.** `core_interface_contract.md`'s "the seam"
-  applies here exactly as it applies to `core` itself: this project
-  never sets or infers `research_question`, `evidence_direction`, or any
-  rating beyond `core`'s own stored `confidence_note` text. That is the
-  future `knowledge-engine-ai` layer's job, not this one's, regardless
-  of how tempting a "graph with typed edges" is to summarize into a
-  score.
-- **Write access of any kind.** This project never modifies `core`'s
-  database. Read-only, always.
-- **Authentication, multi-user support, deployment.** A real future
-  need once this runs anywhere but a trusted local machine; not
-  attempted here (see `SECURITY.md`'s Current Limitations).
+  relationship means.** Still true, and not open for revision here.
+  `core_interface_contract.md`'s "the seam" applies exactly as it
+  applies to `core` itself: this project never sets or infers
+  `research_question`, `evidence_direction`, or any rating beyond
+  `core`'s own stored `confidence_note` text. That is the
+  `knowledge-engine-ai` layer's job, not this one's.
+- **Write access of any kind.** Still true. This project never
+  modifies `core`'s database. Read-only, always.
+- **Authentication, multi-user support, deployment.** Since built: a
+  password-gated Render deployment (`knowledge_engine_web/alpha_auth.py`,
+  `Dockerfile`, `render.yaml`) -- see `docs/deployment.md`'s "Alpha
+  hosting (Render)" section. Still explicitly not built: real
+  multi-user accounts, rate limiting, horizontal scaling -- see that
+  same section's "What this does not cover".
 
 ## Decision: read `core`'s SQLite database via SQLAlchemy reflection, not by redeclaring its schema
 
@@ -137,29 +141,50 @@ duplicated schema definitions.
 
 ## Architecture
 
+As originally scoped for the first slice (`config.py`, `graph_reader.py`,
+`main.py`'s one route, one template) -- all still accurate as far as
+they go. What's been added since, following the same patterns:
+
 - `knowledge_engine_web/config.py` -- a `pydantic-settings` `Settings`
   class reading `KE_WEB_DATABASE_URL` (falls back to
   `sqlite:///data/knowledge_engine.sqlite3`, mirroring `core`'s own
   `KE_DATABASE_URL` default shape but under this project's own prefix,
-  since this is a distinct consuming process, not `core` itself).
-- `knowledge_engine_web/graph_reader.py` -- a small, read-only
-  `GraphSummary` dataclass and a `read_graph_summary(engine)` function:
-  reflects `graph_concepts`/`graph_claims`/`graph_claim_concepts`/
-  `graph_claim_relationships`/`graph_citations` (skipping any table
-  reflection finds missing, e.g. a `core` database older than M47),
-  and computes the same counts `GraphRepository.population_counts()`
-  computes in `core` -- independently, since this project does not
-  import `core`'s repository, but checked against `core`'s own
-  documented numbers in testing (see Testing Strategy).
-- `knowledge_engine_web/main.py` -- the FastAPI app: one route,
-  `GET /graph`, rendering `templates/graph_summary.html` via Jinja2
-  (autoescaping on by default -- every concept-source label and count is
-  escaped automatically, the same non-negotiable discipline `core`'s own
-  `_report_text`/`_graph_report_text` helpers hand-implement for
+  since this is a distinct consuming process, not `core` itself). Since
+  extended with `evidence_records_path`, `host`/`port`, and the alpha
+  auth username/password settings.
+- `knowledge_engine_web/graph_reader.py` -- a small, read-only set of
+  dataclasses and reader functions: reflects `graph_concepts`/`graph_claims`/
+  `graph_claim_concepts`/`graph_claim_relationships`/`graph_citations`/`papers`
+  (skipping any table reflection finds missing, e.g. a `core` database
+  older than a given graph milestone), and computes the same counts and
+  detail views `GraphRepository`'s own methods compute in `core` --
+  independently, since this project does not import `core`'s
+  repository, but checked against `core`'s own documented numbers in
+  testing (see Testing Strategy).
+- `knowledge_engine_web/evidence_reader.py` -- reads one `EvidenceRecord`
+  by ID directly from `evidence_records.jsonl`, when
+  `KE_WEB_EVIDENCE_RECORDS_PATH` is configured.
+- `knowledge_engine_web/report_renderer.py` -- rebuilds the same
+  Markdown reports `ke graph-report`/`ke graph-relationship-candidates`/
+  `ke graph-unconfirmed-claims` print, from this project's own data,
+  for the `/reports` pages -- see `docs/deployment.md` for why (never
+  shells out to `ke`, which the alpha deployment doesn't have).
+- `knowledge_engine_web/alpha_auth.py` -- HTTP Basic Auth middleware
+  gating the whole app when `KE_WEB_ALPHA_USERNAME`/`KE_WEB_ALPHA_PASSWORD`
+  are configured; see `docs/deployment.md`'s "Alpha hosting (Render)"
+  section.
+- `knowledge_engine_web/main.py` -- the FastAPI app: one route per page
+  (`/graph`, `/claims`, `/claims/{id}`, `/papers/{id}`,
+  `/unconfirmed-claims`, `/relationship-candidates`, `/reports` and its
+  sub-pages, `/roadmap`, `/about`), each rendering a Jinja2 template
+  (autoescaping on by default -- every concept-source label and count
+  is escaped automatically, the same non-negotiable discipline `core`'s
+  own `_report_text`/`_graph_report_text` helpers hand-implement for
   Markdown, done here by the standard tool for HTML instead).
-- `templates/graph_summary.html` -- minimal, no client-side JavaScript,
-  no build step. A future page can extend a shared base template once a
-  second page exists; not built prematurely for one page.
+- `templates/base.html` -- the shared layout (header, nav, footer,
+  favicon) every page now extends, added once a second page existed, as
+  originally planned below. `static/style.css` is the hand-written,
+  no-framework, no-build-step stylesheet.
 
 ## Testing Strategy
 
