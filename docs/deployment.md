@@ -88,13 +88,25 @@ below for what real public hosting still needs).
 **This deployment serves a point-in-time snapshot, not live data.**
 A trimmed copy of `core`'s database and evidence file live in this
 repo's `data/` directory and are baked into the Docker image at build
-time -- there is no live connection back to a `core` checkout.
-Refreshing the alpha means re-running the snapshot script and
-committing/pushing the result. This is a deliberate, documented
-limitation, not an oversight: a real API/shared-database boundary
-between `web` and `core` (rather than `web` reading `core`'s SQLite
-file directly) is real, separate infrastructure work for the eventual
-public platform, out of scope for a first alpha test.
+time -- there is no live connection back to a `core` checkout. This is
+a deliberate, documented limitation, not an oversight: a real
+API/shared-database boundary between `web` and `core` (rather than
+`web` reading `core`'s SQLite file directly) is real, separate
+infrastructure work for the eventual public platform, out of scope for
+a first alpha test.
+
+**The refresh itself is automated (weekly), not fully "live."** A
+scheduled Routine re-runs the exact steps below -- restore `core`'s
+local working database, rebuild the graph from whatever
+`evidence_records.jsonl` currently has on `main`, refresh this repo's
+snapshot, commit, push -- on a cadence timed after `core`'s own
+corpus-growth (Monday) and evidence-extraction (daily) automations
+have had a few days to land, so the alpha never drifts more than about
+a week stale without a human doing anything. This narrows the gap
+between "point-in-time snapshot" and "live connection" without
+building the real API boundary yet -- see "What this does not cover"
+below for why that's still separate work. A human can still run the
+refresh manually at any time with the exact commands in step 1 below.
 
 **The snapshot is committed to the repo, not gitignored.** Render's
 Docker build clones this repo directly from GitHub with no way to run
@@ -110,6 +122,10 @@ megabytes -- small enough to commit directly.
 
 ### 1. Refresh the data snapshot
 
+Automated weekly (see above) -- this is the manual/ad-hoc equivalent,
+for refreshing sooner than the schedule or debugging the automation
+itself:
+
 ```bash
 scripts/refresh-alpha-snapshot.sh /path/to/knowledge-engine-core
 git add data/ && git commit -m "Refresh alpha snapshot" && git push
@@ -118,7 +134,10 @@ git add data/ && git commit -m "Refresh alpha snapshot" && git push
 Rebuilds `./data/knowledge_engine.sqlite3` (trimmed, via
 `scripts/build_alpha_snapshot.py`) and copies `evidence_records.jsonl`
 verbatim. Commit and push both -- Render redeploys automatically on a
-push to the connected branch.
+push to the connected branch. The automated Routine follows a PR
+(draft -> CI -> ready -> squash-merge), same as every other change in
+this project's history; a manual refresh may push directly if you
+prefer, since it's a generated data artifact, not source code.
 
 ### 2. Set alpha credentials
 
@@ -161,9 +180,12 @@ unlike the local-network deployment above.
 ## What this does not cover
 
 - **A live connection to `core`.** The Render alpha bakes in a
-  snapshot; see above. A real API boundary (`web` talking to a service
-  over HTTP/gRPC rather than reading SQLite directly) is real,
-  unbuilt infrastructure work for beyond the alpha stage.
+  snapshot; see above. The weekly automated refresh narrows how stale
+  that snapshot gets, but it is still a snapshot, refreshed on a
+  schedule -- not a request-time connection back to `core`. A real API
+  boundary (`web` talking to a service over HTTP/gRPC rather than
+  reading SQLite directly) is real, unbuilt infrastructure work for
+  beyond the alpha stage.
 - **Real multi-user authentication.** The alpha's shared
   username/password is a stopgap for a small testing group, not a
   user-account system -- see `docs/web_design.md`'s Out of Scope.
