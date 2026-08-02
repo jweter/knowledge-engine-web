@@ -32,6 +32,7 @@ from knowledge_engine_web.evidence_intelligence import (
 from knowledge_engine_web.evidence_reader import (
     EvidenceRecordDetail,
     count_evidence_records,
+    list_evidence_records_for_doi,
     read_evidence_record,
 )
 from knowledge_engine_web.graph_reader import (
@@ -48,6 +49,7 @@ from knowledge_engine_web.report_renderer import (
     render_relationship_candidates_report,
     render_unconfirmed_claims_report,
 )
+from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -325,6 +327,66 @@ def _compute_evidence_intelligence(
         "coverage": coverage,
         "synthesis": synthesis,
     }
+
+
+@app.get("/ask", response_class=HTMLResponse)
+def ask(request: Request, q: str = "") -> HTMLResponse:
+    """Answer a natural-language research question: ranked papers, plus per-claim confidence.
+
+    Retrieval only, via `core`'s own FTS5 index (`retrieval.py`) -- no
+    cross-paper synthesis, no single "the answer" verdict. Each matched
+    paper's evidence records (matched by DOI, `KE_WEB_EVIDENCE_RECORDS_PATH`
+    permitting) show their own already-computed Evidence Intelligence
+    numbers exactly as `/claims/{evidence_record_id}` does, when a graph
+    claim exists for them -- never a new number, never a judgment this
+    project invents for the occasion.
+    """
+
+    question = q.strip()
+    if not question:
+        return templates.TemplateResponse(
+            request=request, name="ask.html", context={"question": "", "results": None}
+        )
+
+    engine = _engine()
+    papers = answer_retrieval(engine, question, limit=5)
+
+    settings = Settings()
+    evidence_path = Path(settings.evidence_records_path) if settings.evidence_records_path else None
+
+    results = [
+        {
+            "paper": paper,
+            "evidence_entries": _evidence_entries_for_paper(engine, evidence_path, paper),
+        }
+        for paper in papers
+    ]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="ask.html",
+        context={"question": question, "results": results},
+    )
+
+
+def _evidence_entries_for_paper(
+    engine: Engine, evidence_path: Path | None, paper: SearchResult
+) -> list[dict[str, object]]:
+    """Return one paper's evidence records, each paired with its Evidence Intelligence if any."""
+
+    if evidence_path is None or not paper.doi:
+        return []
+
+    entries: list[dict[str, object]] = []
+    for evidence in list_evidence_records_for_doi(evidence_path, paper.doi):
+        intelligence = None
+        detail = read_claim_detail(engine, evidence.evidence_record_id)
+        if detail is not None:
+            intelligence = _compute_evidence_intelligence(
+                evidence_path, evidence, detail.relationships
+            )
+        entries.append({"evidence": evidence, "intelligence": intelligence})
+    return entries
 
 
 @app.get("/papers/{paper_id}", response_class=HTMLResponse)

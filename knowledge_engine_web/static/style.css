@@ -185,6 +185,61 @@ th {
   line-height: 1.5;
 }
 
+.ask-form {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.25rem 0;
+  flex-wrap: wrap;
+}
+
+.ask-form label {
+  display: none;
+}
+
+.ask-form input[type="text"] {
+  flex: 1 1 320px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.ask-form button {
+  padding: 0.55rem 1.25rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.ask-results {
+  list-style: none;
+  padding: 0;
+}
+
+.ask-results > li {
+  margin: 0 0 1.75rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.ask-snippet {
+  color: var(--text-muted);
+}
+
+.ask-evidence {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.ask-evidence li {
+  margin: 0.5rem 0;
+}
+
 .concept-preview-frame {
   display: block;
   width: 100vw;

@@ -12,7 +12,11 @@ relationship means.
 
 Early, but every page in this roadmap's original list is built: graph
 summary, claims list/detail (now including evidence-record content),
-unconfirmed claims, relationship candidates, and paper detail. See
+unconfirmed claims, relationship candidates, and paper detail. `GET /ask`
+now turns the `/roadmap` page's old non-functional concept-preview mockup
+into a real, working question-first page -- retrieval over `core`'s own
+FTS5 index, each matched paper's evidence records showing their own
+Evidence Intelligence numbers where a graph claim exists. See
 `docs/web_design.md` for the design this project follows, and `core`'s
 own `docs/roadmap.md` for where this project fits in the larger
 Knowledge Engine roadmap (Phase 5).
@@ -95,11 +99,16 @@ design and its Decision, Out of Scope, and Open Questions sections.
 
 ## Data Model
 
-This project reads, but never writes, two kinds of `core` data:
+This project reads, but never writes, three kinds of `core` data:
 
 - **The knowledge graph** (`graph_concepts`/`graph_claims`/
   `graph_claim_concepts`/`graph_claim_relationships`/`graph_citations`)
   -- SQL tables in `core`'s SQLite database, read via reflection.
+- **The FTS5 lexical index** (`paper_search`) -- `core`'s own SQLite
+  full-text index over paper title/abstract/body text. `GET /ask`'s
+  retrieval query is ported from `core`'s `knowledge_engine.search`
+  module rather than imported, same reasoning as the graph reflection
+  above (`knowledge_engine_web/retrieval.py`).
 - **Evidence Records** -- plain JSONL files `core` produces (e.g.
   `evidence_records.jsonl`), read directly via a configured path
   (`KE_WEB_EVIDENCE_RECORDS_PATH`), never imported from `core`. Rendered
@@ -144,6 +153,15 @@ This project reads, but never writes, two kinds of `core` data:
   computed from the same stored fields as the Evidence Record section
   above it (done; see "The Seam" above and
   `knowledge_engine_web/evidence_intelligence.py`).
+- `GET /ask` -- a question-first page: retrieval over `core`'s FTS5
+  index (`knowledge_engine_web/retrieval.py`, ported from `core`'s
+  `knowledge_engine.search`, not shelled out to and not imported), each
+  matched paper's evidence records (matched by DOI) shown with their own
+  Evidence Intelligence numbers where a graph claim exists for them
+  (done). Retrieval plus already-computed signals only -- no cross-paper
+  synthesis, no single "the answer" verdict; the project owner's first
+  piece of a larger question-first "Ask" experience connecting this
+  project, `knowledge-engine-ai`, and `core`.
 
 ## Repository Family
 

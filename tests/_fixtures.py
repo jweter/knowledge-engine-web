@@ -79,6 +79,8 @@ def create_papers_table(engine: Engine) -> MetaData:
         Column("id", Integer, primary_key=True),
         Column("title", String(1024), nullable=False),
         Column("doi", String(256)),
+        Column("abstract", Text),
+        Column("publication_year", Integer),
     )
     metadata.create_all(engine)
     return metadata

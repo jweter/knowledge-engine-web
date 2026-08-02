@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import insert
+from sqlalchemy import Engine, MetaData, Table, insert, text
 
 from knowledge_engine_web.main import app
 from tests._fixtures import build_engine, create_graph_tables, create_papers_table
@@ -704,3 +704,142 @@ def test_static_stylesheet_is_served(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     assert response.status_code == 200
     assert "text/css" in response.headers["content-type"]
+
+
+def _create_fts_table_and_paper(
+    engine: Engine, *, paper_id: int, title: str, doi: str, abstract: str = ""
+) -> None:
+    create_papers_table(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            text("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS paper_search
+                USING fts5(
+                    title,
+                    abstract,
+                    body_text,
+                    raw_text,
+                    tokenize='porter unicode61'
+                )
+                """)
+        )
+        metadata = MetaData()
+        papers = Table("papers", metadata, autoload_with=engine)
+        connection.execute(insert(papers).values(id=paper_id, title=title, doi=doi))
+        connection.execute(
+            text(
+                "INSERT INTO paper_search(rowid, title, abstract, body_text, raw_text) "
+                "VALUES (:id, :title, :abstract, '', '')"
+            ),
+            {"id": paper_id, "title": title, "abstract": abstract},
+        )
+
+
+def test_ask_page_renders_the_empty_state_with_no_question(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/ask")
+
+    assert response.status_code == 200
+    assert "Ask a research question" in response.text
+    assert "Results for" not in response.text
+
+
+def test_ask_page_reports_no_relevant_papers_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    create_papers_table(engine)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/ask", params={"q": "does metformin reduce glucose"})
+
+    assert response.status_code == 200
+    assert "No relevant papers found" in response.text
+
+
+def test_ask_page_renders_a_matched_paper_without_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    _create_fts_table_and_paper(
+        engine,
+        paper_id=1,
+        title="A Trial of Semaglutide for Body Weight Reduction",
+        doi="10.1000/example",
+        abstract="Semaglutide reduced body weight versus placebo.",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.delenv("KE_WEB_EVIDENCE_RECORDS_PATH", raising=False)
+
+    response = TestClient(app).get("/ask", params={"q": "does semaglutide reduce body weight"})
+
+    assert response.status_code == 200
+    assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
+    assert "10.1000/example" in response.text
+    assert "No evidence record matched" in response.text
+
+
+def test_ask_page_renders_evidence_and_intelligence_for_a_matched_paper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    _create_fts_table_and_paper(
+        engine,
+        paper_id=1,
+        title="A Trial of Semaglutide for Body Weight Reduction",
+        doi="10.1000/example",
+        abstract="Semaglutide reduced body weight versus placebo.",
+    )
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_record_id": "ev-1",
+                "source_doi": "10.1000/example",
+                "claim_text": "Semaglutide reduced body weight.",
+                "extraction_method": "manual_human_review",
+                "review_checklist": {"source_verified": True},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/ask", params={"q": "does semaglutide reduce body weight"})
+
+    assert response.status_code == 200
+    assert "ev-1" in response.text
+    assert "Semaglutide reduced body weight." in response.text
+    assert "Evidence Quality:" in response.text
+    assert "not yet assessable" in response.text  # no relationship edges yet
+
+
+def test_ask_page_escapes_a_malicious_snippet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    _create_fts_table_and_paper(
+        engine,
+        paper_id=1,
+        title="<script>alert(1)</script> semaglutide",
+        doi="10.1000/example",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.delenv("KE_WEB_EVIDENCE_RECORDS_PATH", raising=False)
+
+    response = TestClient(app).get("/ask", params={"q": "semaglutide"})
+
+    assert response.status_code == 200
+    assert "<script>alert" not in response.text
+    assert "&lt;script&gt;" in response.text

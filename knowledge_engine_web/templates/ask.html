@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Ask{% endblock %}
+{% block content %}
+<h1>Ask a research question</h1>
+<p class="disclaimer">
+  Retrieval only, over `core`'s indexed corpus -- no scientific claim is
+  synthesized across papers, and there is no single "the answer" verdict.
+  Each matched paper's own evidence records show their own, separately
+  computed Evidence Intelligence numbers (see <a href="/about">About</a>)
+  where a graph claim exists for them.
+</p>
+
+<form method="get" action="/ask" class="ask-form">
+  <label for="q">Question</label>
+  <input
+    type="text"
+    id="q"
+    name="q"
+    value="{{ question }}"
+    placeholder="does semaglutide reduce body weight"
+    autofocus
+  />
+  <button type="submit">Ask</button>
+</form>
+
+{% if results is not none %}
+<h2>Results for &ldquo;{{ question }}&rdquo;</h2>
+{% if results %}
+<ol class="ask-results">
+  {% for item in results %}
+  {% set paper = item.paper %}
+  <li>
+    <p>
+      <a href="/papers/{{ paper.paper_id }}"><strong>{{ paper.title }}</strong></a><br />
+      {% if paper.doi %}DOI: {{ paper.doi }}{% endif %}
+      {% if paper.publication_year %}-- {{ paper.publication_year }}{% endif %}
+    </p>
+    <p class="ask-snippet">{{ paper.snippet }}</p>
+    {% if item.evidence_entries %}
+    <ul class="ask-evidence">
+      {% for entry in item.evidence_entries %}
+      {% set evidence = entry.evidence %}
+      {% set intelligence = entry.intelligence %}
+      <li>
+        <a href="/claims/{{ evidence.evidence_record_id }}">{{ evidence.evidence_record_id }}</a>
+        {% if evidence.claim_text %}-- {{ evidence.claim_text }}{% endif %}
+        {% if intelligence %}
+        <br />
+        Evidence Quality: {{ intelligence.quality.score }}/100 --
+        Evidence Consensus:
+        {% if intelligence.consensus.score is not none %}{{ intelligence.consensus.score }}/100{% else %}not yet assessable{% endif %}
+        ({{ intelligence.consensus.reliability }}) --
+        Claim Confidence:
+        {% if intelligence.confidence.score is not none %}{{ intelligence.confidence.score }}/100{% else %}not yet assessable{% endif %}
+        ({{ intelligence.confidence.reliability }})
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-state">No evidence record matched for this paper.</p>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="empty-state">No relevant papers found in the indexed corpus.</p>
+{% endif %}
+{% endif %}
+{% endblock %}
