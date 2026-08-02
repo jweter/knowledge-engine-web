@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from knowledge_engine_web.evidence_reader import EvidenceRecordsError, read_evidence_record
+from knowledge_engine_web.evidence_reader import (
+    EvidenceRecordsError,
+    count_evidence_records,
+    read_evidence_record,
+)
 
 
 def _write_jsonl(path: Path, *records: dict[str, object]) -> None:
@@ -94,3 +98,45 @@ def test_read_evidence_record_raises_on_a_malformed_json_line(tmp_path: Path) ->
 
     with pytest.raises(EvidenceRecordsError):
         read_evidence_record(path, "ev-1")
+
+
+def test_read_evidence_record_captures_review_checklist(tmp_path: Path) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    _write_jsonl(
+        path,
+        {
+            "evidence_record_id": "ev-1",
+            "review_checklist": {"source_verified": True, "doi_verified": True},
+        },
+    )
+
+    detail = read_evidence_record(path, "ev-1")
+
+    assert detail is not None
+    assert detail.review_checklist == {"source_verified": True, "doi_verified": True}
+
+
+def test_read_evidence_record_defaults_missing_review_checklist(tmp_path: Path) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    _write_jsonl(path, {"evidence_record_id": "ev-1"})
+
+    detail = read_evidence_record(path, "ev-1")
+
+    assert detail is not None
+    assert detail.review_checklist == {}
+
+
+def test_count_evidence_records_returns_zero_when_the_file_does_not_exist(tmp_path: Path) -> None:
+    assert count_evidence_records(tmp_path / "missing.jsonl") == 0
+
+
+def test_count_evidence_records_counts_non_blank_lines(tmp_path: Path) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    _write_jsonl(
+        path,
+        {"evidence_record_id": "ev-1"},
+        {"evidence_record_id": "ev-2"},
+        {"evidence_record_id": "ev-3"},
+    )
+
+    assert count_evidence_records(path) == 3

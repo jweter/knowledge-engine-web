@@ -1,9 +1,12 @@
 """FastAPI application: renders `core`'s knowledge graph, read-only.
 
-No synthesis, no confidence computation, no judgment about what a claim
-or relationship means -- see `docs/web_design.md`'s Out of Scope
-section. Every value shown traces back to an actual row `core` already
-persisted.
+Every value shown traces back to an actual row `core` already persisted.
+As of M1 (see `docs/web_design.md`'s Out of Scope section, "Revised for
+Evidence Intelligence"), the one exception is a deterministic,
+no-LLM confidence-scoring computation
+(`knowledge_engine_web/evidence_intelligence.py`) -- still never an
+invented number, still never a judgment call this project makes itself,
+just arithmetic over already-stored, already-human-reviewed fields.
 """
 
 from __future__ import annotations
@@ -19,8 +22,20 @@ from sqlalchemy import Engine, create_engine
 
 from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
-from knowledge_engine_web.evidence_reader import read_evidence_record
+from knowledge_engine_web.evidence_intelligence import (
+    compute_claim_confidence,
+    compute_evidence_consensus,
+    compute_evidence_coverage,
+    compute_evidence_quality,
+    render_synthesis,
+)
+from knowledge_engine_web.evidence_reader import (
+    EvidenceRecordDetail,
+    count_evidence_records,
+    read_evidence_record,
+)
 from knowledge_engine_web.graph_reader import (
+    RelationshipEdge,
     list_claims,
     list_relationship_candidates,
     list_unconfirmed_claims,
@@ -245,16 +260,71 @@ def claim_detail(request: Request, evidence_record_id: str) -> HTMLResponse:
         raise HTTPException(status_code=404, detail="No claim found for that evidence record ID.")
 
     settings = Settings()
-    evidence = (
-        read_evidence_record(Path(settings.evidence_records_path), evidence_record_id)
-        if settings.evidence_records_path
-        else None
-    )
+    evidence = None
+    intelligence = None
+    if settings.evidence_records_path:
+        evidence_path = Path(settings.evidence_records_path)
+        evidence = read_evidence_record(evidence_path, evidence_record_id)
+        if evidence is not None:
+            intelligence = _compute_evidence_intelligence(
+                evidence_path, evidence, detail.relationships
+            )
+
     return templates.TemplateResponse(
         request=request,
         name="claim_detail.html",
-        context={"claim": detail, "evidence": evidence},
+        context={"claim": detail, "evidence": evidence, "intelligence": intelligence},
     )
+
+
+def _compute_evidence_intelligence(
+    evidence_path: Path, evidence: EvidenceRecordDetail, relationships: list[RelationshipEdge]
+) -> dict[str, object]:
+    """Compute Evidence Quality, Consensus, Claim Confidence, and Coverage for one claim.
+
+    See `knowledge_engine_web/evidence_intelligence.py`. Reads each
+    `supports`/`contradicts` partner's own evidence record (a handful of
+    extra JSONL scans at the corpus's current ~150-record scale) so Claim
+    Confidence's "mean quality of participating records" reflects every
+    claim actually in agreement, not just this one.
+    """
+
+    quality = compute_evidence_quality(evidence)
+    consensus = compute_evidence_consensus(relationships)
+
+    participating_qualities = [quality]
+    seen_other_ids: set[str] = set()
+    for relationship in relationships:
+        if relationship.relationship_type not in ("supports", "contradicts"):
+            continue
+        other_id = relationship.other_evidence_record_id
+        if other_id in seen_other_ids or other_id == evidence.evidence_record_id:
+            continue
+        seen_other_ids.add(other_id)
+        other_evidence = read_evidence_record(evidence_path, other_id)
+        if other_evidence is not None:
+            participating_qualities.append(compute_evidence_quality(other_evidence))
+
+    confidence = compute_claim_confidence(participating_qualities, consensus)
+
+    summary = read_graph_summary(_engine())
+    records_in_relationship = summary.claims_total - len(list_unconfirmed_claims(_engine()))
+    coverage = compute_evidence_coverage(
+        total_records=count_evidence_records(evidence_path),
+        records_in_relationship=records_in_relationship,
+    )
+
+    synthesis = render_synthesis(
+        consensus=consensus, quality=quality, confidence=confidence, coverage=coverage
+    )
+
+    return {
+        "quality": quality,
+        "consensus": consensus,
+        "confidence": confidence,
+        "coverage": coverage,
+        "synthesis": synthesis,
+    }
 
 
 @app.get("/papers/{paper_id}", response_class=HTMLResponse)

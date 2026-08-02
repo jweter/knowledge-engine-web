@@ -94,12 +94,24 @@ What this section originally excluded, and what's true of each today:
   renders). Still needs its own design pass; see this repo's
   `README.md` Roadmap.
 - **Any confidence rating, synthesis, or judgment about what a claim or
-  relationship means.** Still true, and not open for revision here.
-  `core_interface_contract.md`'s "the seam" applies exactly as it
-  applies to `core` itself: this project never sets or infers
-  `research_question`, `evidence_direction`, or any rating beyond
-  `core`'s own stored `confidence_note` text. That is the
-  `knowledge-engine-ai` layer's job, not this one's.
+  relationship means.** Revised for Evidence Intelligence (M1):
+  `GET /claims/{evidence_record_id}` now shows a deterministic,
+  no-LLM confidence-scoring computation (`knowledge_engine_web/evidence_intelligence.py`,
+  independently rebuilding `knowledge-engine-core`'s
+  `docs/evidence_intelligence_design.md` formula against this project's
+  own dataclasses, the same "read `core`'s data, never its code"
+  posture as `graph_reader.py`). This is not a loosening of the seam's
+  actual substance: the computation is fully deterministic (no LLM, no
+  statistical model), reads only already-stored, already-human-reviewed
+  fields, and this project still never sets or infers
+  `research_question`, `evidence_direction`, or authors a
+  `RelationshipRecord` -- `core_interface_contract.md`'s own "Revised
+  in M58" note documents the same location change on `core`'s side.
+  What remains out of scope, unchanged: any *narrated* synthesis (an
+  LLM explaining what a number means), cross-domain confidence
+  profiles, and the Statistics Auditor -- see
+  `docs/evidence_intelligence_design.md`'s own "Explicitly out of
+  scope" section in `knowledge-engine-core`.
 - **Write access of any kind.** Still true. This project never
   modifies `core`'s database. Read-only, always.
 - **Authentication, multi-user support, deployment.** Since built: a

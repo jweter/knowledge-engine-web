@@ -248,6 +248,102 @@ def test_claim_detail_page_escapes_evidence_record_content(
     assert "&lt;script&gt;" in response.text
 
 
+def test_claim_detail_page_shows_not_yet_assessable_with_no_relationships(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_record_id": "ev-1",
+                "study_type": "randomized_controlled_trial",
+                "extraction_method": "manual_human_review",
+                "review_checklist": {"source_verified": True},
+                "limitations": ["A limitation."],
+                "uncertainty_notes": "An uncertainty.",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/claims/ev-1")
+
+    assert response.status_code == 200
+    assert "Evidence Intelligence" in response.text
+    assert "not yet assessable" in response.text
+    assert "reliability: insufficient" in response.text
+
+
+def test_claim_detail_page_computes_consensus_with_two_supports_edges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-1"},
+                {"id": 2, "evidence_record_id": "ev-2"},
+                {"id": 3, "evidence_record_id": "ev-3"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 2,
+                    "target_claim_id": 1,
+                    "relationship_type": "supports",
+                    "rationale": "Same direction, independent trial.",
+                },
+                {
+                    "id": 2,
+                    "relationship_id": "rel-2",
+                    "source_claim_id": 3,
+                    "target_claim_id": 1,
+                    "relationship_type": "supports",
+                    "rationale": "Same direction, pooled meta-analysis.",
+                },
+            ],
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    record_common = {
+        "study_type": "randomized_controlled_trial",
+        "extraction_method": "manual_human_review",
+        "review_checklist": {"source_verified": True},
+        "limitations": ["A limitation."],
+        "uncertainty_notes": "An uncertainty.",
+    }
+    evidence_path.write_text(
+        "\n".join(
+            json.dumps({"evidence_record_id": eid, **record_common})
+            for eid in ("ev-1", "ev-2", "ev-3")
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/claims/ev-1")
+
+    assert response.status_code == 200
+    assert "100/100" in response.text
+    assert "not yet assessable" not in response.text
+
+
 def test_unconfirmed_claims_page_excludes_a_claim_with_a_relationship_edge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

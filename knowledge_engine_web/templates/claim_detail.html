@@ -3,8 +3,11 @@
 {% block content %}
 <h1>{{ claim.evidence_record_id }}</h1>
 <p class="disclaimer">
-  This page displays stored graph rows only -- nothing here is
-  inferred or synthesized.
+  This page displays stored graph rows only. The Evidence Intelligence
+  section below is the one exception: it is computed deterministically
+  from the stored fields above it (no LLM, nothing invented) -- see
+  <code>docs/evidence_intelligence_design.md</code> in
+  <code>knowledge-engine-core</code>.
 </p>
 
 <h2>Evidence Record</h2>
@@ -35,8 +38,9 @@
 {% endif %}
 {% if evidence.confidence_note %}
 <p>
-  <strong>Confidence note</strong> (`core`'s own stored text, not a
-  score this project computes): {{ evidence.confidence_note }}
+  <strong>Confidence note</strong> (`core`'s own free-text field, distinct
+  from the computed Evidence Intelligence numbers below):
+  {{ evidence.confidence_note }}
 </p>
 {% endif %}
 <p>
@@ -47,6 +51,69 @@
   ({{ evidence.extraction_status or "status unknown" }}; review status:
   {{ evidence.review_status or "unknown" }}).
 </p>
+
+<h2>Evidence Intelligence</h2>
+{% if intelligence %}
+<p class="disclaimer">
+  Computed deterministically from the stored fields above -- no LLM, no
+  invented number. Evidence Quality, Evidence Consensus, and Claim
+  Confidence are three separate figures and must never be read as one
+  collapsed score. See <code>docs/evidence_intelligence_design.md</code>
+  in <code>knowledge-engine-core</code>.
+</p>
+<table>
+  <tr>
+    <th>Evidence Quality</th>
+    <td>
+      {{ intelligence.quality.score }}/100
+      ({{ intelligence.quality.study_design_tier }},
+      {% if intelligence.quality.manually_reviewed %}manually reviewed{% else %}automated, pending review{% endif %})
+    </td>
+  </tr>
+  <tr>
+    <th>Evidence Consensus</th>
+    <td>
+      {% if intelligence.consensus.score is not none %}
+        {{ intelligence.consensus.score }}/100
+        ({{ intelligence.consensus.supports_count }} of {{ intelligence.consensus.agreement_total }} agree)
+      {% else %}
+        not yet assessable
+      {% endif %}
+      -- reliability: {{ intelligence.consensus.reliability }}
+    </td>
+  </tr>
+  <tr>
+    <th>Claim Confidence</th>
+    <td>
+      {% if intelligence.confidence.score is not none %}
+        {{ intelligence.confidence.score }}/100
+      {% else %}
+        not yet assessable
+      {% endif %}
+      -- reliability: {{ intelligence.confidence.reliability }}
+    </td>
+  </tr>
+  <tr>
+    <th>Evidence Coverage</th>
+    <td>
+      {{ intelligence.coverage.records_in_relationship }} of {{ intelligence.coverage.total_records }}
+      corpus records ({{ intelligence.coverage.percentage }}%) participate in a confirmed relationship.
+    </td>
+  </tr>
+</table>
+<p><strong>Synthesis</strong> (a deterministic template over the numbers above, not generated text):</p>
+<ul>
+  {% for line in intelligence.synthesis %}
+  <li>{{ line }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty-state">
+  Evidence Intelligence is not shown here -- it requires the same
+  <code>KE_WEB_EVIDENCE_RECORDS_PATH</code> configuration as the
+  Evidence Record section above.
+</p>
+{% endif %}
 {% else %}
 <p class="empty-state">
   Evidence-record content is not configured for this deployment. Set
