@@ -115,10 +115,16 @@ original approach) can never reach it, which broke the alpha's first
 real deploy (`COPY data ./data` failing with `"/data": not found`).
 `scripts/build_alpha_snapshot.py` keeps this safe to commit: it copies
 only the tables `knowledge_engine_web` actually reads (graph tables,
-`papers`, `journals` for a foreign-key reference) out of `core`'s full
-database, which is hundreds of megabytes of raw paper text and
-embeddings this app never touches. The trimmed result is a few
-megabytes -- small enough to commit directly.
+`papers`, `journals` for a foreign-key reference, and `paper_search` --
+the FTS5 index `/ask` queries) out of `core`'s full database, which is
+hundreds of megabytes of raw paper text and embeddings this app mostly
+never touches. The trimmed result is a few megabytes -- small enough
+to commit directly. **`paper_search` is indexed on title/abstract only,
+not full body text**, which is what makes up most of `core`'s database
+size (~120 MB across today's corpus); a snapshot with full-text search
+included would be far too large to commit. This means the alpha's
+`/ask` page only matches title/abstract content, not full paper text --
+a real, documented recall gap for this deployment, not a bug.
 
 ### 1. Refresh the data snapshot
 
@@ -186,6 +192,10 @@ unlike the local-network deployment above.
   boundary (`web` talking to a service over HTTP/gRPC rather than
   reading SQLite directly) is real, unbuilt infrastructure work for
   beyond the alpha stage.
+- **Full-text `/ask` search.** The committed snapshot's `paper_search`
+  index covers title/abstract only, not full body text (see above) --
+  a real recall gap versus a local/LAN deployment reading `core`'s
+  full database directly.
 - **Real multi-user authentication.** The alpha's shared
   username/password is a stopgap for a small testing group, not a
   user-account system -- see `docs/web_design.md`'s Out of Scope.
