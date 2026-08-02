@@ -140,8 +140,10 @@ This project reads, but never writes, three kinds of `core` data:
   `render.yaml`, `KE_WEB_ALPHA_USERNAME`/`KE_WEB_ALPHA_PASSWORD`) for
   testing hosting, browsers, and real-world latency outside a local
   network -- done; see `docs/deployment.md`'s "Alpha hosting (Render)"
-  section. Serves a point-in-time snapshot, not a live connection to
-  `core` -- a real API boundary remains future work.
+  section. Serves a snapshot, refreshed automatically on a weekly
+  schedule (done -- see deployment.md's automation note), not a
+  request-time live connection to `core` -- a real API boundary
+  remains future work.
 - `GET /reports` and `GET /reports/{graph,relationship-candidates,unconfirmed-claims}`
   -- the same Markdown reports `ke graph-report`/`ke graph-relationship-candidates`/
   `ke graph-unconfirmed-claims` print, rebuilt from this site's own data
