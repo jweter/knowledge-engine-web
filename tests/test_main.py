@@ -525,6 +525,7 @@ def test_about_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert response.status_code == 200
     assert "About Knowledge Engine" in response.text
     assert "The seam" in response.text
+    assert "https://buymeacoffee.com/Weterjeremy" in response.text
 
 
 def test_root_redirects_to_graph(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

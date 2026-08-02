@@ -255,3 +255,20 @@ th {
     height: 2900px;
   }
 }
+
+.coffee-button {
+  display: inline-block;
+  padding: 0.55rem 1.25rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.coffee-button:hover,
+.coffee-button:focus-visible {
+  opacity: 0.9;
+}
