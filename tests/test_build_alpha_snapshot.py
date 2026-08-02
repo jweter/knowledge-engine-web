@@ -64,6 +64,9 @@ def _create_core_like_source(path: Path) -> None:
             cited_paper_id INTEGER REFERENCES papers(id)
         );
         CREATE TABLE irrelevant_table (id INTEGER PRIMARY KEY);
+        CREATE VIRTUAL TABLE paper_search USING fts5(
+            title, abstract, body_text, raw_text, tokenize='porter unicode61'
+        );
 
         INSERT INTO journals VALUES (1, 'Journal of Testing');
         INSERT INTO papers VALUES (1, 'A real paper title', '10.1000/xyz', 1);
@@ -71,6 +74,8 @@ def _create_core_like_source(path: Path) -> None:
         INSERT INTO graph_claims VALUES (1, 'ev-test-001');
         INSERT INTO graph_claim_concepts VALUES (1, 1, 1);
         INSERT INTO irrelevant_table VALUES (1);
+        INSERT INTO paper_search(rowid, title, abstract, body_text, raw_text)
+            VALUES (1, 'A real paper title', 'An abstract mentioning semaglutide.', '', '');
         """
     )
     conn.commit()
@@ -105,7 +110,32 @@ def test_snapshot_omits_tables_the_web_app_never_reads(tmp_path: Path) -> None:
     }
     conn.close()
     assert "irrelevant_table" not in table_names
-    assert table_names == set(build_alpha_snapshot.TABLE_NAMES)
+    # paper_search's own shadow tables (fts5 bookkeeping) come along for free
+    # once the virtual table is created -- not literal TABLE_NAMES entries.
+    fts_shadow_tables = {
+        f"{build_alpha_snapshot.FTS_TABLE_NAME}_{suffix}"
+        for suffix in ("data", "idx", "content", "docsize", "config")
+    }
+    expected = set(build_alpha_snapshot.TABLE_NAMES) | {build_alpha_snapshot.FTS_TABLE_NAME}
+    expected |= fts_shadow_tables
+    assert table_names == expected
+
+
+def test_snapshot_preserves_the_full_text_index_with_matching_rowids(tmp_path: Path) -> None:
+    """The exact bug this fix addresses: /ask's FTS query returned nothing without this."""
+
+    source_path = tmp_path / "source.sqlite3"
+    dest_path = tmp_path / "snapshot.sqlite3"
+    _create_core_like_source(source_path)
+
+    build_alpha_snapshot.build_snapshot(source_path, dest_path)
+
+    conn = sqlite3.connect(dest_path)
+    rows = conn.execute(
+        "SELECT rowid FROM paper_search WHERE paper_search MATCH 'semaglutide'"
+    ).fetchall()
+    conn.close()
+    assert rows == [(1,)]
 
 
 def test_snapshot_preserves_row_data(tmp_path: Path) -> None:
