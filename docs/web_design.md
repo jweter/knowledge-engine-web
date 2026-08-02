@@ -6,14 +6,16 @@ code, the same role `knowledge-engine-core`'s own
 `docs/phase1_design.md`/`docs/phase4_design.md` played for their
 phases. Much more has shipped since -- claims, unconfirmed claims,
 relationship candidates, paper detail, Evidence Record rendering,
-Markdown reports, a Roadmap page, and a password-gated alpha
-deployment. **For current scope, see this repo's own `README.md`
-Roadmap section**, kept up to date as features ship. What follows
-below is the original first-slice scope and the architectural
-decisions made reaching it -- most still hold true (the SQLAlchemy
-reflection decision, the JSONL-not-shell-out decision for Evidence
-Records) even though the page inventory it describes is now smaller
-than what actually exists.
+Markdown reports, a Roadmap page, Evidence Intelligence rendering, a
+question-first `GET /ask` page, and a password-gated alpha deployment.
+**For current scope, see this repo's own `README.md` Roadmap section**,
+kept up to date as features ship. What follows below is the original
+first-slice scope and the architectural decisions made reaching it --
+most still hold true (the SQLAlchemy reflection decision, the
+JSONL-not-shell-out decision for Evidence Records, and the same
+port-don't-shell-out posture now extended to `core`'s FTS5 retrieval
+index for `GET /ask`) even though the page inventory it describes is
+now smaller than what actually exists.
 
 ## Mission
 

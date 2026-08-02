@@ -8,6 +8,7 @@ import pytest
 from knowledge_engine_web.evidence_reader import (
     EvidenceRecordsError,
     count_evidence_records,
+    list_evidence_records_for_doi,
     read_evidence_record,
 )
 
@@ -140,3 +141,54 @@ def test_count_evidence_records_counts_non_blank_lines(tmp_path: Path) -> None:
     )
 
     assert count_evidence_records(path) == 3
+
+
+def test_list_evidence_records_for_doi_returns_an_empty_list_when_the_file_does_not_exist(
+    tmp_path: Path,
+) -> None:
+    assert list_evidence_records_for_doi(tmp_path / "missing.jsonl", "10.1000/example") == []
+
+
+def test_list_evidence_records_for_doi_returns_an_empty_list_for_an_unmatched_doi(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    _write_jsonl(path, {"evidence_record_id": "ev-1", "source_doi": "10.1000/other"})
+
+    assert list_evidence_records_for_doi(path, "10.1000/example") == []
+
+
+def test_list_evidence_records_for_doi_returns_every_matching_record(tmp_path: Path) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    _write_jsonl(
+        path,
+        {"evidence_record_id": "ev-1", "source_doi": "10.1000/example", "claim_text": "First."},
+        {"evidence_record_id": "ev-2", "source_doi": "10.1000/other", "claim_text": "Unrelated."},
+        {"evidence_record_id": "ev-3", "source_doi": "10.1000/example", "claim_text": "Second."},
+    )
+
+    records = list_evidence_records_for_doi(path, "10.1000/example")
+
+    assert [record.evidence_record_id for record in records] == ["ev-1", "ev-3"]
+
+
+def test_list_evidence_records_for_doi_normalizes_the_doi_before_comparing(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    _write_jsonl(
+        path,
+        {"evidence_record_id": "ev-1", "source_doi": "https://doi.org/10.1000/EXAMPLE"},
+    )
+
+    records = list_evidence_records_for_doi(path, "10.1000/example")
+
+    assert [record.evidence_record_id for record in records] == ["ev-1"]
+
+
+def test_list_evidence_records_for_doi_raises_on_a_malformed_json_line(tmp_path: Path) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    path.write_text("not json\n", encoding="utf-8")
+
+    with pytest.raises(EvidenceRecordsError):
+        list_evidence_records_for_doi(path, "10.1000/example")
