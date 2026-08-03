@@ -20,5 +20,7 @@ class Settings(BaseSettings):
     port: int = 8000
     alpha_username: str | None = None
     alpha_password: str | None = None
+    llm_model: str | None = None
+    ollama_host: str = "http://127.0.0.1:11434"
 
     model_config = SettingsConfigDict(env_prefix="KE_WEB_", env_file=".env", extra="ignore")

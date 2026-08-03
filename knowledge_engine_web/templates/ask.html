@@ -20,10 +20,27 @@
     placeholder="does semaglutide reduce body weight"
     autofocus
   />
+  <label class="ask-synthesize-toggle">
+    <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested %}checked{% endif %} />
+    Also generate an AI synthesis (local model, real inference -- not free)
+  </label>
   <button type="submit">Ask</button>
 </form>
 
 {% if results is not none %}
+{% if synthesize_requested %}
+<div class="ask-synthesis">
+  <h3>AI-generated synthesis</h3>
+  <p class="disclaimer">Local model, narrating only the evidence below -- not a new judgment call.</p>
+  {% if synthesis_error %}
+  <p class="empty-state">{{ synthesis_error }}</p>
+  {% elif synthesis %}
+  <p>{{ synthesis }}</p>
+  {% else %}
+  <p class="empty-state">No evidence with a stated claim was retrieved to narrate.</p>
+  {% endif %}
+</div>
+{% endif %}
 <h2>Results for &ldquo;{{ question }}&rdquo;</h2>
 {% if results %}
 <ol class="ask-results">

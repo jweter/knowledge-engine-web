@@ -44,12 +44,14 @@ from knowledge_engine_web.graph_reader import (
     read_graph_summary,
     read_paper_detail,
 )
+from knowledge_engine_web.llm import LocalLLMError, OllamaLLM
 from knowledge_engine_web.report_renderer import (
     render_graph_summary_report,
     render_relationship_candidates_report,
     render_unconfirmed_claims_report,
 )
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
+from knowledge_engine_web.synthesis import synthesize_answer
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -330,16 +332,23 @@ def _compute_evidence_intelligence(
 
 
 @app.get("/ask", response_class=HTMLResponse)
-def ask(request: Request, q: str = "") -> HTMLResponse:
+def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse:
     """Answer a natural-language research question: ranked papers, plus per-claim confidence.
 
-    Retrieval only, via `core`'s own FTS5 index (`retrieval.py`) -- no
-    cross-paper synthesis, no single "the answer" verdict. Each matched
+    Retrieval, via `core`'s own FTS5 index (`retrieval.py`), is always
+    the primary result -- no single "the answer" verdict. Each matched
     paper's evidence records (matched by DOI, `KE_WEB_EVIDENCE_RECORDS_PATH`
     permitting) show their own already-computed Evidence Intelligence
     numbers exactly as `/claims/{evidence_record_id}` does, when a graph
     claim exists for them -- never a new number, never a judgment this
     project invents for the occasion.
+
+    `synthesize=1` is the one opt-in exception: a local, offline LLM
+    (served by Ollama, `KE_WEB_LLM_MODEL` required) narrates that same
+    already-computed evidence into one grounded paragraph -- see
+    `knowledge_engine_web/synthesis.py` and `docs/web_design.md`'s
+    "Decision: local LLM" section. Off by default: real inference, not
+    free, and a person should ask for it explicitly.
     """
 
     question = q.strip()
@@ -362,10 +371,30 @@ def ask(request: Request, q: str = "") -> HTMLResponse:
         for paper in papers
     ]
 
+    synthesis: str | None = None
+    synthesis_error: str | None = None
+    if synthesize:
+        if not settings.llm_model:
+            synthesis_error = (
+                "Synthesis is not configured on this server -- KE_WEB_LLM_MODEL must be set."
+            )
+        else:
+            try:
+                llm = OllamaLLM(model=settings.llm_model, host=settings.ollama_host)
+                synthesis = synthesize_answer(question, results, llm)
+            except LocalLLMError as exc:
+                synthesis_error = str(exc)
+
     return templates.TemplateResponse(
         request=request,
         name="ask.html",
-        context={"question": question, "results": results},
+        context={
+            "question": question,
+            "results": results,
+            "synthesize_requested": synthesize,
+            "synthesis": synthesis,
+            "synthesis_error": synthesis_error,
+        },
     )
 
 

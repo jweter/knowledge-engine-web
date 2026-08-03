@@ -216,6 +216,28 @@ th {
   cursor: pointer;
 }
 
+.ask-form .ask-synthesize-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.ask-synthesis {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-alt);
+}
+
+.ask-synthesis h3 {
+  margin-top: 0;
+}
+
 .ask-results {
   list-style: none;
   padding: 0;

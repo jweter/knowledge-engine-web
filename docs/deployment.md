@@ -24,8 +24,18 @@ export KE_WEB_HOST="0.0.0.0"
 export KE_WEB_PORT="8000"
 export KE_WEB_DATABASE_URL="sqlite:///path/to/knowledge_engine.sqlite3"
 export KE_WEB_EVIDENCE_RECORDS_PATH="/path/to/evidence_records.jsonl"
+export KE_WEB_LLM_MODEL="qwen2.5:1.5b"  # optional -- enables /ask's synthesis checkbox
 poetry run knowledge-engine-web
 ```
+
+`KE_WEB_LLM_MODEL` is genuinely optional and specific to this kind of
+deployment: it requires `ollama serve` already running on the same host
+(`ollama pull qwen2.5:1.5b` once) -- see `docs/web_design.md`'s
+"Decision: local LLM". This works for local-network serving, but not
+for the Render alpha hosting below: a laptop or self-hosted machine
+cannot durably run Ollama *for* Render's separate hosted environment,
+so `/ask`'s synthesis checkbox stays unconfigured there until that gets
+its own architecture.
 
 `0.0.0.0` binds every network interface on the host -- reachable from
 other machines on the same local network at `http://<host-ip>:8000`.
@@ -58,6 +68,7 @@ Environment=KE_WEB_HOST=0.0.0.0
 Environment=KE_WEB_PORT=8000
 Environment=KE_WEB_DATABASE_URL=sqlite:////path/to/data/knowledge_engine.sqlite3
 Environment=KE_WEB_EVIDENCE_RECORDS_PATH=/path/to/data/corpora/glp1_weight_loss/evidence_records.jsonl
+Environment=KE_WEB_LLM_MODEL=qwen2.5:1.5b
 ExecStart=/path/to/poetry run knowledge-engine-web
 Restart=on-failure
 RestartSec=5
