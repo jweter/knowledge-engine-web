@@ -6,6 +6,7 @@ from knowledge_engine_web.graph_reader import (
     GraphSummary,
     list_claims,
     list_relationship_candidates,
+    list_relationships,
     list_unconfirmed_claims,
     read_claim_detail,
     read_graph_summary,
@@ -373,3 +374,45 @@ def test_read_paper_detail_shows_citation_edges_from_both_sides(tmp_path: Path) 
     assert len(cited_detail.cited_by) == 1
     assert cited_detail.cited_by[0].title == "Citing Paper"
     assert not cited_detail.cites
+
+
+def test_list_relationships_resolves_both_sides_to_evidence_record_id(tmp_path: Path) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-1"},
+                {"id": 2, "evidence_record_id": "ev-2"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 1,
+                    "target_claim_id": 2,
+                    "relationship_type": "supports",
+                    "rationale": "Because.",
+                    "created_at": "2026-01-05T00:00:00+00:00",
+                }
+            ],
+        )
+
+    edges = list_relationships(engine)
+
+    assert len(edges) == 1
+    assert edges[0].relationship_id == "rel-1"
+    assert edges[0].relationship_type == "supports"
+    assert edges[0].source_evidence_record_id == "ev-1"
+    assert edges[0].target_evidence_record_id == "ev-2"
+    assert edges[0].created_at == "2026-01-05T00:00:00+00:00"
+
+
+def test_list_relationships_on_a_database_with_no_graph_tables_yet(tmp_path: Path) -> None:
+    engine = build_engine(tmp_path)
+
+    assert list_relationships(engine) == []

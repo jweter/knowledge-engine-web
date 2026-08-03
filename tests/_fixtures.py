@@ -55,6 +55,7 @@ def create_graph_tables(engine: Engine, *, include_citations: bool = True) -> Me
         Column("target_claim_id", Integer, nullable=False),
         Column("relationship_type", String(16), nullable=False),
         Column("rationale", Text, nullable=False, default=""),
+        Column("created_at", String(32), nullable=False, default="2026-01-01T00:00:00Z"),
     )
     if include_citations:
         Table(

@@ -53,9 +53,14 @@ from knowledge_engine_web.report_renderer import (
     render_graph_summary_report,
     render_relationship_candidates_report,
     render_unconfirmed_claims_report,
+    render_whats_changed_report,
 )
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 from knowledge_engine_web.synthesis import synthesize_answer
+from knowledge_engine_web.whats_changed import (
+    WHATS_CHANGED_WINDOW_DAYS,
+    build_whats_changed_summary,
+)
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -70,6 +75,13 @@ def _engine() -> Engine:
     """Return an engine bound to `core`'s configured database, read-only by convention."""
 
     return create_engine(Settings().database_url)
+
+
+def _evidence_path() -> Path | None:
+    """Return `core`'s configured evidence-records path, or `None` if not set."""
+
+    settings = Settings()
+    return Path(settings.evidence_records_path) if settings.evidence_records_path else None
 
 
 @app.get("/", include_in_schema=False)
@@ -200,21 +212,33 @@ def relationship_candidates(request: Request) -> HTMLResponse:
     )
 
 
-_REPORTS: dict[str, tuple[str, str, Callable[[Engine], str]]] = {
+_REPORTS: dict[str, tuple[str, str, Callable[[Engine, Path | None], str]]] = {
     "graph": (
         "Graph Report",
         "The corpus-wide population counts -- the same report `ke graph-report` prints.",
-        lambda engine: render_graph_summary_report(read_graph_summary(engine)),
+        lambda engine, evidence_path: render_graph_summary_report(read_graph_summary(engine)),
     ),
     "relationship-candidates": (
         "Relationship Candidates Report",
         "Claim pairs sharing a PICO-resolved concept with no relationship edge yet.",
-        lambda engine: render_relationship_candidates_report(list_relationship_candidates(engine)),
+        lambda engine, evidence_path: render_relationship_candidates_report(
+            list_relationship_candidates(engine)
+        ),
     ),
     "unconfirmed-claims": (
         "Unconfirmed Claims Report",
         "Claims with no relationship edge of any type yet.",
-        lambda engine: render_unconfirmed_claims_report(list_unconfirmed_claims(engine)),
+        lambda engine, evidence_path: render_unconfirmed_claims_report(
+            list_unconfirmed_claims(engine)
+        ),
+    ),
+    "what-changed": (
+        "What Changed Report",
+        f"New claims, new relationship edges, and aggregate deltas over the last "
+        f"{WHATS_CHANGED_WINDOW_DAYS} days.",
+        lambda engine, evidence_path: render_whats_changed_report(
+            build_whats_changed_summary(engine, evidence_path)
+        ),
     ),
 }
 
@@ -252,7 +276,7 @@ def report_download(report_slug: str) -> Response:
     if entry is None:
         raise HTTPException(status_code=404, detail="No report with that name.")
     _, _, render = entry
-    report_text = render(_engine())
+    report_text = render(_engine(), _evidence_path())
     return Response(
         content=report_text,
         media_type="text/markdown",
@@ -268,7 +292,7 @@ def report_view(request: Request, report_slug: str) -> HTMLResponse:
     if entry is None:
         raise HTTPException(status_code=404, detail="No report with that name.")
     title, _, render = entry
-    report_text = render(_engine())
+    report_text = render(_engine(), _evidence_path())
     return templates.TemplateResponse(
         request=request,
         name="report_view.html",

@@ -58,6 +58,18 @@ class RelationshipEdge:
     direction: str
     rationale: str
     other_evidence_record_id: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class RelationshipListItem:
+    """One relationship edge in the graph, both sides resolved to their `evidence_record_id`."""
+
+    relationship_id: str
+    relationship_type: str
+    source_evidence_record_id: str
+    target_evidence_record_id: str
+    created_at: str
 
 
 @dataclass(frozen=True)
@@ -210,6 +222,53 @@ def list_unconfirmed_claims(engine: Engine) -> list[ClaimListItem]:
     ]
 
 
+def list_relationships(engine: Engine) -> list[RelationshipListItem]:
+    """Return every relationship edge in the graph, ordered by creation, or `[]` if none exist.
+
+    Unlike `_read_relationship_edges` (per-claim, called twice per edge --
+    once from each side), this reads every edge exactly once, both sides
+    already resolved to their `evidence_record_id`. Built for corpus-wide
+    reporting (`whats_changed.py`) where a per-claim N+1 query pattern
+    would be wasteful.
+    """
+
+    tables = _reflect_graph_tables(engine)
+    relationships = tables.get("graph_claim_relationships")
+    claims = tables.get("graph_claims")
+    if relationships is None or claims is None:
+        return []
+
+    source_claims = claims.alias("source_claims")
+    target_claims = claims.alias("target_claims")
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            select(
+                relationships.c.relationship_id,
+                relationships.c.relationship_type,
+                relationships.c.created_at,
+                source_claims.c.evidence_record_id.label("source_evidence_record_id"),
+                target_claims.c.evidence_record_id.label("target_evidence_record_id"),
+            )
+            .select_from(
+                relationships.join(
+                    source_claims, relationships.c.source_claim_id == source_claims.c.id
+                ).join(target_claims, relationships.c.target_claim_id == target_claims.c.id)
+            )
+            .order_by(relationships.c.id)
+        ).all()
+    return [
+        RelationshipListItem(
+            relationship_id=row.relationship_id,
+            relationship_type=row.relationship_type,
+            source_evidence_record_id=row.source_evidence_record_id,
+            target_evidence_record_id=row.target_evidence_record_id,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
+
+
 def read_claim_detail(engine: Engine, evidence_record_id: str) -> ClaimDetail | None:
     """Return one claim's concepts (by PICO role) and relationship edges, or `None` if not found.
 
@@ -294,6 +353,7 @@ def _read_relationship_edges(
                 relationships.c.relationship_id,
                 relationships.c.relationship_type,
                 relationships.c.rationale,
+                relationships.c.created_at,
                 claims.c.evidence_record_id.label("other_evidence_record_id"),
             )
             .select_from(relationships.join(claims, claims.c.id == other_column))
@@ -308,6 +368,7 @@ def _read_relationship_edges(
                     direction=direction,
                     rationale=row.rationale,
                     other_evidence_record_id=row.other_evidence_record_id,
+                    created_at=row.created_at,
                 ),
             )
             for row in rows

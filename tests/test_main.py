@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -663,6 +664,7 @@ def test_reports_index_lists_every_report(tmp_path: Path, monkeypatch: pytest.Mo
         response.text
     )
     assert '<a href="/reports/unconfirmed-claims">Unconfirmed Claims Report</a>' in response.text
+    assert '<a href="/reports/what-changed">What Changed Report</a>' in response.text
 
 
 def test_graph_report_view_renders_populated_counts(
@@ -749,6 +751,49 @@ def test_unconfirmed_claims_report_view_lists_a_claim(
     assert response.status_code == 200
     assert "# Knowledge Engine Graph Unconfirmed Claims" in response.text
     assert "ev-1" in response.text
+
+
+def test_whats_changed_report_view_lists_a_new_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {
+                    "id": 1,
+                    "evidence_record_id": "ev-1",
+                    "created_at": datetime.now(UTC).isoformat(),
+                }
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/what-changed")
+
+    assert response.status_code == 200
+    assert "# Knowledge Engine What Changed Report" in response.text
+    # A claim created right now definitely falls inside the report's
+    # default 7-day window, so it must show up as new.
+    assert "ev-1" in response.text
+    # No KE_WEB_EVIDENCE_RECORDS_PATH configured -- deltas must say so
+    # honestly rather than showing a fabricated 0%.
+    assert "not configured on this deployment" in response.text
+
+
+def test_whats_changed_report_download_returns_markdown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/what-changed.md")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert response.text.startswith("# Knowledge Engine What Changed Report")
 
 
 def test_report_view_404s_for_an_unknown_report_name(

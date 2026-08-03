@@ -47,6 +47,7 @@ def _relationship(relationship_type: str) -> RelationshipEdge:
         direction="source",
         rationale="Because.",
         other_evidence_record_id="ev-other",
+        created_at="2026-01-01T00:00:00+00:00",
     )
 
 

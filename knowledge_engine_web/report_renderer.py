@@ -26,6 +26,7 @@ from knowledge_engine_web.graph_reader import (
     GraphSummary,
     RelationshipCandidate,
 )
+from knowledge_engine_web.whats_changed import WhatsChangedSummary
 
 _MARKDOWN_SPECIAL_CHARS = re.compile(r"([\\`*_\[\]<~])")
 
@@ -146,6 +147,101 @@ def render_unconfirmed_claims_report(claims: list[ClaimListItem]) -> str:
             "claim has been reviewed and explicitly related to it, nothing "
             "more. This is a fact about review coverage, not a judgment "
             "about the underlying science.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _quality_delta_line(before: float | None, after: float | None) -> str:
+    if before is None or after is None:
+        return "not yet assessable"
+    return f"{before:.1f}/100 -> {after:.1f}/100 ({after - before:+.1f})"
+
+
+def render_whats_changed_report(summary: WhatsChangedSummary) -> str:
+    """Build the "what changed" report: new activity and aggregate deltas over one window.
+
+    `docs/roadmap.md`'s "Planned: Reviewer & Evidence Intelligence
+    Tooling" third item. "Before" is reconstructed from `created_at`
+    timestamps already stored on graph rows, not a stored historical
+    snapshot -- see `whats_changed.py`'s own module docstring.
+    """
+
+    lines = [
+        "# Knowledge Engine What Changed Report",
+        "",
+        f"Generated: {summary.generated_at}",
+        f"Window: last {summary.window_days} day(s), since {summary.since}",
+        "",
+        "## New Claims",
+        "",
+        f"New claims: {len(summary.new_claims)}",
+        "",
+    ]
+    if not summary.new_claims:
+        lines.extend(["No new claims in this window.", ""])
+    for claim in summary.new_claims:
+        lines.append(
+            f"- {_report_text(claim.evidence_record_id)} ({_report_text(claim.created_at)})"
+        )
+    if summary.new_claims:
+        lines.append("")
+
+    lines.extend(
+        [
+            "## New Relationship Edges",
+            "",
+            f"New relationship edges: {len(summary.new_relationships)}",
+            "",
+        ]
+    )
+    if not summary.new_relationships:
+        lines.extend(["No new relationship edges in this window.", ""])
+    for edge in summary.new_relationships:
+        lines.append(
+            f"- {_report_text(edge.source_evidence_record_id)} "
+            f"**{_report_text(edge.relationship_type)}** "
+            f"{_report_text(edge.target_evidence_record_id)} ({_report_text(edge.created_at)})"
+        )
+    if summary.new_relationships:
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Aggregate Deltas",
+            "",
+            f"- Claims in the graph: {summary.claims_total_before} -> {summary.claims_total_after}",
+        ]
+    )
+    if summary.evidence_configured:
+        lines.extend(
+            [
+                f"- Mean Evidence Quality: "
+                f"{_quality_delta_line(summary.mean_quality_before, summary.mean_quality_after)}",
+                f"- Evidence Coverage: {summary.coverage_before.percentage}% -> "
+                f"{summary.coverage_after.percentage}% "
+                f"({summary.coverage_before.records_in_relationship} of "
+                f"{summary.coverage_before.total_records} -> "
+                f"{summary.coverage_after.records_in_relationship} of "
+                f"{summary.coverage_after.total_records})",
+            ]
+        )
+    else:
+        lines.append(
+            "- Mean Evidence Quality / Evidence Coverage: not shown -- "
+            "`KE_WEB_EVIDENCE_RECORDS_PATH` is not configured on this deployment."
+        )
+    lines.extend(
+        [
+            "",
+            "## Scope",
+            "",
+            '"Before" is reconstructed from each graph row\'s own `created_at` '
+            "timestamp as of the window's start, not a stored historical "
+            "snapshot -- this project has no persistent host to keep one on "
+            "(see `docs/service_boundary_design.md`). Both ends are real, "
+            "already-stored values; nothing here is estimated.",
             "",
         ]
     )
