@@ -42,6 +42,7 @@ def _evidence(**overrides: object) -> EvidenceRecordDetail:
 
 def _relationship(relationship_type: str) -> RelationshipEdge:
     return RelationshipEdge(
+        relationship_id="rel-1",
         relationship_type=relationship_type,
         direction="source",
         rationale="Because.",

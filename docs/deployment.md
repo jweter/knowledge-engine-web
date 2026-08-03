@@ -24,6 +24,7 @@ export KE_WEB_HOST="0.0.0.0"
 export KE_WEB_PORT="8000"
 export KE_WEB_DATABASE_URL="sqlite:///path/to/knowledge_engine.sqlite3"
 export KE_WEB_EVIDENCE_RECORDS_PATH="/path/to/evidence_records.jsonl"
+export KE_WEB_RELATIONSHIP_RECORDS_PATH="/path/to/relationship_records.jsonl"
 poetry run knowledge-engine-web
 ```
 
@@ -58,6 +59,7 @@ Environment=KE_WEB_HOST=0.0.0.0
 Environment=KE_WEB_PORT=8000
 Environment=KE_WEB_DATABASE_URL=sqlite:////path/to/data/knowledge_engine.sqlite3
 Environment=KE_WEB_EVIDENCE_RECORDS_PATH=/path/to/data/corpora/glp1_weight_loss/evidence_records.jsonl
+Environment=KE_WEB_RELATIONSHIP_RECORDS_PATH=/path/to/data/corpora/glp1_weight_loss/relationship_records.jsonl
 ExecStart=/path/to/poetry run knowledge-engine-web
 Restart=on-failure
 RestartSec=5
