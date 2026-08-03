@@ -148,6 +148,99 @@ def test_claim_detail_page_renders_concepts_and_relationships(
     assert "ev-2" in response.text
 
 
+def test_claim_detail_page_renders_relationship_provenance_when_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-1"},
+                {"id": 2, "evidence_record_id": "ev-2"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 1,
+                    "target_claim_id": 2,
+                    "relationship_type": "supports",
+                    "rationale": "Both report the same direction.",
+                }
+            ],
+        )
+    relationship_path = tmp_path / "relationship_records.jsonl"
+    relationship_path.write_text(
+        json.dumps(
+            {
+                "relationship_id": "rel-1",
+                "source_evidence_record_id": "ev-1",
+                "target_evidence_record_id": "ev-2",
+                "relationship_type": "supports",
+                "rationale": "Both report the same direction.",
+                "provenance": {
+                    "created_by": "manual review",
+                    "method": "reviewed both PICO fields",
+                },
+                "created_for_milestone": "M56",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_RELATIONSHIP_RECORDS_PATH", str(relationship_path))
+
+    response = TestClient(app).get("/claims/ev-1")
+
+    assert response.status_code == 200
+    assert "rel-1" in response.text
+    assert "manual review" in response.text
+    assert "reviewed both PICO fields" in response.text
+    assert "M56" in response.text
+
+
+def test_claim_detail_page_omits_relationship_provenance_when_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-1"},
+                {"id": 2, "evidence_record_id": "ev-2"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 1,
+                    "target_claim_id": 2,
+                    "relationship_type": "supports",
+                    "rationale": "Both report the same direction.",
+                }
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.delenv("KE_WEB_RELATIONSHIP_RECORDS_PATH", raising=False)
+
+    response = TestClient(app).get("/claims/ev-1")
+
+    assert response.status_code == 200
+    assert "supports" in response.text
+    assert "Relationship ID:" not in response.text
+
+
 def test_claim_detail_page_404s_for_an_unknown_evidence_record_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

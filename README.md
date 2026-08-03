@@ -81,6 +81,18 @@ export KE_WEB_EVIDENCE_RECORDS_PATH="/path/to/data/corpora/glp1_weight_loss/evid
 This is optional -- without it, claim detail pages still render graph
 structure (concepts, relationships) exactly as before.
 
+To also show each relationship edge's provenance (who determined it,
+and how -- manual review or automated) on claim detail pages, point
+this project at `core`'s `relationship_records.jsonl` too:
+
+```bash
+export KE_WEB_RELATIONSHIP_RECORDS_PATH="/path/to/data/corpora/glp1_weight_loss/relationship_records.jsonl"
+```
+
+This is optional as well -- without it, relationship edges still show
+their type and rationale exactly as before, just without the
+provenance line.
+
 By default this binds to `127.0.0.1:8000` (local machine only). To
 serve on a local network, or run as a persistent systemd service, see
 `docs/deployment.md`.
@@ -113,8 +125,11 @@ This project reads, but never writes, three kinds of `core` data:
   `evidence_records.jsonl`), read directly via a configured path
   (`KE_WEB_EVIDENCE_RECORDS_PATH`), never imported from `core`. Rendered
   on claim detail pages when configured (`knowledge_engine_web/evidence_reader.py`).
-- **Relationship Records** -- plain JSONL files `core` produces, not yet
-  rendered by any page here (see `docs/web_design.md`'s Out of Scope).
+- **Relationship Records** -- plain JSONL files `core` produces (e.g.
+  `relationship_records.jsonl`), read directly via a configured path
+  (`KE_WEB_RELATIONSHIP_RECORDS_PATH`), never imported from `core`.
+  Each relationship edge's provenance is rendered on claim detail pages
+  when configured (`knowledge_engine_web/relationship_reader.py`).
 
 ## Roadmap
 
@@ -132,8 +147,12 @@ This project reads, but never writes, three kinds of `core` data:
   `research_question`, `evidence_direction`, PICO fields,
   `result_summary`, `limitations`, and more, read directly from
   `evidence_records.jsonl` (done; optional via `KE_WEB_EVIDENCE_RECORDS_PATH`).
-- Relationship Record rendering -- still needs its own design pass (see
-  `docs/web_design.md`'s Out of Scope).
+- Relationship Record rendering on claim detail pages -- each edge's
+  `provenance` (who determined it, and how) and `created_for_milestone`,
+  read directly from `relationship_records.jsonl` and matched to its SQL
+  edge by `relationship_id` (done; optional via
+  `KE_WEB_RELATIONSHIP_RECORDS_PATH`; see `docs/web_design.md`'s
+  "Decision: RelationshipRecord rendering").
 - `KE_WEB_HOST`/`KE_WEB_PORT` and a systemd service example for running
   as a persistent local server (done; see `docs/deployment.md`).
 - A password-gated alpha deployment on Render (`Dockerfile`,

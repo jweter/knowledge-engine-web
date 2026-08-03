@@ -141,10 +141,19 @@
 {% if claim.relationships %}
 <ul>
   {% for relationship in claim.relationships %}
+  {% set record = relationship_provenance.get(relationship.relationship_id) %}
   <li>
     <strong>{{ relationship.relationship_type }}</strong> ({{ relationship.direction }}) --
     <a href="/claims/{{ relationship.other_evidence_record_id }}">{{ relationship.other_evidence_record_id }}</a><br />
     {{ relationship.rationale }}
+    {% if record %}
+    <p class="disclaimer">
+      Relationship ID: {{ record.relationship_id }}
+      {% if record.provenance.created_by %} -- recorded by: {{ record.provenance.created_by }}{% endif %}
+      {% if record.provenance.method %} ({{ record.provenance.method }}){% endif %}
+      {% if record.created_for_milestone %} -- {{ record.created_for_milestone }}{% endif %}
+    </p>
+    {% endif %}
   </li>
   {% endfor %}
 </ul>
