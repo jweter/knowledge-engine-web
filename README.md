@@ -174,9 +174,12 @@ This project reads, but never writes, three kinds of `core` data:
   testing hosting, browsers, and real-world latency outside a local
   network -- done; see `docs/deployment.md`'s "Alpha hosting (Render)"
   section. Serves a snapshot, refreshed automatically on a weekly
-  schedule (done -- see deployment.md's automation note), not a
-  request-time live connection to `core` -- a real API boundary
-  remains future work.
+  schedule, plus event-triggered same-day refreshes whenever a corpus-
+  growth or evidence-extraction cycle actually changes the data (see
+  deployment.md's automation note) -- not yet a request-time live
+  connection to `core`; see `docs/service_boundary_design.md` for the
+  full decision and why a real API boundary remains future work until
+  `core` runs as a persistent host.
 - `GET /reports` and `GET /reports/{graph,relationship-candidates,unconfirmed-claims}`
   -- the same Markdown reports `ke graph-report`/`ke graph-relationship-candidates`/
   `ke graph-unconfirmed-claims` print, rebuilt from this site's own data
