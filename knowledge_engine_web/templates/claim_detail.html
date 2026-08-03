@@ -61,6 +61,47 @@
   collapsed score. See <code>docs/evidence_intelligence_design.md</code>
   in <code>knowledge-engine-core</code>.
 </p>
+
+{% set reliability_labels = {"insufficient": "Not yet assessable", "low": "Low confidence", "moderate": "Moderate confidence", "high": "High confidence"} %}
+<div class="confidence-gauge">
+  <p class="gauge-eyebrow">Claim Confidence</p>
+  {% if intelligence.confidence.score is not none %}
+  {% set needle_angle = (((intelligence.confidence.score / 100) * 180) - 90) | round(1) %}
+  {% set dash_offset = (345.6 * (1 - intelligence.confidence.score / 100)) | round(1) %}
+  <svg viewBox="0 0 260 175" role="img" aria-label="Claim Confidence gauge showing {{ intelligence.confidence.score }} out of 100, {{ intelligence.confidence.reliability }} reliability">
+    <path d="M 20 130 A 110 110 0 0 1 240 130" fill="none" stroke="var(--border)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M 20 130 A 110 110 0 0 1 240 130" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round"
+          stroke-dasharray="345.6" stroke-dashoffset="{{ dash_offset }}"/>
+    <g fill="var(--text-muted)" font-size="8" text-anchor="middle">
+      <text x="20" y="148">0</text>
+      <text x="130" y="30">50</text>
+      <text x="240" y="148">100</text>
+    </g>
+    <g class="gauge-needle" style="--needle-angle: {{ needle_angle }}deg">
+      <line x1="130" y1="130" x2="130" y2="42" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="130" cy="130" r="6" fill="var(--text)"/>
+    </g>
+  </svg>
+  <div class="gauge-number">{{ intelligence.confidence.score }}<span class="of100">/100</span></div>
+  {% else %}
+  <svg viewBox="0 0 260 175" role="img" aria-label="Claim Confidence gauge: not yet assessable, {{ intelligence.confidence.reliability }} reliability">
+    <path d="M 20 130 A 110 110 0 0 1 240 130" fill="none" stroke="var(--border)" stroke-width="10" stroke-linecap="round"/>
+    <g fill="var(--text-muted)" font-size="8" text-anchor="middle">
+      <text x="20" y="148">0</text>
+      <text x="130" y="30">50</text>
+      <text x="240" y="148">100</text>
+    </g>
+    <g class="gauge-needle" style="--needle-angle: -90deg">
+      <line x1="130" y1="130" x2="130" y2="42" stroke="var(--text-muted)" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="130" cy="130" r="6" fill="var(--text-muted)"/>
+    </g>
+  </svg>
+  <div class="gauge-number">--<span class="of100">/100</span></div>
+  {% endif %}
+  <div class="gauge-label">{{ reliability_labels.get(intelligence.confidence.reliability, intelligence.confidence.reliability) }} -- reliability: {{ intelligence.confidence.reliability }}</div>
+  <div class="gauge-breakdown">{{ intelligence.consensus.supports_count }} SUPPORTING &middot; {{ intelligence.consensus.contradicts_count }} CONTRADICTING</div>
+</div>
+
 <table>
   <tr>
     <th>Evidence Quality</th>
@@ -80,17 +121,6 @@
         not yet assessable
       {% endif %}
       -- reliability: {{ intelligence.consensus.reliability }}
-    </td>
-  </tr>
-  <tr>
-    <th>Claim Confidence</th>
-    <td>
-      {% if intelligence.confidence.score is not none %}
-        {{ intelligence.confidence.score }}/100
-      {% else %}
-        not yet assessable
-      {% endif %}
-      -- reliability: {{ intelligence.confidence.reliability }}
     </td>
   </tr>
   <tr>

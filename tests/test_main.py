@@ -375,6 +375,9 @@ def test_claim_detail_page_shows_not_yet_assessable_with_no_relationships(
     assert "Evidence Intelligence" in response.text
     assert "not yet assessable" in response.text
     assert "reliability: insufficient" in response.text
+    assert 'class="confidence-gauge"' in response.text
+    assert '<div class="gauge-number">--<span class="of100">/100</span></div>' in response.text
+    assert "--needle-angle: -90deg" in response.text
 
 
 def test_claim_detail_page_computes_consensus_with_two_supports_edges(
@@ -436,6 +439,13 @@ def test_claim_detail_page_computes_consensus_with_two_supports_edges(
     assert response.status_code == 200
     assert "100/100" in response.text
     assert "not yet assessable" not in response.text
+    # Claim Confidence is a product of mean Evidence Quality (94, not 100 --
+    # the two manual-review/uncertainty-note bonus points don't reach a
+    # perfect score) and Evidence Consensus (100, both edges agree), so
+    # the gauge shows 94, not 100.
+    assert '<div class="gauge-number">94<span class="of100">/100</span></div>' in response.text
+    assert "--needle-angle: 79.2deg" in response.text
+    assert "2 SUPPORTING &middot; 0 CONTRADICTING" in response.text
 
 
 def test_unconfirmed_claims_page_excludes_a_claim_with_a_relationship_edge(
