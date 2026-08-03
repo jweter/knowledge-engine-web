@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Evidence Intelligence Dashboard{% endblock %}
+{% block content %}
+<h1>Evidence Intelligence Dashboard</h1>
+<p class="disclaimer">
+  A corpus-wide distribution of the same deterministic, no-LLM Evidence
+  Quality and Claim Confidence numbers every claim detail page already
+  shows (see "The Seam" in the README) -- nothing new is computed here,
+  only aggregated.
+</p>
+
+{% if summary is none %}
+<p>
+  Not configured on this server -- <code>KE_WEB_EVIDENCE_RECORDS_PATH</code>
+  must be set for this dashboard to compute anything.
+</p>
+{% else %}
+<h2>Coverage</h2>
+<ul>
+  <li>Claims in the graph: {{ summary.claims_total }}</li>
+  <li>Claims with evidence-record content configured: {{ summary.claims_with_evidence_configured }}</li>
+</ul>
+
+{% if summary.claims_with_evidence_configured == 0 %}
+<p>No claims have evidence-record content configured yet.</p>
+{% else %}
+<h2>Evidence Quality Distribution</h2>
+<p>
+  Mean Evidence Quality score:
+  {{ "%.1f"|format(summary.mean_quality_score) if summary.mean_quality_score is not none else "not yet assessable" }}/100
+</p>
+<ul>
+  {% for bucket, count in summary.quality_bucket_counts.items() %}
+  <li>{{ bucket }}: {{ count }}</li>
+  {% endfor %}
+</ul>
+
+<h2>Claim Confidence Reliability</h2>
+<ul>
+  {% for tier, count in summary.confidence_reliability_counts.items() | sort %}
+  <li>{{ tier }}: {{ count }}</li>
+  {% endfor %}
+</ul>
+<p class="disclaimer">
+  {{ summary.not_yet_assessable_count }} claim(s) have no Claim
+  Confidence score yet -- not a low score, an honest "not yet
+  assessable" state for a claim with insufficient relationship evidence
+  to compute one (no relationship edge at all, only one, or edges that
+  are all <code>qualifies</code>/<code>contextualizes</code> rather than
+  <code>supports</code>/<code>contradicts</code> agreement).
+</p>
+{% endif %}
+{% endif %}
+{% endblock %}
