@@ -44,8 +44,10 @@
 <p class="disclaimer">
   {{ summary.not_yet_assessable_count }} claim(s) have no Claim
   Confidence score yet -- not a low score, an honest "not yet
-  assessable" state for a claim with no relationship edge to another
-  claim.
+  assessable" state for a claim with insufficient relationship evidence
+  to compute one (no relationship edge at all, only one, or edges that
+  are all <code>qualifies</code>/<code>contextualizes</code> rather than
+  <code>supports</code>/<code>contradicts</code> agreement).
 </p>
 {% endif %}
 {% endif %}
