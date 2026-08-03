@@ -62,6 +62,53 @@ def test_evidence_quality_manual_scores_higher_than_automated() -> None:
     assert manual.score > automated.score
 
 
+def test_evidence_quality_llm_grounded_scores_between_automated_and_manual() -> None:
+    manual = compute_evidence_quality(_evidence())
+    llm_grounded = compute_evidence_quality(
+        _evidence(
+            extraction_method="m69-llm-grounded-pico-v1",
+            review_checklist={"llm_grounded": True},
+        )
+    )
+    automated = compute_evidence_quality(
+        _evidence(extraction_method="m52-evidence-classification-v1", review_checklist={})
+    )
+
+    assert automated.score < llm_grounded.score < manual.score
+
+
+def test_evidence_quality_extraction_tier_labels_each_case_honestly() -> None:
+    manual = compute_evidence_quality(_evidence())
+    llm_grounded = compute_evidence_quality(
+        _evidence(
+            extraction_method="m69-llm-grounded-pico-v1",
+            review_checklist={"llm_grounded": True},
+        )
+    )
+    automated = compute_evidence_quality(
+        _evidence(extraction_method="m52-evidence-classification-v1", review_checklist={})
+    )
+
+    assert manual.extraction_tier == "manual"
+    assert llm_grounded.extraction_tier == "llm_grounded"
+    assert automated.extraction_tier == "automated"
+    assert llm_grounded.manually_reviewed is False
+
+
+def test_evidence_quality_llm_grounded_extraction_method_without_checklist_is_automated_tier() -> (
+    None
+):
+    """An empty `review_checklist` means grounding was never actually
+    recorded, so it must fall back to the automated tier -- the same rule
+    manual review already follows."""
+
+    result = compute_evidence_quality(
+        _evidence(extraction_method="m69-llm-grounded-pico-v1", review_checklist={})
+    )
+
+    assert result.extraction_tier == "automated"
+
+
 def test_evidence_quality_penalizes_missing_limitations() -> None:
     complete = compute_evidence_quality(_evidence())
     incomplete = compute_evidence_quality(_evidence(limitations=[], uncertainty_notes=None))
@@ -111,12 +158,14 @@ def test_claim_confidence_multiplies_rather_than_averages() -> None:
         score=100,
         study_design_tier="meta_analysis",
         manually_reviewed=True,
+        extraction_tier="manual",
     )
     low = EvidenceQuality(
         evidence_record_id="ev-2",
         score=20,
         study_design_tier="case_report",
         manually_reviewed=False,
+        extraction_tier="automated",
     )
     consensus = compute_evidence_consensus(
         [_relationship("supports"), _relationship("supports"), _relationship("supports")]
@@ -147,6 +196,28 @@ def test_render_synthesis_insufficient_consensus_omits_confidence() -> None:
     )
 
     assert "not yet assessable" in lines
+
+
+def test_render_synthesis_labels_llm_grounded_tier_honestly() -> None:
+    quality = compute_evidence_quality(
+        _evidence(
+            extraction_method="m69-llm-grounded-pico-v1",
+            review_checklist={"llm_grounded": True},
+        )
+    )
+    consensus = compute_evidence_consensus([_relationship("supports")])
+    confidence = compute_claim_confidence([quality], consensus)
+    coverage = compute_evidence_coverage(total_records=155, records_in_relationship=7)
+
+    lines = "\n".join(
+        render_synthesis(
+            consensus=consensus, quality=quality, confidence=confidence, coverage=coverage
+        )
+    )
+
+    assert "grounding-verified" in lines
+    assert "manually reviewed" not in lines
+    assert "automated, pending review" not in lines
 
 
 def test_render_synthesis_agreement_denominator_excludes_non_agreement_edges() -> None:

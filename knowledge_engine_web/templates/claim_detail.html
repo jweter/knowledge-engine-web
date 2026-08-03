@@ -111,7 +111,7 @@
     <td>
       {{ intelligence.quality.score }}/100
       ({{ intelligence.quality.study_design_tier }},
-      {% if intelligence.quality.manually_reviewed %}manually reviewed{% else %}automated, pending review{% endif %})
+      {% if intelligence.quality.extraction_tier == "manual" %}manually reviewed{% elif intelligence.quality.extraction_tier == "llm_grounded" %}LLM-extracted, grounding-verified{% else %}automated, pending review{% endif %})
     </td>
   </tr>
   <tr>
