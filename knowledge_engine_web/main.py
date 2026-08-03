@@ -22,6 +22,7 @@ from sqlalchemy import Engine, create_engine
 
 from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
+from knowledge_engine_web.dashboard import build_evidence_intelligence_dashboard
 from knowledge_engine_web.evidence_intelligence import (
     compute_claim_confidence,
     compute_evidence_consensus,
@@ -111,6 +112,29 @@ def graph_summary(request: Request) -> HTMLResponse:
     summary = read_graph_summary(_engine())
     return templates.TemplateResponse(
         request=request, name="graph_summary.html", context={"summary": summary}
+    )
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request) -> HTMLResponse:
+    """Render the corpus-wide Evidence Intelligence dashboard.
+
+    Extends M58/M1's per-claim Evidence Quality/Claim Confidence
+    computation to a corpus-wide distribution -- see
+    `knowledge_engine_web/dashboard.py`. Only shown for claims with
+    `KE_WEB_EVIDENCE_RECORDS_PATH` configured and a record on file, the
+    same "not configured" posture every other Evidence Intelligence
+    surface in this project already follows.
+    """
+
+    settings = Settings()
+    if not settings.evidence_records_path:
+        return templates.TemplateResponse(
+            request=request, name="dashboard.html", context={"summary": None}
+        )
+    summary = build_evidence_intelligence_dashboard(_engine(), Path(settings.evidence_records_path))
+    return templates.TemplateResponse(
+        request=request, name="dashboard.html", context={"summary": summary}
     )
 
 

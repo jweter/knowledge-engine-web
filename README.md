@@ -199,7 +199,17 @@ This project reads, but never writes, three kinds of `core` data:
   (done). Retrieval plus already-computed signals only -- no cross-paper
   synthesis, no single "the answer" verdict; the project owner's first
   piece of a larger question-first "Ask" experience connecting this
-  project, `knowledge-engine-ai`, and `core`.
+  project, `knowledge-engine-ai`, and `core`. `synthesize=1` optionally
+  narrates the same retrieval results and Evidence Intelligence numbers
+  into one grounded paragraph via a local, offline LLM (done; see
+  "Decision: local LLM" in `docs/web_design.md`).
+- `GET /dashboard` -- a corpus-wide Evidence Intelligence dashboard:
+  the distribution of Evidence Quality scores and Claim Confidence
+  reliability tiers across every claim with evidence configured (done;
+  see `knowledge_engine_web/dashboard.py`). No new computation --
+  extends M58/M1's existing per-claim numbers to a corpus-wide
+  aggregate, the first item from "Planned: Reviewer & Evidence
+  Intelligence Tooling" in `core`'s `docs/roadmap.md`.
 
 ## Repository Family
 

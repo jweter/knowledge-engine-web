@@ -1058,3 +1058,51 @@ def test_ask_synthesize_reports_a_local_llm_error_inline(
 
     assert response.status_code == 200
     assert "Could not reach Ollama" in response.text
+
+
+def test_dashboard_page_shows_not_configured_message_without_evidence_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/dashboard")
+
+    assert response.status_code == 200
+    assert "Not configured on this server" in response.text
+
+
+def test_dashboard_page_renders_aggregate_evidence_intelligence_when_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_record_id": "ev-1",
+                "study_type": "randomized_controlled_trial",
+                "extraction_method": "manual_human_review",
+                "review_checklist": {"source_verified": True},
+                "limitations": ["A limitation."],
+                "uncertainty_notes": "An uncertainty.",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/dashboard")
+
+    assert response.status_code == 200
+    assert "Claims in the graph: 1" in response.text
+    assert "Claims with evidence-record content configured: 1" in response.text
+    assert "Evidence Quality Distribution" in response.text
+    assert "Claim Confidence Reliability" in response.text
