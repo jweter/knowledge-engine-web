@@ -62,7 +62,7 @@
   in <code>knowledge-engine-core</code>.
 </p>
 
-{% set reliability_labels = {"insufficient": "Not yet assessable", "low": "Low confidence", "moderate": "Moderate confidence", "high": "High confidence"} %}
+{% set reliability_labels = {"insufficient": "Not yet assessable", "low": "Low reliability", "moderate": "Moderate reliability", "high": "High reliability"} %}
 <div class="confidence-gauge">
   <p class="gauge-eyebrow">Claim Confidence</p>
   {% if intelligence.confidence.score is not none %}
@@ -98,7 +98,10 @@
   </svg>
   <div class="gauge-number">--<span class="of100">/100</span></div>
   {% endif %}
-  <div class="gauge-label">{{ reliability_labels.get(intelligence.confidence.reliability, intelligence.confidence.reliability) }} -- reliability: {{ intelligence.confidence.reliability }}</div>
+  <div class="gauge-label">
+    Reliability: {{ reliability_labels.get(intelligence.confidence.reliability, intelligence.confidence.reliability) }}
+    ({{ intelligence.consensus.relationship_edge_count }} relationship edge{{ "s" if intelligence.consensus.relationship_edge_count != 1 else "" }})
+  </div>
   <div class="gauge-breakdown">{{ intelligence.consensus.supports_count }} SUPPORTING &middot; {{ intelligence.consensus.contradicts_count }} CONTRADICTING</div>
 </div>
 

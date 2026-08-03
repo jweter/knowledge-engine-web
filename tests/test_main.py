@@ -446,6 +446,12 @@ def test_claim_detail_page_computes_consensus_with_two_supports_edges(
     assert '<div class="gauge-number">94<span class="of100">/100</span></div>' in response.text
     assert "--needle-angle: 79.2deg" in response.text
     assert "2 SUPPORTING &middot; 0 CONTRADICTING" in response.text
+    # A 94/100 score with only 2 relationship edges must be labeled a low
+    # *reliability* tier, never a "low confidence" score -- the two are
+    # different axes and must not be conflated (Codex review on PR #22).
+    assert "Reliability: Low reliability" in response.text
+    assert "(2 relationship edges)" in response.text
+    assert "Low confidence" not in response.text
 
 
 def test_unconfirmed_claims_page_excludes_a_claim_with_a_relationship_edge(
