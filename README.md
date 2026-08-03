@@ -210,6 +210,14 @@ This project reads, but never writes, three kinds of `core` data:
   extends M58/M1's existing per-claim numbers to a corpus-wide
   aggregate, the first item from "Planned: Reviewer & Evidence
   Intelligence Tooling" in `core`'s `docs/roadmap.md`.
+- Live confidence-gauge visual on claim detail pages -- replaced the
+  plain Claim Confidence table row with an SVG arc-and-needle gauge
+  (reusing the visual language of the `/roadmap` page's old
+  concept-preview mockup), wired to the real, already-computed
+  `intelligence.confidence` number instead of illustrative content
+  (done; see `knowledge_engine_web/templates/claim_detail.html`'s
+  `.confidence-gauge`). The second item from "Planned: Reviewer &
+  Evidence Intelligence Tooling."
 - `GET /reports/what-changed` -- a recurring status report: new claims,
   new relationship edges, and corpus-wide Evidence Quality/Coverage
   deltas over the last 7 days (done; see
