@@ -221,6 +221,55 @@ def relationship_candidates(request: Request) -> HTMLResponse:
     )
 
 
+@app.get(
+    "/relationship-candidates/{evidence_record_id_a}/{evidence_record_id_b}",
+    response_class=HTMLResponse,
+)
+def relationship_candidate_compare(
+    request: Request, evidence_record_id_a: str, evidence_record_id_b: str
+) -> HTMLResponse:
+    """Render two claims' full evidence content side by side, for reviewing one candidate pair.
+
+    The same fields `ke relationship-review-worksheet` assembles into a
+    Markdown document, rendered as a browsable page instead -- reviewing
+    from the browser rather than a generated CLI document, the last
+    named item from `docs/future_ideas.md`'s Reviewer Tooling section.
+    Never infers, scores, or suggests a relationship; deciding whether
+    one exists remains entirely a human judgment call, authored
+    directly in `core`'s `relationship_records.jsonl`.
+    """
+
+    engine = _engine()
+    detail_a = read_claim_detail(engine, evidence_record_id_a)
+    detail_b = read_claim_detail(engine, evidence_record_id_b)
+    if detail_a is None or detail_b is None:
+        raise HTTPException(status_code=404, detail="No claim found for that evidence record ID.")
+
+    shared_concept_labels = sorted(
+        {concept.label for concept in detail_a.concepts}
+        & {concept.label for concept in detail_b.concepts}
+    )
+
+    evidence_path = _evidence_path()
+    evidence_a = None
+    evidence_b = None
+    if evidence_path is not None:
+        evidence_a = read_evidence_record(evidence_path, evidence_record_id_a)
+        evidence_b = read_evidence_record(evidence_path, evidence_record_id_b)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="relationship_compare.html",
+        context={
+            "columns": [
+                (detail_a, evidence_a),
+                (detail_b, evidence_b),
+            ],
+            "shared_concept_labels": shared_concept_labels,
+        },
+    )
+
+
 _REPORTS: dict[str, tuple[str, str, Callable[[Engine, Path | None], str]]] = {
     "graph": (
         "Graph Report",

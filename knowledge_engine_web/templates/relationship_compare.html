@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Compare {{ columns[0][0].evidence_record_id }} / {{ columns[1][0].evidence_record_id }}{% endblock %}
+{% block content %}
+<h1>Compare Claims</h1>
+<p class="disclaimer">
+  Both claims' full evidence content side by side -- the same fields
+  <code>ke relationship-review-worksheet</code> assembles into a
+  Markdown document, rendered here as a browsable page instead. This
+  page never infers, scores, or suggests a relationship; deciding
+  whether one exists, and authoring it, remains entirely a human
+  judgment call, made directly in <code>core</code>'s
+  <code>relationship_records.jsonl</code> (see <code>ke
+  relationship-review-worksheet</code>'s generated template for the
+  exact JSON shape).
+</p>
+
+{% if shared_concept_labels %}
+<p><strong>Shared concepts ({{ shared_concept_labels | length }}):</strong> {{ shared_concept_labels | join(", ") }}</p>
+{% else %}
+<p class="empty-state">These two claims share no PICO-resolved concept.</p>
+{% endif %}
+
+<div class="compare-grid">
+  {% for claim, evidence in columns %}
+  <section class="compare-column">
+    <h2><a href="/claims/{{ claim.evidence_record_id }}">{{ claim.evidence_record_id }}</a></h2>
+    {% if evidence %}
+    <p><strong>Research question:</strong> {{ evidence.research_question or "(not recorded)" }}</p>
+    <p><strong>Claim:</strong> {{ evidence.claim_text or "(not recorded)" }}</p>
+    <p><strong>Direction:</strong> {{ evidence.evidence_direction or "(not recorded)" }}</p>
+    <table>
+      <tr><th>Population</th><td>{{ evidence.population or "--" }}</td></tr>
+      <tr><th>Intervention</th><td>{{ evidence.intervention or "--" }}</td></tr>
+      <tr><th>Comparator</th><td>{{ evidence.comparator or "--" }}</td></tr>
+      <tr><th>Outcome</th><td>{{ evidence.outcome or "--" }}</td></tr>
+    </table>
+    <p><strong>Result:</strong> {{ evidence.result_summary or "(not recorded)" }}</p>
+    {% if evidence.short_source_excerpt %}
+    <p><strong>Source excerpt:</strong> &ldquo;{{ evidence.short_source_excerpt }}&rdquo;</p>
+    {% endif %}
+    {% if evidence.limitations %}
+    <p><strong>Limitations:</strong></p>
+    <ul>
+      {% for limitation in evidence.limitations %}
+      <li>{{ limitation }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <p>
+      Source: {{ evidence.source_title or "(untitled)" }}
+      {% if evidence.source_doi %}(DOI: {{ evidence.source_doi }}){% endif %}
+      -- {{ evidence.study_type or evidence.source_type or "unspecified type" }},
+      extracted via {{ evidence.extraction_method or "unknown method" }}
+      ({{ evidence.extraction_status or "status unknown" }}; review status:
+      {{ evidence.review_status or "unknown" }}).
+    </p>
+    {% else %}
+    <p class="empty-state">
+      Evidence-record content is not configured for this deployment. Set
+      <code>KE_WEB_EVIDENCE_RECORDS_PATH</code> to `core`'s
+      <code>evidence_records.jsonl</code> to show it here.
+    </p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}
