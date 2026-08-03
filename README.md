@@ -228,7 +228,17 @@ This project reads, but never writes, three kinds of `core` data:
   from graph row `created_at` timestamps, which don't survive a refresh
   (`core`'s working database has no persistent host and is rebuilt from
   scratch every session; see `docs/service_boundary_design.md`). No
-  baseline yet is shown honestly rather than guessed. The third and
+  baseline yet is shown honestly rather than guessed. The third item
+  from "Planned: Reviewer & Evidence Intelligence Tooling" in `core`'s
+  `docs/roadmap.md`.
+- `GET /relationship-candidates/{evidence_record_id_a}/{evidence_record_id_b}`
+  -- both claims' full evidence content side by side, for reviewing one
+  candidate pair from `/relationship-candidates` (done; see
+  `knowledge_engine_web/templates/relationship_compare.html`). The same
+  fields `ke relationship-review-worksheet` assembles into a Markdown
+  document, browsable here instead of generated -- never infers, scores,
+  or suggests a relationship, that stays a human judgment call authored
+  directly in `core`'s `relationship_records.jsonl`. The fourth and
   final item from "Planned: Reviewer & Evidence Intelligence Tooling" in
   `core`'s `docs/roadmap.md`.
 

@@ -16,6 +16,7 @@
     &lt;-&gt;
     <a href="/claims/{{ candidate.claim_b_evidence_record_id }}">{{ candidate.claim_b_evidence_record_id }}</a>
     -- shared concepts: {{ candidate.shared_concept_labels | join(", ") }}
+    (<a href="/relationship-candidates/{{ candidate.claim_a_evidence_record_id }}/{{ candidate.claim_b_evidence_record_id }}">compare side by side</a>)
   </li>
   {% endfor %}
 </ul>

@@ -549,6 +549,99 @@ def test_relationship_candidates_page_renders_no_candidates(
     assert "No claim pairs share a concept" in response.text
 
 
+def test_relationship_candidate_compare_page_renders_both_claims_side_by_side(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [{"id": 1, "label": "Semaglutide", "source": "rxnorm"}],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-a"},
+                {"id": 2, "evidence_record_id": "ev-b"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_concepts"]),
+            [
+                {"id": 1, "claim_id": 1, "concept_id": 1, "edge_role": "intervention"},
+                {"id": 2, "claim_id": 2, "concept_id": 1, "edge_role": "intervention"},
+            ],
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    evidence_path.write_text(
+        "\n".join(
+            json.dumps(
+                {
+                    "evidence_record_id": eid,
+                    "research_question": f"Does X reduce Y in {eid}?",
+                    "claim_text": f"Claim text for {eid}.",
+                    "result_summary": f"Result for {eid}.",
+                }
+            )
+            for eid in ("ev-a", "ev-b")
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/relationship-candidates/ev-a/ev-b")
+
+    assert response.status_code == 200
+    assert "ev-a" in response.text
+    assert "ev-b" in response.text
+    assert "Claim text for ev-a." in response.text
+    assert "Claim text for ev-b." in response.text
+    assert "Semaglutide" in response.text
+    assert "Shared concepts (1)" in response.text
+
+
+def test_relationship_candidate_compare_page_returns_404_for_unknown_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-a"}]
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/relationship-candidates/ev-a/ev-missing")
+
+    assert response.status_code == 404
+
+
+def test_relationship_candidate_compare_page_omits_evidence_content_when_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-a"},
+                {"id": 2, "evidence_record_id": "ev-b"},
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.delenv("KE_WEB_EVIDENCE_RECORDS_PATH", raising=False)
+
+    response = TestClient(app).get("/relationship-candidates/ev-a/ev-b")
+
+    assert response.status_code == 200
+    assert "KE_WEB_EVIDENCE_RECORDS_PATH" in response.text
+    assert "These two claims share no PICO-resolved concept." in response.text
+
+
 def test_paper_detail_page_renders_citation_edges(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
