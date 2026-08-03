@@ -93,6 +93,20 @@ This is optional as well -- without it, relationship edges still show
 their type and rationale exactly as before, just without the
 provenance line.
 
+To also let the `/ask` page generate a local, offline AI synthesis of
+the retrieved evidence (opt-in per request, via a checkbox -- see
+`docs/web_design.md`'s "Decision: local LLM"), run
+[Ollama](https://ollama.com), pull a model, and point this project at it:
+
+```bash
+ollama pull qwen2.5:1.5b
+export KE_WEB_LLM_MODEL="qwen2.5:1.5b"
+```
+
+This is optional too -- without it, `/ask`'s synthesis checkbox shows a
+plain "not configured" message and retrieval results still render
+normally.
+
 By default this binds to `127.0.0.1:8000` (local machine only). To
 serve on a local network, or run as a persistent systemd service, see
 `docs/deployment.md`.

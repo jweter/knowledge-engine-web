@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, MetaData, Table, insert, text
 
+from knowledge_engine_web import main
 from knowledge_engine_web.main import app
 from tests._fixtures import build_engine, create_graph_tables, create_papers_table
 
@@ -937,3 +938,123 @@ def test_ask_page_escapes_a_malicious_snippet(
     assert response.status_code == 200
     assert "<script>alert" not in response.text
     assert "&lt;script&gt;" in response.text
+
+
+class _FakeLLM:
+    def __init__(self, *, model: str, host: str) -> None:
+        self.model = model
+        self.host = host
+
+    def generate(self, prompt: str, *, max_tokens: int = 400) -> str:
+        assert "does semaglutide reduce body weight" in prompt
+        return "Semaglutide reduces body weight [ev-1]."
+
+
+class _FailingFakeLLM:
+    def __init__(self, *, model: str, host: str) -> None:
+        pass
+
+    def generate(self, prompt: str, *, max_tokens: int = 400) -> str:
+        from knowledge_engine_web.llm import LocalLLMError
+
+        raise LocalLLMError("Could not reach Ollama at http://x: refused.")
+
+
+def _setup_paper_with_evidence(engine: Engine, tmp_path: Path) -> Path:
+    _create_fts_table_and_paper(
+        engine,
+        paper_id=1,
+        title="A Trial of Semaglutide for Body Weight Reduction",
+        doi="10.1000/example",
+        abstract="Semaglutide reduced body weight versus placebo.",
+    )
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_record_id": "ev-1",
+                "source_doi": "10.1000/example",
+                "claim_text": "Semaglutide reduced body weight.",
+                "extraction_method": "manual_human_review",
+                "review_checklist": {"source_verified": True},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return evidence_path
+
+
+def test_ask_without_synthesize_shows_no_synthesis_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.setattr(main, "OllamaLLM", _FakeLLM)
+
+    response = TestClient(app).get("/ask", params={"q": "does semaglutide reduce body weight"})
+
+    assert response.status_code == 200
+    assert "AI-generated synthesis" not in response.text
+
+
+def test_ask_synthesize_requires_llm_model_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.delenv("KE_WEB_LLM_MODEL", raising=False)
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "AI-generated synthesis" in response.text
+    assert "KE_WEB_LLM_MODEL must be set" in response.text
+
+
+def test_ask_synthesize_renders_the_grounded_narrative(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.setenv("KE_WEB_LLM_MODEL", "qwen2.5:1.5b")
+    monkeypatch.setattr(main, "OllamaLLM", _FakeLLM)
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "AI-generated synthesis" in response.text
+    assert "Semaglutide reduces body weight [ev-1]." in response.text
+
+
+def test_ask_synthesize_reports_a_local_llm_error_inline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.setenv("KE_WEB_LLM_MODEL", "qwen2.5:1.5b")
+    monkeypatch.setattr(main, "OllamaLLM", _FailingFakeLLM)
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "Could not reach Ollama" in response.text

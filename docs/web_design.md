@@ -187,6 +187,53 @@ JSONL record carries). `KE_WEB_RELATIONSHIP_RECORDS_PATH` is optional,
 same posture as `KE_WEB_EVIDENCE_RECORDS_PATH`: without it, relationship
 edges still render exactly as before, just without the provenance line.
 
+## Decision: local LLM
+
+Same owner decision `knowledge-engine-ai`'s `docs/ai_design.md` already
+made and this project inherits without relitigating: local, offline
+inference served by [Ollama](https://ollama.com), never a hosted API --
+no `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`-style secret anywhere in this
+project. `/ask`'s `synthesize=1` opt-in narrates the same retrieval
+results and Evidence Intelligence numbers the page already renders into
+one grounded paragraph, citing each `evidence_record_id`, via
+`knowledge_engine_web/llm.py` and `synthesis.py`.
+
+Those two modules are a small, self-contained mirror of
+`knowledge_engine_ai`'s own `llm.py`/`synthesis.py` (same Ollama HTTP
+API, same system-instructions wording, same "narrate already-computed
+signals, never invent one" discipline) rather than a dependency on that
+package. This project's own established boundary is reading `core`'s
+data directly instead of importing `knowledge_engine` (the reflection
+decision above); the analogous choice here is a self-contained client
+instead of pulling in a sibling project's package -- and its own
+CLI-only dependencies (`typer`, `click`, `rich`), unused in a FastAPI
+server -- just to reuse ~150 lines with no `knowledge_engine_web`-specific
+coupling to begin with. The two implementations must stay in sync by
+hand if Ollama's wire format or the safety wording ever changes; a
+future shared package is the real fix, matching the same caveat
+`evidence_intelligence.py`'s own module docstring already makes about
+duplicating `core`'s scoring formula.
+
+`KE_WEB_LLM_MODEL` (no default -- unset means synthesis is off) and
+`KE_WEB_OLLAMA_HOST` (defaults to `http://127.0.0.1:11434`) configure
+it, under this project's own env var namespace rather than reusing
+`ke-ai`'s `KE_AI_LLM_MODEL`/`KE_AI_OLLAMA_HOST` names -- each consuming
+process owns its own settings, even when, in practice, the same local
+Ollama server and model likely serve both. Off by default and opt-in
+per request (a checkbox on the form, not a setting that changes every
+page load): real inference costs real CPU time, and a person should ask
+for it explicitly. `LocalLLMError` (model not pulled, Ollama not
+running, malformed response) is caught and rendered inline as part of
+the synthesis panel, never a 500 -- retrieval results render normally
+either way.
+
+Same production caveat `ai_design.md` raises: `ollama serve` is a
+separate process this project does not manage or start, and a laptop
+cannot durably serve it to the public alpha deployment (`docs/deployment.md`).
+Development and a local/LAN deployment get real synthesis for free once
+Ollama is running; the hosted Render alpha will not, until that gets its
+own architecture -- not attempted here.
+
 ## Architecture
 
 As originally scoped for the first slice (`config.py`, `graph_reader.py`,
@@ -225,8 +272,10 @@ they go. What's been added since, following the same patterns:
   gating the whole app when `KE_WEB_ALPHA_USERNAME`/`KE_WEB_ALPHA_PASSWORD`
   are configured; see `docs/deployment.md`'s "Alpha hosting (Render)"
   section.
+- `knowledge_engine_web/llm.py` and `synthesis.py` -- see "Decision:
+  local LLM" below.
 - `knowledge_engine_web/main.py` -- the FastAPI app: one route per page
-  (`/graph`, `/claims`, `/claims/{id}`, `/papers/{id}`,
+  (`/ask`, `/graph`, `/claims`, `/claims/{id}`, `/papers/{id}`,
   `/unconfirmed-claims`, `/relationship-candidates`, `/reports` and its
   sub-pages, `/roadmap`, `/about`), each rendering a Jinja2 template
   (autoescaping on by default -- every concept-source label and count
