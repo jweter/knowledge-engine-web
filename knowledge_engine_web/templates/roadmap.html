@@ -18,30 +18,48 @@
   <li>
     <code>knowledge-engine-web</code> (this site): a read-only view of
     that graph -- Graph Summary, Claims, Unconfirmed Claims,
-    Relationship Candidates, paper detail, and now these Reports --
+    Relationship Candidates, paper detail, Evidence and Relationship Record
+    provenance, Evidence Intelligence, the corpus dashboard, and Reports --
     plus a password-gated alpha deployment for testing hosting,
     browsers, and real-world latency outside a local machine.
   </li>
   <li>
-    <code>knowledge-engine-ai</code>: a first Retrieval Intelligence
-    slice (<code>ke-ai ask</code>) -- a natural-language question to
-    ranked, source-linked evidence, no synthesis yet.
+    <code>knowledge-engine-ai</code>: Retrieval Intelligence plus optional,
+    local, citation-required synthesis (<code>ke-ai ask --synthesize</code>).
+    This site exposes the same opt-in synthesis on <code>/ask</code> when a
+    local model is configured.
   </li>
 </ul>
 
-<h2>Near-term</h2>
-<ul>
-  <li>Relationship Record rendering on this site (still needs its own design pass).</li>
+<h2>Current Project Path</h2>
+<ol>
   <li>
-    A real API boundary between this site and <code>core</code>, so the
-    alpha can serve current data instead of a point-in-time snapshot
-    that has to be manually refreshed and redeployed.
+    <strong>One coherent public journey.</strong> Connect the public showcase
+    to this live laboratory, keep status language and data revisions current,
+    and guide a visitor from the mission to one real evidence-backed example.
   </li>
   <li>
-    Growing the corpus and relationship-edge coverage beyond today's
-    GLP-1 vertical slice.
+    <strong>Measured Ask quality.</strong> Establish golden research questions
+    and make source-linked evidence outrank incidental keyword mentions.
   </li>
-</ul>
+  <li>
+    <strong>One complete evidence map.</strong> Deepen the GLP-1/body-weight
+    question across key studies, limitations, population differences,
+    contradictions, citations, and reviewed relationships before adding more
+    breadth.
+  </li>
+  <li>
+    <strong>Evidence and Analytical Intelligence.</strong> Build structured
+    cross-study comparison and deterministic statistical checks before broader
+    AI narration. Keep Evidence Quality, Consensus, and Claim Confidence
+    separate and inspectable.
+  </li>
+  <li>
+    <strong>Persistent-host migration.</strong> Replace snapshot reads with a
+    small read-only core API only after the documented operator, security, data
+    publication, and consumer-parity trigger is met.
+  </li>
+</ol>
 
 <h2>Longer-term</h2>
 <p>
@@ -51,8 +69,8 @@
   <code>core</code> can already support:
 </p>
 <ul>
-  <li><strong>Retrieval Intelligence</strong> (started) -- question to ranked evidence, no synthesis.</li>
-  <li><strong>Evidence Intelligence</strong> -- structured comparison across multiple evidence records for one question.</li>
+  <li><strong>Retrieval Intelligence</strong> (shipped, evaluation next) -- question to ranked evidence, with optional grounded narration.</li>
+  <li><strong>Evidence Intelligence</strong> (foundations shipped) -- deterministic per-claim values today; structured comparison across multiple records next.</li>
   <li><strong>Analytical Intelligence</strong> -- weighing evidence quality, direction, and disagreement.</li>
   <li><strong>Discovery Intelligence</strong> -- surfacing open questions the corpus doesn't answer yet.</li>
 </ul>
@@ -67,9 +85,9 @@
   <strong>Not live.</strong> The frame below is a static mockup of a
   possible future answer view, isolated in its own page so it can
   never be mistaken for a working feature. The question and evidence
-  shown are real, drawn from this site's actual corpus -- the
-  confidence score and gap tracking are illustrative only; no code
-  computes them today.
+  shown are real, drawn from this site's actual corpus. Real claim pages now
+  compute deterministic Evidence Intelligence; the preview's exact confidence
+  and gap-tracking values remain illustrative and are not live output.
 </p>
 <iframe
   src="/static/concept-preview.html"
