@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///data/knowledge_engine.sqlite3"
     evidence_records_path: str | None = None
+    relationship_records_path: str | None = None
     host: str = "127.0.0.1"
     port: int = 8000
     alpha_username: str | None = None

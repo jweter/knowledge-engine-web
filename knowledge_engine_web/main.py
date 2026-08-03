@@ -45,6 +45,9 @@ from knowledge_engine_web.graph_reader import (
     read_paper_detail,
 )
 from knowledge_engine_web.llm import LocalLLMError, OllamaLLM
+from knowledge_engine_web.relationship_reader import (
+    list_relationship_records_for_evidence_record_id,
+)
 from knowledge_engine_web.report_renderer import (
     render_graph_summary_report,
     render_relationship_candidates_report,
@@ -257,6 +260,15 @@ def claim_detail(request: Request, evidence_record_id: str) -> HTMLResponse:
     on) is only shown if `KE_WEB_EVIDENCE_RECORDS_PATH` is configured --
     it is optional, since not every deployment has that JSONL file
     available alongside `core`'s database.
+
+    Each relationship edge's `provenance` (who determined it, and how --
+    manual review or automated) comes from the `RelationshipRecord`
+    JSONL directly, keyed by the same `relationship_id` `core`'s SQL
+    mirror (`graph_claim_relationships`, what `detail.relationships`
+    already reads) carries -- shown only if
+    `KE_WEB_RELATIONSHIP_RECORDS_PATH` is configured, since the SQL edge
+    itself has `relationship_type`/`rationale` but not a record's own
+    authorship. See `relationship_reader.py`.
     """
 
     detail = read_claim_detail(_engine(), evidence_record_id)
@@ -274,10 +286,23 @@ def claim_detail(request: Request, evidence_record_id: str) -> HTMLResponse:
                 evidence_path, evidence, detail.relationships
             )
 
+    relationship_provenance = {}
+    if settings.relationship_records_path:
+        relationship_path = Path(settings.relationship_records_path)
+        for record in list_relationship_records_for_evidence_record_id(
+            relationship_path, evidence_record_id
+        ):
+            relationship_provenance[record.relationship_id] = record
+
     return templates.TemplateResponse(
         request=request,
         name="claim_detail.html",
-        context={"claim": detail, "evidence": evidence, "intelligence": intelligence},
+        context={
+            "claim": detail,
+            "evidence": evidence,
+            "intelligence": intelligence,
+            "relationship_provenance": relationship_provenance,
+        },
     )
 
 

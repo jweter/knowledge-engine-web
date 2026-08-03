@@ -90,11 +90,16 @@ What this section originally excluded, and what's true of each today:
   fields, `result_summary`, `limitations`, `uncertainty_notes`, and
   `confidence_note` when `KE_WEB_EVIDENCE_RECORDS_PATH` is configured
   -- see `knowledge_engine_web/evidence_reader.py`.
-- **`RelationshipRecord` rendering.** Still not built -- no page reads
-  relationship-record JSONL content (as opposed to the
-  `graph_claim_relationships` SQL edges the claim-detail page already
-  renders). Still needs its own design pass; see this repo's
-  `README.md` Roadmap.
+- **`RelationshipRecord` rendering.** Since built: `GET /claims/{evidence_record_id}`
+  now shows each relationship edge's `provenance` (who determined it,
+  and how -- manual review or automated) and `created_for_milestone`,
+  read directly from the `RelationshipRecord` JSONL and matched against
+  the SQL edge by the `relationship_id` both share, when
+  `KE_WEB_RELATIONSHIP_RECORDS_PATH` is configured -- see
+  `knowledge_engine_web/relationship_reader.py`. `relationship_type`/
+  `rationale` were already shown, from `core`'s SQL mirror
+  (`graph_claim_relationships`); this closes the one real gap that
+  mirror couldn't: a record's own authorship.
 - **Any confidence rating, synthesis, or judgment about what a claim or
   relationship means.** Revised for Evidence Intelligence (M1):
   `GET /claims/{evidence_record_id}` now shows a deterministic,
@@ -152,6 +157,35 @@ duplicated schema definitions.
   interface contract itself (a database file path and a schema this
   project reads defensively), not a build-time coupling to `core`'s
   internal Python structure.
+
+## Decision: RelationshipRecord rendering
+
+The gap this milestone's own Out of Scope section originally left open:
+`core`'s `ke graph-build` already copies a `RelationshipRecord`'s
+`relationship_id`/`relationship_type`/`rationale` into the
+`graph_claim_relationships` SQL table, and the claim-detail page has
+rendered that SQL-mirrored content since the very first slice. What it
+never showed is the one thing the SQL mirror doesn't carry: a record's
+own `provenance` (who determined this relationship, and how -- manual
+review, or automated via `ke extraction-review-autoclassify`'s sibling
+tooling) and `created_for_milestone`. Those describe the record's own
+authorship, not a graph-queryable fact, which is exactly why `core`
+never put them in a SQL table to begin with (`GraphClaimRelationship`'s
+own docstring: "a projection of the same validated data, not a second
+source of truth").
+
+`knowledge_engine_web/relationship_reader.py` reads
+`RelationshipRecord` JSONL directly (same "no table for this" reasoning
+`evidence_reader.py` already established for `EvidenceRecord`s), and
+`main.py`'s `claim_detail` route matches each JSONL record against its
+SQL-mirrored edge by the `relationship_id` both already share --
+extended `RelationshipEdge` (`graph_reader.py`) to actually select
+that column, since the query previously read `graph_claim_relationships.id`
+(the row's own primary key, used only for edge ordering) but never
+`graph_claim_relationships.relationship_id` (the same business key the
+JSONL record carries). `KE_WEB_RELATIONSHIP_RECORDS_PATH` is optional,
+same posture as `KE_WEB_EVIDENCE_RECORDS_PATH`: without it, relationship
+edges still render exactly as before, just without the provenance line.
 
 ## Decision: local LLM
 
@@ -225,6 +259,10 @@ they go. What's been added since, following the same patterns:
 - `knowledge_engine_web/evidence_reader.py` -- reads one `EvidenceRecord`
   by ID directly from `evidence_records.jsonl`, when
   `KE_WEB_EVIDENCE_RECORDS_PATH` is configured.
+- `knowledge_engine_web/relationship_reader.py` -- reads every
+  `RelationshipRecord` naming a given evidence record, directly from
+  `relationship_records.jsonl`, when `KE_WEB_RELATIONSHIP_RECORDS_PATH`
+  is configured -- see "Decision: RelationshipRecord rendering" above.
 - `knowledge_engine_web/report_renderer.py` -- rebuilds the same
   Markdown reports `ke graph-report`/`ke graph-relationship-candidates`/
   `ke graph-unconfirmed-claims` print, from this project's own data,
@@ -294,8 +332,10 @@ they go. What's been added since, following the same patterns:
   its stdout format staying stable. The setting is optional and a
   missing file/unset path renders as "not configured" rather than an
   error, matching `graph_reader`'s "missing table means empty" posture.
-  `RelationshipRecord` rendering is unresolved and remains open -- no
-  page reads relationship-record JSONL content yet.
+- **Resolved: `RelationshipRecord` rendering reads its JSONL file
+  directly**, the same way, via `KE_WEB_RELATIONSHIP_RECORDS_PATH`
+  (`knowledge_engine_web/relationship_reader.py`) -- see "Decision:
+  RelationshipRecord rendering" above.
 - **HTML template structure once a second page exists** (shared layout,
   navigation). Not designed against one page; revisit at the second
   page, the same "don't design for a hypothetical" discipline `core`

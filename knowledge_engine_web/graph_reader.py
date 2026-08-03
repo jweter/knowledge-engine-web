@@ -53,6 +53,7 @@ class ConceptEdge:
 class RelationshipEdge:
     """One relationship edge touching a claim, as source or target."""
 
+    relationship_id: str
     relationship_type: str
     direction: str
     rationale: str
@@ -290,6 +291,7 @@ def _read_relationship_edges(
         rows = connection.execute(
             select(
                 relationships.c.id,
+                relationships.c.relationship_id,
                 relationships.c.relationship_type,
                 relationships.c.rationale,
                 claims.c.evidence_record_id.label("other_evidence_record_id"),
@@ -301,6 +303,7 @@ def _read_relationship_edges(
             (
                 row.id,
                 RelationshipEdge(
+                    relationship_id=row.relationship_id,
                     relationship_type=row.relationship_type,
                     direction=direction,
                     rationale=row.rationale,
