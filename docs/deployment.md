@@ -125,6 +125,14 @@ decision on why, and what would come next). See "What this does not
 cover" below for what's still separate work. A human can still run the
 refresh manually at any time with the exact commands in step 1 below.
 
+Relationship-only graph changes are a known exception to the event-triggered
+path: unless they accompany corpus growth or evidence extraction, they may wait
+for the weekly run or a manual refresh. The current project path calls for this
+gap to become visible through a published snapshot revision and for those
+changes to trigger or explicitly queue a refresh. Until that work ships, the
+alpha must not be described as live or guaranteed same-day for every graph
+update.
+
 **The snapshot is committed to the repo, not gitignored.** Render's
 Docker build clones this repo directly from GitHub with no way to run
 a pre-build script -- a gitignored local `data/` directory (the

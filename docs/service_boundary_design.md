@@ -72,7 +72,12 @@ names "local server to start" as its next deployment step
 a comparatively small addition on top of it (a FastAPI wrapper around
 the same `GraphRepository`/reader modules `web` already has, exposed
 over the network instead of read from a local file) -- revisit this
-doc then, don't build it speculatively now.
+doc then, don't build it speculatively now. Core has since recorded the
+companion decision in `docs/persistent_host_design.md`: a read-only,
+localhost-first ASGI host, built one consumer slice at a time only after its
+operator, published-data, API-fixture, and network-security trigger is met.
+That design does not mean the host exists today; snapshots remain the deployed
+boundary until those conditions are real.
 
 ## Scope for this milestone (C)
 

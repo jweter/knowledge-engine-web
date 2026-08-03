@@ -2,11 +2,21 @@
 
 Read-only web interface for the [Knowledge Engine](https://github.com/jweter/knowledge-engine-core)
 project. Renders what `knowledge-engine-core` ("`core`") has already
-validated -- for a person, in a browser, instead of a terminal. As of M1,
-claim detail pages also show a deterministic, no-LLM Evidence
-Intelligence confidence score (see "The Seam" below); nothing else here
-adds synthesis, narration, or judgment about what a claim or
-relationship means.
+validated -- for a person, in a browser, instead of a terminal. Claim detail
+pages show deterministic Evidence Intelligence, while `/ask` can optionally
+use a local LLM to narrate retrieved evidence with required citations. Neither
+path authors evidence, relationships, or hidden confidence values; see "The
+Seam" below.
+
+Public entry points:
+
+- [Project showcase](https://knowledge-engine.steelzombie9999.chatgpt.site/)
+  -- the project mission and public front door.
+- [Working web alpha](https://knowledge-engine-web-alpha.onrender.com/)
+  -- this application's deployed, password-gated, point-in-time demonstration.
+
+The alpha is a live application over a published snapshot, not a live connection
+to core and not a claim that the scientific question has been answered.
 
 ## Status
 
@@ -146,6 +156,27 @@ This project reads, but never writes, three kinds of `core` data:
   when configured (`knowledge_engine_web/relationship_reader.py`).
 
 ## Roadmap
+
+The project family now follows one ordered path: unify the public showcase and
+this live alpha into one truthful journey; benchmark and improve Ask retrieval;
+complete one defensible GLP-1/body-weight evidence map; build structured
+Evidence and Analytical Intelligence over that evaluated foundation; then
+migrate this site to core's read-only persistent host when its operator and
+security trigger is met. Core's `docs/roadmap.md` is the canonical project-level
+sequence.
+
+The first concrete cleanup is freshness visibility: expose the snapshot's data
+revision and ensure relationship-only graph changes trigger or explicitly queue
+an alpha refresh instead of waiting silently for the weekly/manual path.
+
+The first three shared tasks are:
+
+1. Make the showcase-to-alpha journey coherent and truthful, including README
+   links, snapshot freshness, and a guided evidence example.
+2. Build a golden-question benchmark and improve Ask ranking from measured
+   failures.
+3. Present one complete GLP-1/body-weight evidence map with limitations,
+   citations, population differences, and reviewed relationships.
 
 - `GET /graph` -- corpus-wide graph summary (done).
 - `GET /claims` / `GET /claims/{evidence_record_id}` -- claim listing and
