@@ -34,6 +34,21 @@ for path in "$database_source" "$evidence_source"; do
 done
 
 mkdir -p "$web_root/data"
+
+# Capture a "what changed" baseline from the currently-deployed snapshot
+# BEFORE it's replaced below -- the only reliable "before" state the
+# report can diff against, since core's own working database has no
+# persistent host and graph created_at timestamps do not survive a
+# rebuild (see knowledge_engine_web/whats_changed.py's module docstring).
+old_database="$web_root/data/knowledge_engine.sqlite3"
+old_evidence="$web_root/data/evidence_records.jsonl"
+if [ -f "$old_database" ] && [ -f "$old_evidence" ]; then
+  (cd "$web_root" && poetry run python3 "$script_dir/capture_whats_changed_baseline.py" \
+    "$old_database" "$old_evidence" "$web_root/data/whats_changed_baseline.json")
+else
+  echo "No existing snapshot to capture a what-changed baseline from -- skipping (first deploy)."
+fi
+
 python3 "$script_dir/build_alpha_snapshot.py" "$database_source" "$web_root/data/knowledge_engine.sqlite3"
 cp "$evidence_source" "$web_root/data/evidence_records.jsonl"
 

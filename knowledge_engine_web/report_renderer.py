@@ -26,6 +26,7 @@ from knowledge_engine_web.graph_reader import (
     GraphSummary,
     RelationshipCandidate,
 )
+from knowledge_engine_web.whats_changed import WhatsChangedSummary
 
 _MARKDOWN_SPECIAL_CHARS = re.compile(r"([\\`*_\[\]<~])")
 
@@ -146,6 +147,110 @@ def render_unconfirmed_claims_report(claims: list[ClaimListItem]) -> str:
             "claim has been reviewed and explicitly related to it, nothing "
             "more. This is a fact about review coverage, not a judgment "
             "about the underlying science.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _quality_delta_line(before: float | None, after: float | None) -> str:
+    if before is None or after is None:
+        return "not yet assessable"
+    return f"{before:.1f}/100 -> {after:.1f}/100 ({after - before:+.1f})"
+
+
+def render_whats_changed_report(summary: WhatsChangedSummary) -> str:
+    """Build the "what changed" report: new activity and aggregate deltas since the baseline.
+
+    `docs/roadmap.md`'s "Planned: Reviewer & Evidence Intelligence
+    Tooling" third item. "Before" is a saved baseline captured at the
+    start of each alpha-snapshot refresh, not reconstructed from graph
+    `created_at` timestamps -- see `whats_changed.py`'s own module
+    docstring for why the timestamp approach doesn't hold up against the
+    real deployment.
+    """
+
+    lines = ["# Knowledge Engine What Changed Report", ""]
+    if summary.baseline_captured_at is not None:
+        lines.append(f"Comparing against the baseline captured: {summary.baseline_captured_at}")
+    else:
+        lines.append(
+            "No baseline has been captured yet -- this deployment hasn't been "
+            "through a refresh cycle since this report shipped, so there is "
+            "nothing real to compare against. New Claims/New Relationship "
+            "Edges below are empty rather than guessed; they will show real "
+            "activity starting with the next refresh."
+        )
+    lines.extend(["", "## New Claims", "", f"New claims: {len(summary.new_claims)}", ""])
+    if not summary.new_claims:
+        lines.extend(["No new claims since the baseline.", ""])
+    for claim in summary.new_claims:
+        lines.append(f"- {_report_text(claim.evidence_record_id)}")
+    if summary.new_claims:
+        lines.append("")
+
+    lines.extend(
+        [
+            "## New Relationship Edges",
+            "",
+            f"New relationship edges: {len(summary.new_relationships)}",
+            "",
+        ]
+    )
+    if not summary.new_relationships:
+        lines.extend(["No new relationship edges since the baseline.", ""])
+    for edge in summary.new_relationships:
+        lines.append(
+            f"- {_report_text(edge.source_evidence_record_id)} "
+            f"**{_report_text(edge.relationship_type)}** "
+            f"{_report_text(edge.target_evidence_record_id)}"
+        )
+    if summary.new_relationships:
+        lines.append("")
+
+    lines.extend(["## Aggregate Deltas", ""])
+    if summary.claims_total_before is not None:
+        lines.append(
+            f"- Claims in the graph: {summary.claims_total_before} -> {summary.claims_total_after}"
+        )
+    else:
+        lines.append(f"- Claims in the graph: (no baseline) -> {summary.claims_total_after}")
+    if (
+        summary.evidence_configured
+        and summary.coverage_before is not None
+        and summary.coverage_after is not None
+    ):
+        coverage_before = summary.coverage_before
+        coverage_after = summary.coverage_after
+        lines.extend(
+            [
+                f"- Mean Evidence Quality: "
+                f"{_quality_delta_line(summary.mean_quality_before, summary.mean_quality_after)}",
+                f"- Evidence Coverage: {coverage_before.percentage}% -> "
+                f"{coverage_after.percentage}% "
+                f"({coverage_before.records_in_relationship} of {coverage_before.total_records} -> "
+                f"{coverage_after.records_in_relationship} of {coverage_after.total_records})",
+            ]
+        )
+    elif summary.evidence_configured:
+        lines.append("- Mean Evidence Quality / Evidence Coverage: not shown -- no baseline yet.")
+    else:
+        lines.append(
+            "- Mean Evidence Quality / Evidence Coverage: not shown -- "
+            "`KE_WEB_EVIDENCE_RECORDS_PATH` is not configured on this deployment."
+        )
+    lines.extend(
+        [
+            "",
+            "## Scope",
+            "",
+            '"Before" is a saved baseline captured at the start of each '
+            "alpha-snapshot refresh (see `scripts/capture_whats_changed_baseline.py`), "
+            "not reconstructed from graph row timestamps -- `core`'s working "
+            "database has no persistent host and is rebuilt from scratch every "
+            "session (see `docs/service_boundary_design.md`), so graph "
+            "`created_at` values do not survive across refreshes. Both ends of "
+            "every delta shown here are real, already-stored values.",
             "",
         ]
     )

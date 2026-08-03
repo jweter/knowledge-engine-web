@@ -156,11 +156,18 @@ git add data/ && git commit -m "Refresh alpha snapshot" && git push
 
 Rebuilds `./data/knowledge_engine.sqlite3` (trimmed, via
 `scripts/build_alpha_snapshot.py`) and copies `evidence_records.jsonl`
-verbatim. Commit and push both -- Render redeploys automatically on a
-push to the connected branch. The automated Routine follows a PR
-(draft -> CI -> ready -> squash-merge), same as every other change in
-this project's history; a manual refresh may push directly if you
-prefer, since it's a generated data artifact, not source code.
+verbatim. Before doing so, it also captures a `GET /reports/what-changed`
+baseline (`scripts/capture_whats_changed_baseline.py`) from the
+currently-deployed snapshot into `./data/whats_changed_baseline.json` --
+the only reliable "before" state that report can diff against, since
+`core`'s own working database has no persistent host and graph
+`created_at` timestamps do not survive a rebuild (see
+`knowledge_engine_web/whats_changed.py`'s module docstring). Commit and
+push all three files -- Render redeploys automatically on a push to the
+connected branch. The automated Routine follows a PR (draft -> CI ->
+ready -> squash-merge), same as every other change in this project's
+history; a manual refresh may push directly if you prefer, since it's a
+generated data artifact, not source code.
 
 ### 2. Set alpha credentials
 

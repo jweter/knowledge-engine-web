@@ -218,6 +218,19 @@ This project reads, but never writes, three kinds of `core` data:
   (done; see `knowledge_engine_web/templates/claim_detail.html`'s
   `.confidence-gauge`). The second item from "Planned: Reviewer &
   Evidence Intelligence Tooling."
+- `GET /reports/what-changed` -- a recurring status report: new claims,
+  new relationship edges, and corpus-wide Evidence Quality/Coverage
+  deltas since the last alpha-snapshot refresh (done; see
+  `knowledge_engine_web/whats_changed.py`). "Before" is a small saved
+  baseline (`data/whats_changed_baseline.json`), captured from the
+  about-to-be-replaced snapshot at the start of each refresh
+  (`scripts/capture_whats_changed_baseline.py`) -- not reconstructed
+  from graph row `created_at` timestamps, which don't survive a refresh
+  (`core`'s working database has no persistent host and is rebuilt from
+  scratch every session; see `docs/service_boundary_design.md`). No
+  baseline yet is shown honestly rather than guessed. The third and
+  final item from "Planned: Reviewer & Evidence Intelligence Tooling" in
+  `core`'s `docs/roadmap.md`.
 
 ## Repository Family
 
