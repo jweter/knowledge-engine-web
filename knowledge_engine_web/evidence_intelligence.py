@@ -43,6 +43,17 @@ _STUDY_DESIGN_WEIGHTS: dict[str, int] = {
 
 _MANUAL_EXTRACTION_METHODS = frozenset({"manual_human_review", "manual"})
 
+# Must match `LLM_GROUNDED_PICO_RULES_VERSION` in `knowledge-engine-core`'s
+# `knowledge_engine/extraction/llm_grounded_pico.py` -- kept as a literal
+# string, not an import, per this module's "read core's data, never its
+# code" posture (see module docstring).
+_LLM_GROUNDED_EXTRACTION_METHODS = frozenset({"m69-llm-grounded-pico-v1"})
+
+# The reserved middle tier between raw-automated (25) and human-manual
+# (40) for a grounding-verified LLM extraction -- not the same rigor as a
+# person reading the source. Mirrors core's `_LLM_GROUNDED_RIGOR_POINTS`.
+_LLM_GROUNDED_RIGOR_POINTS = 33
+
 _CONSENSUS_ELIGIBLE_TYPES = frozenset({"supports", "contradicts", "qualifies", "contextualizes"})
 
 
@@ -54,6 +65,12 @@ class EvidenceQuality:
     score: int
     study_design_tier: str
     manually_reviewed: bool
+    extraction_tier: str
+    """One of "manual", "llm_grounded", or "automated" -- `manually_reviewed`
+    stays a plain bool (true only for "manual") so existing callers reading
+    it are unaffected; this field exists for callers that need to render
+    the llm_grounded tier honestly rather than collapsing it into either
+    "manually reviewed" or an undifferentiated "automated"."""
 
 
 def compute_evidence_quality(evidence: EvidenceRecordDetail) -> EvidenceQuality:
@@ -72,10 +89,19 @@ def compute_evidence_quality(evidence: EvidenceRecordDetail) -> EvidenceQuality:
         else ("missing" if not study_type else "unrecognized")
     )
 
-    manually_reviewed = evidence.extraction_method in _MANUAL_EXTRACTION_METHODS and bool(
-        evidence.review_checklist
-    )
-    rigor_points = 40 if manually_reviewed else 25
+    has_checklist = bool(evidence.review_checklist)
+    manually_reviewed = evidence.extraction_method in _MANUAL_EXTRACTION_METHODS and has_checklist
+    llm_grounded = evidence.extraction_method in _LLM_GROUNDED_EXTRACTION_METHODS and has_checklist
+
+    if manually_reviewed:
+        extraction_tier = "manual"
+        rigor_points = 40
+    elif llm_grounded:
+        extraction_tier = "llm_grounded"
+        rigor_points = _LLM_GROUNDED_RIGOR_POINTS
+    else:
+        extraction_tier = "automated"
+        rigor_points = 25
 
     penalty = 0
     if not evidence.limitations:
@@ -91,6 +117,7 @@ def compute_evidence_quality(evidence: EvidenceRecordDetail) -> EvidenceQuality:
         score=score,
         study_design_tier=tier,
         manually_reviewed=manually_reviewed,
+        extraction_tier=extraction_tier,
     )
 
 
@@ -194,6 +221,13 @@ def compute_evidence_coverage(
     )
 
 
+_EXTRACTION_TIER_LABELS = {
+    "manual": "manually reviewed",
+    "llm_grounded": "LLM-extracted, grounding-verified",
+    "automated": "automated, pending review",
+}
+
+
 def render_synthesis(
     *,
     consensus: EvidenceConsensus,
@@ -207,7 +241,7 @@ def render_synthesis(
         f"{consensus.relationship_edge_count} relationship(s) recorded for this claim: "
         f"{consensus.supports_count} support, {consensus.contradicts_count} contradict.",
         f"Evidence Quality: {quality.score}/100 ({quality.study_design_tier}, "
-        f"{'manually reviewed' if quality.manually_reviewed else 'automated, pending review'}).",
+        f"{_EXTRACTION_TIER_LABELS.get(quality.extraction_tier, 'automated, pending review')}).",
     ]
     if consensus.score is None:
         lines.append(

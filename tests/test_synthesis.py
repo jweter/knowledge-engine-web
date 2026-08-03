@@ -52,6 +52,7 @@ def _intelligence() -> dict[str, object]:
             score=94,
             study_design_tier="randomized_controlled_trial",
             manually_reviewed=True,
+            extraction_tier="manual",
         ),
         "confidence": ClaimConfidence(score=89, reliability="moderate", mean_evidence_quality=94.0),
     }
