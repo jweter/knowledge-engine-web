@@ -108,17 +108,21 @@ API/shared-database boundary between `web` and `core` (rather than
 infrastructure work for the eventual public platform, out of scope for
 a first alpha test.
 
-**The refresh itself is automated (weekly), not fully "live."** A
-scheduled Routine re-runs the exact steps below -- restore `core`'s
-local working database, rebuild the graph from whatever
-`evidence_records.jsonl` currently has on `main`, refresh this repo's
-snapshot, commit, push -- on a cadence timed after `core`'s own
-corpus-growth (Monday) and evidence-extraction (daily) automations
-have had a few days to land, so the alpha never drifts more than about
-a week stale without a human doing anything. This narrows the gap
-between "point-in-time snapshot" and "live connection" without
-building the real API boundary yet -- see "What this does not cover"
-below for why that's still separate work. A human can still run the
+**The refresh runs on a weekly schedule, plus event-triggered same-day
+refreshes.** A scheduled Routine re-runs the exact steps below --
+restore `core`'s local working database, rebuild the graph from
+whatever `evidence_records.jsonl` currently has on `main`, refresh this
+repo's snapshot, commit, push -- every Wednesday as a floor. On top of
+that, `core`'s own corpus-growth and evidence-extraction Routines each
+fire this refresh Routine directly the same day their own PR merges
+real new data (see `docs/service_boundary_design.md`'s "Option C"),
+skipping it entirely on a cycle that changed nothing. So the alpha
+typically reflects a change same-day, with the weekly schedule as a
+backstop rather than the only trigger -- this narrows the gap between
+"point-in-time snapshot" and "live connection" without building the
+real API boundary yet (`docs/service_boundary_design.md` is the full
+decision on why, and what would come next). See "What this does not
+cover" below for what's still separate work. A human can still run the
 refresh manually at any time with the exact commands in step 1 below.
 
 **The snapshot is committed to the repo, not gitignored.** Render's
