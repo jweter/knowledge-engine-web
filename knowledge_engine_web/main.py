@@ -57,10 +57,7 @@ from knowledge_engine_web.report_renderer import (
 )
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 from knowledge_engine_web.synthesis import synthesize_answer
-from knowledge_engine_web.whats_changed import (
-    WHATS_CHANGED_WINDOW_DAYS,
-    build_whats_changed_summary,
-)
+from knowledge_engine_web.whats_changed import build_whats_changed_summary
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -82,6 +79,18 @@ def _evidence_path() -> Path | None:
 
     settings = Settings()
     return Path(settings.evidence_records_path) if settings.evidence_records_path else None
+
+
+def _whats_changed_baseline_path() -> Path:
+    """Return the configured "what changed" baseline path.
+
+    Always a real path (default `data/whats_changed_baseline.json`,
+    alongside the DB's own default location) -- a missing file at that
+    path is a normal, expected state (`whats_changed.read_baseline_json`
+    returns `None`), not a configuration error.
+    """
+
+    return Path(Settings().whats_changed_baseline_path)
 
 
 @app.get("/", include_in_schema=False)
@@ -234,10 +243,10 @@ _REPORTS: dict[str, tuple[str, str, Callable[[Engine, Path | None], str]]] = {
     ),
     "what-changed": (
         "What Changed Report",
-        f"New claims, new relationship edges, and aggregate deltas over the last "
-        f"{WHATS_CHANGED_WINDOW_DAYS} days.",
+        "New claims, new relationship edges, and aggregate deltas since the "
+        "last captured baseline.",
         lambda engine, evidence_path: render_whats_changed_report(
-            build_whats_changed_summary(engine, evidence_path)
+            build_whats_changed_summary(engine, evidence_path, _whats_changed_baseline_path())
         ),
     ),
 }

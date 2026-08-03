@@ -220,15 +220,17 @@ This project reads, but never writes, three kinds of `core` data:
   Evidence Intelligence Tooling."
 - `GET /reports/what-changed` -- a recurring status report: new claims,
   new relationship edges, and corpus-wide Evidence Quality/Coverage
-  deltas over the last 7 days (done; see
-  `knowledge_engine_web/whats_changed.py`). This project has no
-  persistent host and no stored historical snapshot to diff against
-  (see `docs/service_boundary_design.md`), so "before" is reconstructed
-  from each graph row's own `created_at` timestamp as of the window's
-  start rather than a saved point-in-time copy -- both ends of every
-  delta are real, already-stored values. The third and final item from
-  "Planned: Reviewer & Evidence Intelligence Tooling" in `core`'s
-  `docs/roadmap.md`.
+  deltas since the last alpha-snapshot refresh (done; see
+  `knowledge_engine_web/whats_changed.py`). "Before" is a small saved
+  baseline (`data/whats_changed_baseline.json`), captured from the
+  about-to-be-replaced snapshot at the start of each refresh
+  (`scripts/capture_whats_changed_baseline.py`) -- not reconstructed
+  from graph row `created_at` timestamps, which don't survive a refresh
+  (`core`'s working database has no persistent host and is rebuilt from
+  scratch every session; see `docs/service_boundary_design.md`). No
+  baseline yet is shown honestly rather than guessed. The third and
+  final item from "Planned: Reviewer & Evidence Intelligence Tooling" in
+  `core`'s `docs/roadmap.md`.
 
 ## Repository Family
 

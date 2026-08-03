@@ -160,31 +160,32 @@ def _quality_delta_line(before: float | None, after: float | None) -> str:
 
 
 def render_whats_changed_report(summary: WhatsChangedSummary) -> str:
-    """Build the "what changed" report: new activity and aggregate deltas over one window.
+    """Build the "what changed" report: new activity and aggregate deltas since the baseline.
 
     `docs/roadmap.md`'s "Planned: Reviewer & Evidence Intelligence
-    Tooling" third item. "Before" is reconstructed from `created_at`
-    timestamps already stored on graph rows, not a stored historical
-    snapshot -- see `whats_changed.py`'s own module docstring.
+    Tooling" third item. "Before" is a saved baseline captured at the
+    start of each alpha-snapshot refresh, not reconstructed from graph
+    `created_at` timestamps -- see `whats_changed.py`'s own module
+    docstring for why the timestamp approach doesn't hold up against the
+    real deployment.
     """
 
-    lines = [
-        "# Knowledge Engine What Changed Report",
-        "",
-        f"Generated: {summary.generated_at}",
-        f"Window: last {summary.window_days} day(s), since {summary.since}",
-        "",
-        "## New Claims",
-        "",
-        f"New claims: {len(summary.new_claims)}",
-        "",
-    ]
-    if not summary.new_claims:
-        lines.extend(["No new claims in this window.", ""])
-    for claim in summary.new_claims:
+    lines = ["# Knowledge Engine What Changed Report", ""]
+    if summary.baseline_captured_at is not None:
+        lines.append(f"Comparing against the baseline captured: {summary.baseline_captured_at}")
+    else:
         lines.append(
-            f"- {_report_text(claim.evidence_record_id)} ({_report_text(claim.created_at)})"
+            "No baseline has been captured yet -- this deployment hasn't been "
+            "through a refresh cycle since this report shipped, so there is "
+            "nothing real to compare against. New Claims/New Relationship "
+            "Edges below are empty rather than guessed; they will show real "
+            "activity starting with the next refresh."
         )
+    lines.extend(["", "## New Claims", "", f"New claims: {len(summary.new_claims)}", ""])
+    if not summary.new_claims:
+        lines.extend(["No new claims since the baseline.", ""])
+    for claim in summary.new_claims:
+        lines.append(f"- {_report_text(claim.evidence_record_id)}")
     if summary.new_claims:
         lines.append("")
 
@@ -197,36 +198,42 @@ def render_whats_changed_report(summary: WhatsChangedSummary) -> str:
         ]
     )
     if not summary.new_relationships:
-        lines.extend(["No new relationship edges in this window.", ""])
+        lines.extend(["No new relationship edges since the baseline.", ""])
     for edge in summary.new_relationships:
         lines.append(
             f"- {_report_text(edge.source_evidence_record_id)} "
             f"**{_report_text(edge.relationship_type)}** "
-            f"{_report_text(edge.target_evidence_record_id)} ({_report_text(edge.created_at)})"
+            f"{_report_text(edge.target_evidence_record_id)}"
         )
     if summary.new_relationships:
         lines.append("")
 
-    lines.extend(
-        [
-            "## Aggregate Deltas",
-            "",
-            f"- Claims in the graph: {summary.claims_total_before} -> {summary.claims_total_after}",
-        ]
-    )
-    if summary.evidence_configured:
+    lines.extend(["## Aggregate Deltas", ""])
+    if summary.claims_total_before is not None:
+        lines.append(
+            f"- Claims in the graph: {summary.claims_total_before} -> {summary.claims_total_after}"
+        )
+    else:
+        lines.append(f"- Claims in the graph: (no baseline) -> {summary.claims_total_after}")
+    if (
+        summary.evidence_configured
+        and summary.coverage_before is not None
+        and summary.coverage_after is not None
+    ):
+        coverage_before = summary.coverage_before
+        coverage_after = summary.coverage_after
         lines.extend(
             [
                 f"- Mean Evidence Quality: "
                 f"{_quality_delta_line(summary.mean_quality_before, summary.mean_quality_after)}",
-                f"- Evidence Coverage: {summary.coverage_before.percentage}% -> "
-                f"{summary.coverage_after.percentage}% "
-                f"({summary.coverage_before.records_in_relationship} of "
-                f"{summary.coverage_before.total_records} -> "
-                f"{summary.coverage_after.records_in_relationship} of "
-                f"{summary.coverage_after.total_records})",
+                f"- Evidence Coverage: {coverage_before.percentage}% -> "
+                f"{coverage_after.percentage}% "
+                f"({coverage_before.records_in_relationship} of {coverage_before.total_records} -> "
+                f"{coverage_after.records_in_relationship} of {coverage_after.total_records})",
             ]
         )
+    elif summary.evidence_configured:
+        lines.append("- Mean Evidence Quality / Evidence Coverage: not shown -- no baseline yet.")
     else:
         lines.append(
             "- Mean Evidence Quality / Evidence Coverage: not shown -- "
@@ -237,11 +244,13 @@ def render_whats_changed_report(summary: WhatsChangedSummary) -> str:
             "",
             "## Scope",
             "",
-            '"Before" is reconstructed from each graph row\'s own `created_at` '
-            "timestamp as of the window's start, not a stored historical "
-            "snapshot -- this project has no persistent host to keep one on "
-            "(see `docs/service_boundary_design.md`). Both ends are real, "
-            "already-stored values; nothing here is estimated.",
+            '"Before" is a saved baseline captured at the start of each '
+            "alpha-snapshot refresh (see `scripts/capture_whats_changed_baseline.py`), "
+            "not reconstructed from graph row timestamps -- `core`'s working "
+            "database has no persistent host and is rebuilt from scratch every "
+            "session (see `docs/service_boundary_design.md`), so graph "
+            "`created_at` values do not survive across refreshes. Both ends of "
+            "every delta shown here are real, already-stored values.",
             "",
         ]
     )

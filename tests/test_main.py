@@ -1,5 +1,4 @@
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -769,7 +768,31 @@ def test_unconfirmed_claims_report_view_lists_a_claim(
     assert "ev-1" in response.text
 
 
-def test_whats_changed_report_view_lists_a_new_claim(
+def test_whats_changed_report_view_with_no_baseline_yet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv(
+        "KE_WEB_WHATS_CHANGED_BASELINE_PATH", str(tmp_path / "does-not-exist-yet.json")
+    )
+
+    response = TestClient(app).get("/reports/what-changed")
+
+    assert response.status_code == 200
+    assert "# Knowledge Engine What Changed Report" in response.text
+    # No baseline captured yet -- honest about having nothing real to
+    # diff against, not a fabricated "ev-1 is new" claim.
+    assert "No baseline has been captured yet" in response.text
+    assert "New claims: 0" in response.text
+
+
+def test_whats_changed_report_view_lists_a_new_claim_against_a_baseline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = build_engine(tmp_path)
@@ -778,22 +801,36 @@ def test_whats_changed_report_view_lists_a_new_claim(
         connection.execute(
             insert(metadata.tables["graph_claims"]),
             [
-                {
-                    "id": 1,
-                    "evidence_record_id": "ev-1",
-                    "created_at": datetime.now(UTC).isoformat(),
-                }
+                {"id": 1, "evidence_record_id": "ev-baseline"},
+                {"id": 2, "evidence_record_id": "ev-new"},
             ],
         )
+    baseline_path = tmp_path / "whats_changed_baseline.json"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "captured_at": "2026-08-01T00:00:00+00:00",
+                "claim_evidence_record_ids": ["ev-baseline"],
+                "relationship_ids": [],
+                "claims_with_evidence_configured": 0,
+                "mean_quality_score": None,
+                "coverage_records_in_relationship": 0,
+                "coverage_total_records": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_WHATS_CHANGED_BASELINE_PATH", str(baseline_path))
 
     response = TestClient(app).get("/reports/what-changed")
 
     assert response.status_code == 200
-    assert "# Knowledge Engine What Changed Report" in response.text
-    # A claim created right now definitely falls inside the report's
-    # default 7-day window, so it must show up as new.
-    assert "ev-1" in response.text
+    assert "Comparing against the baseline captured: 2026-08-01T00:00:00+00:00" in response.text
+    assert "New claims: 1" in response.text
+    assert "ev-new" in response.text
+    assert "ev-baseline" not in response.text.split("## New Claims")[1].split("##")[0]
     # No KE_WEB_EVIDENCE_RECORDS_PATH configured -- deltas must say so
     # honestly rather than showing a fabricated 0%.
     assert "not configured on this deployment" in response.text
@@ -804,6 +841,9 @@ def test_whats_changed_report_download_returns_markdown(
 ) -> None:
     build_engine(tmp_path)
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv(
+        "KE_WEB_WHATS_CHANGED_BASELINE_PATH", str(tmp_path / "does-not-exist-yet.json")
+    )
 
     response = TestClient(app).get("/reports/what-changed.md")
 
