@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="{% block description %}Knowledge Engine: a read-only, evidence-first view of validated scientific claims. Every value traces back to its source -- nothing inferred, nothing synthesized.{% endblock %}"
+      content="{% block description %}Knowledge Engine: a read-only, evidence-first view of source-linked scientific claims, deterministic assessments, and reviewed relationships.{% endblock %}"
     />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="{% block og_title %}Knowledge Engine{% endblock %}" />
     <meta
       property="og:description"
-      content="{% block og_description %}A read-only, evidence-first view of validated scientific claims. Every value traces back to its source.{% endblock %}"
+      content="{% block og_description %}A read-only, evidence-first view of source-linked scientific claims and reviewed relationships.{% endblock %}"
     />
     <link
       rel="icon"
@@ -22,28 +22,42 @@
   </head>
   <body>
     <header class="site-header">
-      <a class="site-title" href="/graph">Knowledge Engine</a>
+      <a class="site-title" href="/demo">Knowledge Engine</a>
       <span class="alpha-badge">alpha</span>
       <nav>
+        <a href="/demo">Demo</a>
         <a href="/ask">Ask</a>
+        <a href="/claims">Evidence</a>
         <a href="/graph">Graph</a>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/claims">Claims</a>
-        <a href="/unconfirmed-claims">Unconfirmed</a>
-        <a href="/relationship-candidates">Relationship candidates</a>
         <a href="/reports">Reports</a>
-        <a href="/roadmap">Roadmap</a>
         <a href="/about">About</a>
+        <details class="inspect-menu">
+          <summary>Inspect</summary>
+          <div>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/unconfirmed-claims">Unconfirmed claims</a>
+            <a href="/relationship-candidates">Relationship candidates</a>
+            <a href="/roadmap">Roadmap</a>
+          </div>
+        </details>
       </nav>
     </header>
     <main>{% block content %}{% endblock %}</main>
     <footer class="site-footer">
       <p>
-        Read-only. Every value traced back to a stored row -- nothing
-        inferred or synthesized. See <a href="/about">About</a> for what
-        Knowledge Engine is and isn't, and
+        Read-only alpha over a point-in-time snapshot. Evidence and relationships
+        remain source-linked; deterministic scores are labeled; optional AI narration
+        is never treated as new evidence or scientific review. See
+        <a href="/about">About</a> and
         <a href="https://github.com/jweter/knowledge-engine-core">the source</a>.
       </p>
+      {% if snapshot.metadata %}
+      <p class="snapshot-line">
+        Snapshot {{ snapshot.metadata.generated_at }} &middot; corpus {{ snapshot.metadata.corpus_id }} &middot;
+        {{ snapshot.metadata.claims_count }} claims &middot; {{ snapshot.metadata.relationships_count }} relationships &middot;
+        {{ snapshot.metadata.citations_count }} citations
+      </p>
+      {% else %}<p class="snapshot-line">{{ snapshot.unavailable_reason }}</p>{% endif %}
     </footer>
   </body>
 </html>

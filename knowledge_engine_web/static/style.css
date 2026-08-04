@@ -149,6 +149,12 @@ th {
   font-size: 0.92rem;
 }
 
+.inspect-menu { position: relative; }
+.inspect-menu summary { color: var(--link); cursor: pointer; list-style: none; }
+.inspect-menu summary::-webkit-details-marker { display: none; }
+.inspect-menu > div { position: absolute; right: 0; top: 1.7rem; z-index: 10; min-width: 13rem; padding: 0.55rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.inspect-menu > div a { display: block; padding: 0.35rem 0.45rem; }
+
 .site-footer {
   max-width: 880px;
   margin: 0 auto;
@@ -156,6 +162,29 @@ th {
   border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 0.88rem;
+}
+.snapshot-line { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.76rem; }
+.snapshot-panel { padding: 0.7rem 0.85rem; border-left: 3px solid var(--accent); background: var(--bg-alt); color: var(--text-muted); }
+.demo-hero { padding: 2.5rem 0 1.5rem; }
+.demo-hero h1 { max-width: 700px; font-size: clamp(2rem, 5vw, 3.4rem); }
+.eyebrow, .trust-label { margin: 0 0 0.5rem; color: var(--accent); font-size: 0.76rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.demo-section, .demo-boundary { margin: 1rem 0; padding: 1.2rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-alt); }
+.demo-section h2, .demo-boundary h2 { margin-top: 0; padding-top: 0; border-top: 0; }
+.demo-claim { font-size: 1.15rem; }
+.demo-section blockquote { margin: 1rem 0; padding-left: 1rem; border-left: 3px solid var(--accent); color: var(--text-muted); }
+.demo-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+.demo-metrics div { min-height: 6.5rem; padding: 1rem; border: 1px solid var(--border); background: var(--bg); }
+.demo-metrics strong, .demo-metrics span { display: block; }
+.demo-metrics strong { font-size: 1.55rem; }
+.demo-metrics span { margin-top: .35rem; color: var(--text-muted); }
+.demo-cta { display: inline-block; padding: .55rem .8rem; border-radius: 5px; background: var(--accent); color: var(--accent-contrast); font-weight: 600; }
+.demo-relationships li { margin-bottom: 0.8rem; }
+.demo-relationships a { display: block; font-size: 0.9rem; }
+
+@media (max-width: 650px) {
+  .site-header nav { width: 100%; margin-left: 0; }
+  .inspect-menu > div { left: 0; right: auto; }
+  .demo-metrics { grid-template-columns: 1fr; }
 }
 
 .disclaimer {

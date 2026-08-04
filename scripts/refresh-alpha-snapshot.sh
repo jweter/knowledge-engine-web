@@ -51,6 +51,11 @@ fi
 
 python3 "$script_dir/build_alpha_snapshot.py" "$database_source" "$web_root/data/knowledge_engine.sqlite3"
 cp "$evidence_source" "$web_root/data/evidence_records.jsonl"
+python3 "$script_dir/build_snapshot_metadata.py" \
+  "$core_path" "$corpus_name" \
+  "$web_root/data/knowledge_engine.sqlite3" \
+  "$web_root/data/evidence_records.jsonl" \
+  "$web_root/data/snapshot_metadata.json"
 
 echo "Snapshot refreshed in $web_root/data/ from $core_path (corpus: $corpus_name)."
 echo "This is a point-in-time copy -- commit and push ./data/ to update the deployed alpha."

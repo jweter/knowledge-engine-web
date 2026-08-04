@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     evidence_records_path: str | None = None
     relationship_records_path: str | None = None
     whats_changed_baseline_path: str = "data/whats_changed_baseline.json"
+    snapshot_metadata_path: str = "data/snapshot_metadata.json"
     host: str = "127.0.0.1"
     port: int = 8000
     alpha_username: str | None = None
