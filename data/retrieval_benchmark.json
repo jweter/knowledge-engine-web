@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "benchmark_id": "glp1-body-weight-golden-questions-v1",
+  "description": "Golden questions for measuring whether Ask retrieves direct, source-linked GLP-1 body-weight evidence ahead of incidental keyword matches.",
+  "top_k": 5,
+  "rank_depth": 1000,
+  "questions": [
+    {
+      "question_id": "glp1-class-body-weight",
+      "question": "Do GLP-1 receptor agonists reduce body weight in adults with overweight or obesity?",
+      "expected_results": [
+        {
+          "doi": "10.1038/s41591-022-02026-4",
+          "title": "Two-year effects of semaglutide in adults with overweight or obesity: the STEP 5 trial",
+          "publication_year": 2022,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Garvey WT et al. Nature Medicine. 2022. doi:10.1038/s41591-022-02026-4.",
+          "evidence_record_ids": ["ev-glp1-step5-body-weight-week104-001"]
+        },
+        {
+          "doi": "10.3389/fphar.2022.935823",
+          "title": "Efficacy and safety of semaglutide on weight loss in obese or overweight patients without diabetes: A systematic review and meta-analysis of randomized controlled trials",
+          "publication_year": 2022,
+          "study_type": "systematic_review_meta_analysis",
+          "citation": "Gao X et al. Frontiers in Pharmacology. 2022. doi:10.3389/fphar.2022.935823.",
+          "evidence_record_ids": ["ev-glp1-gao-meta-analysis-body-weight-001"]
+        },
+        {
+          "doi": "10.1038/s41591-024-02996-7",
+          "title": "Long-term weight loss effects of semaglutide in obesity without diabetes in the SELECT trial",
+          "publication_year": 2024,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Ryan DH et al. Nature Medicine. 2024. doi:10.1038/s41591-024-02996-7.",
+          "evidence_record_ids": ["ev-glp1-select-trial-weight-loss-208wk-001"]
+        }
+      ],
+      "acceptable_secondary_dois": []
+    },
+    {
+      "question_id": "semaglutide-long-term-effect",
+      "question": "Does semaglutide produce sustained long-term body-weight reduction in adults with overweight or obesity without diabetes?",
+      "expected_results": [
+        {
+          "doi": "10.1038/s41591-022-02026-4",
+          "title": "Two-year effects of semaglutide in adults with overweight or obesity: the STEP 5 trial",
+          "publication_year": 2022,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Garvey WT et al. Nature Medicine. 2022. doi:10.1038/s41591-022-02026-4.",
+          "evidence_record_ids": ["ev-glp1-step5-body-weight-week104-001"]
+        },
+        {
+          "doi": "10.1038/s41591-024-02996-7",
+          "title": "Long-term weight loss effects of semaglutide in obesity without diabetes in the SELECT trial",
+          "publication_year": 2024,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Ryan DH et al. Nature Medicine. 2024. doi:10.1038/s41591-024-02996-7.",
+          "evidence_record_ids": ["ev-glp1-select-trial-weight-loss-208wk-001"]
+        }
+      ],
+      "acceptable_secondary_dois": ["10.3389/fphar.2022.935823"]
+    },
+    {
+      "question_id": "semaglutide-randomized-evidence",
+      "question": "What does randomized trial evidence show about semaglutide and body-weight reduction in adults without diabetes?",
+      "expected_results": [
+        {
+          "doi": "10.3389/fphar.2022.935823",
+          "title": "Efficacy and safety of semaglutide on weight loss in obese or overweight patients without diabetes: A systematic review and meta-analysis of randomized controlled trials",
+          "publication_year": 2022,
+          "study_type": "systematic_review_meta_analysis",
+          "citation": "Gao X et al. Frontiers in Pharmacology. 2022. doi:10.3389/fphar.2022.935823.",
+          "evidence_record_ids": ["ev-glp1-gao-meta-analysis-body-weight-001"]
+        }
+      ],
+      "acceptable_secondary_dois": [
+        "10.1038/s41591-022-02026-4",
+        "10.1038/s41591-024-02996-7"
+      ]
+    },
+    {
+      "question_id": "semaglutide-duration",
+      "question": "Is semaglutide-associated weight loss maintained for two to four years in adults with overweight or obesity?",
+      "expected_results": [
+        {
+          "doi": "10.1038/s41591-022-02026-4",
+          "title": "Two-year effects of semaglutide in adults with overweight or obesity: the STEP 5 trial",
+          "publication_year": 2022,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Garvey WT et al. Nature Medicine. 2022. doi:10.1038/s41591-022-02026-4.",
+          "evidence_record_ids": ["ev-glp1-step5-body-weight-week104-001"]
+        },
+        {
+          "doi": "10.1038/s41591-024-02996-7",
+          "title": "Long-term weight loss effects of semaglutide in obesity without diabetes in the SELECT trial",
+          "publication_year": 2024,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Ryan DH et al. Nature Medicine. 2024. doi:10.1038/s41591-024-02996-7.",
+          "evidence_record_ids": ["ev-glp1-select-trial-weight-loss-208wk-001"]
+        }
+      ],
+      "acceptable_secondary_dois": ["10.3389/fphar.2022.935823"]
+    }
+  ]
+}

@@ -370,9 +370,12 @@ This is the recommended next implementation milestone.
 
 ### Slice 2: measured retrieval handoff
 
-- Link Demo to a prefilled Ask query.
-- Label Ask as experimental retrieval.
-- Begin Current Project Path goal 2's golden-question benchmark.
+- Done: Demo links to the canonical prefilled Ask query.
+- Done: Ask is labeled experimental retrieval.
+- Done: Current Project Path goal 2 begins with the versioned, deterministic
+  golden-question benchmark in `docs/retrieval_benchmark_design.md`.
+- Deferred to the next focused PR: ranking changes justified by the recorded
+  baseline.
 
 No ranking change belongs in Slice 1.
 
