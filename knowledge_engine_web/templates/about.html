@@ -7,9 +7,10 @@
   Knowledge Engine renders what
   <a href="https://github.com/jweter/knowledge-engine-core">knowledge-engine-core</a>
   ("<code>core</code>") has already validated -- for a person, in a
-  browser, instead of a terminal. This site adds no synthesis, no
-  confidence rating, and no judgment about what a claim or relationship
-  means.
+  browser, instead of a terminal. It displays stored evidence and reviewed
+  relationships, plus clearly labeled deterministic Evidence Intelligence.
+  Optional AI narration, when configured and explicitly requested, is labeled
+  and never treated as new evidence or scientific review.
 </p>
 
 <h2>The seam</h2>
@@ -17,16 +18,25 @@
   <code>core</code> locates, validates, and persists evidence. It never
   decides what that evidence means for a person's actual question. This
   site holds the exact same boundary: it never sets or infers a
-  research question, an evidence direction, or any confidence rating
-  beyond what <code>core</code> already stores as free-text notes. That
-  judgment belongs to a future, separate reasoning layer, not this one.
+  research question or an evidence direction. Deterministic scores summarize
+  recorded fields; they do not decide truth or replace scientific judgment.
 </p>
 <p>
-  Concretely: every number and label on this site traces back to an
-  actual row in <code>core</code>'s database or an actual field in a
-  validated evidence record -- never a value invented to make a page
-  look more complete.
+  Stored values trace to <code>core</code>'s database or evidence records.
+  Computed values identify their deterministic method, reviewed relationships
+  remain distinct from automation, and illustrative material is labeled.
 </p>
+
+<h2>Snapshot provenance</h2>
+{% if snapshot.metadata %}
+<p>
+  Generated {{ snapshot.metadata.generated_at }} from corpus
+  <code>{{ snapshot.metadata.corpus_id }}</code>. It contains
+  {{ snapshot.metadata.claims_count }} claims,
+  {{ snapshot.metadata.relationships_count }} relationships, and
+  {{ snapshot.metadata.citations_count }} citations.
+</p>
+{% else %}<p class="empty-state">{{ snapshot.unavailable_reason }}</p>{% endif %}
 
 <h2>What "alpha" means here</h2>
 <p>

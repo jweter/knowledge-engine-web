@@ -28,6 +28,7 @@ COPY data ./data
 
 ENV KE_WEB_DATABASE_URL=sqlite:////app/data/knowledge_engine.sqlite3 \
     KE_WEB_EVIDENCE_RECORDS_PATH=/app/data/evidence_records.jsonl \
+    KE_WEB_SNAPSHOT_METADATA_PATH=/app/data/snapshot_metadata.json \
     KE_WEB_WHATS_CHANGED_BASELINE_PATH=/app/data/whats_changed_baseline.json \
     KE_WEB_HOST=0.0.0.0
 

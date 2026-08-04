@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-03T17:10:12Z",
+  "corpus_id": "glp1_weight_loss",
+  "core_commit": null,
+  "evidence_records_sha256": "sha256:1b167875660660eafec014ca4074614c8320338fcea4ab47eb9712afa25f2663",
+  "relationship_records_sha256": null,
+  "relationship_records_note": "Relationship JSONL was not included in this snapshot.",
+  "claims_count": 154,
+  "relationships_count": 11,
+  "citations_count": 5
+}

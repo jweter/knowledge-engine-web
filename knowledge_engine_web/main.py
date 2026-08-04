@@ -56,6 +56,7 @@ from knowledge_engine_web.report_renderer import (
     render_whats_changed_report,
 )
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
+from knowledge_engine_web.snapshot_metadata import read_snapshot_metadata
 from knowledge_engine_web.synthesis import synthesize_answer
 from knowledge_engine_web.whats_changed import build_whats_changed_summary
 
@@ -65,7 +66,15 @@ _STATIC_DIR = Path(__file__).parent / "static"
 app = FastAPI(title="Knowledge Engine Web")
 app.add_middleware(AlphaBasicAuthMiddleware)
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
-templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+
+
+def _snapshot_context(_: Request) -> dict[str, object]:
+    return {"snapshot": read_snapshot_metadata(Path(Settings().snapshot_metadata_path))}
+
+
+templates = Jinja2Templates(directory=str(_TEMPLATES_DIR), context_processors=[_snapshot_context])
+
+_DEMO_EVIDENCE_RECORD_ID = "ev-glp1-select-trial-weight-loss-208wk-001"
 
 
 def _engine() -> Engine:
@@ -102,7 +111,26 @@ def index() -> RedirectResponse:
     since no route was ever defined for "/" itself.
     """
 
-    return RedirectResponse(url="/graph")
+    return RedirectResponse(url="/demo")
+
+
+@app.get("/demo", response_class=HTMLResponse)
+def demo(request: Request) -> HTMLResponse:
+    """Render one stable, source-linked example of the implemented public workflow."""
+
+    claim = read_claim_detail(_engine(), _DEMO_EVIDENCE_RECORD_ID)
+    evidence_path = _evidence_path()
+    evidence = (
+        read_evidence_record(evidence_path, _DEMO_EVIDENCE_RECORD_ID) if evidence_path else None
+    )
+    intelligence = None
+    if claim is not None and evidence is not None and evidence_path is not None:
+        intelligence = _compute_evidence_intelligence(evidence_path, evidence, claim.relationships)
+    return templates.TemplateResponse(
+        request=request,
+        name="demo.html",
+        context={"claim": claim, "evidence": evidence, "intelligence": intelligence},
+    )
 
 
 @app.get("/about", response_class=HTMLResponse)

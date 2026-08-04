@@ -731,13 +731,69 @@ def test_about_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert "https://buymeacoffee.com/Weterjeremy" in response.text
 
 
-def test_root_redirects_to_graph(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_root_redirects_to_demo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
 
     response = TestClient(app).get("/", follow_redirects=False)
 
     assert response.status_code in (302, 307)
-    assert response.headers["location"] == "/graph"
+    assert response.headers["location"] == "/demo"
+
+
+def test_demo_page_reports_missing_anchor_honestly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/demo")
+
+    assert response.status_code == 200
+    assert "Demo record unavailable" in response.text
+    assert "No substitute claim was selected" in response.text
+
+
+def test_demo_page_renders_stored_anchor_and_trust_boundaries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    evidence_id = "ev-glp1-select-trial-weight-loss-208wk-001"
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [{"id": 1, "evidence_record_id": evidence_id}],
+        )
+    evidence_path = tmp_path / "evidence.jsonl"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_record_id": evidence_id,
+                "research_question": "Do GLP-1 receptor agonists reduce body weight?",
+                "claim_text": "Semaglutide reduced body weight at week 208.",
+                "result_summary": "Mean change was -10.2% versus -1.5% with placebo.",
+                "source_title": "SELECT trial",
+                "source_doi": "10.1056/NEJMoa2400741",
+                "study_type": "randomized controlled trial",
+                "review_status": "reviewed",
+                "review_checklist": {},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/demo")
+
+    assert response.status_code == 200
+    assert "SELECT trial" in response.text
+    assert "-10.2% versus -1.5%" in response.text
+    assert "Stored evidence" in response.text
+    assert "Computed, deterministic" in response.text
+    assert "Human-reviewed structure" in response.text
+    assert f'href="/claims/{evidence_id}"' in response.text
 
 
 def test_roadmap_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1033,7 +1089,7 @@ def test_ask_page_renders_the_empty_state_with_no_question(
     response = TestClient(app).get("/ask")
 
     assert response.status_code == 200
-    assert "Ask a research question" in response.text
+    assert "Experimental retrieval" in response.text
     assert "Results for" not in response.text
 
 

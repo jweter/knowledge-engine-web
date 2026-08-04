@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Evidence Demo{% endblock %}
+{% block description %}A source-linked walkthrough of one real GLP-1 evidence record, its deterministic assessment, and reviewed relationships.{% endblock %}
+{% block content %}
+<section class="demo-hero">
+  <p class="eyebrow">Public evidence journey</p>
+  <h1>What does one inspectable scientific claim look like?</h1>
+  <p>Follow a real SELECT trial result from stored evidence to deterministic assessment and human-reviewed relationships. This page does not answer the broader scientific question.</p>
+</section>
+
+{% if claim and evidence %}
+<section class="demo-section">
+  <p class="trust-label">Stored evidence</p>
+  <h2>{{ evidence.source_title or "Source record" }}</h2>
+  <p><strong>Research question:</strong> {{ evidence.research_question }}</p>
+  <p class="demo-claim">{{ evidence.claim_text }}</p>
+  <p><strong>Observed result:</strong> {{ evidence.result_summary }}</p>
+  {% if evidence.short_source_excerpt %}<blockquote>{{ evidence.short_source_excerpt }}</blockquote>{% endif %}
+  <p>DOI: {{ evidence.source_doi or "not recorded" }} &middot; Study type: {{ evidence.study_type or evidence.source_type or "not recorded" }}</p>
+  <p class="disclaimer">
+    Extraction: {{ evidence.extraction_method or "not recorded" }} &middot;
+    status: {{ evidence.extraction_status or "not recorded" }} &middot;
+    review: {{ evidence.review_status or "not recorded" }}
+  </p>
+</section>
+
+<section class="demo-section">
+  <p class="trust-label computed">Computed, deterministic</p>
+  <h2>Evidence Intelligence</h2>
+  {% if intelligence %}
+  <div class="demo-metrics">
+    <div><strong>{{ intelligence.quality.score }}/100</strong><span>Evidence Quality</span></div>
+    <div><strong>{{ intelligence.consensus.score if intelligence.consensus.score is not none else "--" }}/100</strong><span>Evidence Consensus</span></div>
+    <div><strong>{{ intelligence.confidence.score if intelligence.confidence.score is not none else "--" }}/100</strong><span>Claim Confidence</span></div>
+  </div>
+  <p>These values are deterministic calculations over stored fields. They are separate measures, not a truth score.</p>
+  {% else %}<p class="empty-state">Evidence Intelligence is unavailable in this snapshot.</p>{% endif %}
+</section>
+
+<section class="demo-section">
+  <p class="trust-label reviewed">Human-reviewed structure</p>
+  <h2>Relationships and limitations</h2>
+  <p>{{ claim.relationships|length }} reviewed relationship edge{{ "s" if claim.relationships|length != 1 else "" }} connect this claim to other evidence records.</p>
+  {% if claim.relationships %}
+  <ul class="demo-relationships">
+    {% for relationship in claim.relationships[:3] %}
+    <li>
+      <strong>{{ relationship.relationship_type }}</strong>
+      ({{ relationship.direction }}) -- {{ relationship.rationale }}
+      <a href="/claims/{{ relationship.other_evidence_record_id }}">Inspect related claim</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if claim.relationships|length > 3 %}
+  <p class="disclaimer">
+    {{ claim.relationships|length - 3 }} additional reviewed relationship{{ "s" if claim.relationships|length - 3 != 1 else "" }} are available on the complete claim record.
+  </p>
+  {% endif %}
+  {% endif %}
+  {% if evidence.limitations %}<ul>{% for limitation in evidence.limitations %}<li>{{ limitation }}</li>{% endfor %}</ul>{% endif %}
+  <p><a class="demo-cta" href="/claims/{{ claim.evidence_record_id }}">Inspect the complete claim record</a></p>
+</section>
+{% else %}
+<section class="demo-section empty-state">
+  <h2>Demo record unavailable</h2>
+  <p>The stable SELECT evidence record is not present in this snapshot. No substitute claim was selected.</p>
+</section>
+{% endif %}
+
+<section class="demo-boundary">
+  <h2>What this proves, and what it does not</h2>
+  <p><strong>Proves:</strong> source-linked evidence can remain inspectable through structured records, deterministic computations, and reviewed relationships.</p>
+  <p><strong>Does not prove:</strong> scientific truth, clinical advice, comprehensive corpus coverage, or automated scientific synthesis.</p>
+</section>
+{% endblock %}

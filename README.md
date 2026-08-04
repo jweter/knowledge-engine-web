@@ -12,7 +12,7 @@ Public entry points:
 
 - [Project showcase](https://knowledge-engine.steelzombie9999.chatgpt.site/)
   -- the project mission and public front door.
-- [Working web alpha](https://knowledge-engine-web-alpha.onrender.com/)
+- [Working web alpha demo](https://knowledge-engine-web-alpha.onrender.com/demo)
   -- this application's deployed, password-gated, point-in-time demonstration.
 
 The alpha is a live application over a published snapshot, not a live connection
@@ -20,7 +20,10 @@ to core and not a claim that the scientific question has been answered.
 
 ## Status
 
-Early, but every page in this roadmap's original list is built: graph
+Early, but every page in this roadmap's original list is built. The stable
+`/demo` route is the visitor-facing walkthrough of one real SELECT trial
+evidence record, deterministic Evidence Intelligence, and reviewed
+relationships. The broader application includes the graph
 summary, claims list/detail (now including evidence-record content),
 unconfirmed claims, relationship candidates, and paper detail. `GET /ask`
 now turns the `/roadmap` page's old non-functional concept-preview mockup
@@ -168,6 +171,12 @@ sequence.
 The first concrete cleanup is freshness visibility: expose the snapshot's data
 revision and ensure relationship-only graph changes trigger or explicitly queue
 an alpha refresh instead of waiting silently for the weekly/manual path.
+
+The implementation-ready design for that public-journey milestone is
+[`docs/public_journey_design.md`](docs/public_journey_design.md). It recommends
+a stable `/demo` route over one real SELECT trial claim, generated snapshot
+provenance, shared trust language, and a bounded showcase-to-alpha bridge before
+retrieval ranking changes begin.
 
 The first three shared tasks are:
 

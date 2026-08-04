@@ -6,6 +6,9 @@
   This page displays the graph's current, actual row counts only --
   nothing here is inferred or synthesized.
 </p>
+{% if snapshot.metadata %}
+<p class="snapshot-panel">Point-in-time snapshot generated {{ snapshot.metadata.generated_at }} from corpus <code>{{ snapshot.metadata.corpus_id }}</code>.</p>
+{% else %}<p class="snapshot-panel">{{ snapshot.unavailable_reason }}</p>{% endif %}
 
 <h2>Corpus Totals</h2>
 <ul>
