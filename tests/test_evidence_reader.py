@@ -8,6 +8,7 @@ import pytest
 from knowledge_engine_web.evidence_reader import (
     EvidenceRecordsError,
     count_evidence_records,
+    index_evidence_records_by_doi,
     list_evidence_records_for_doi,
     read_evidence_record,
 )
@@ -192,3 +193,31 @@ def test_list_evidence_records_for_doi_raises_on_a_malformed_json_line(tmp_path:
 
     with pytest.raises(EvidenceRecordsError):
         list_evidence_records_for_doi(path, "10.1000/example")
+
+
+def test_index_evidence_records_by_doi_normalizes_and_groups_records(tmp_path: Path) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "evidence_record_id": "ev-1",
+                        "source_doi": "https://doi.org/10.1000/EXAMPLE",
+                    }
+                ),
+                json.dumps({"evidence_record_id": "ev-2", "source_doi": "doi:10.1000/example"}),
+                json.dumps({"evidence_record_id": "ev-no-doi", "source_doi": None}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    records = index_evidence_records_by_doi(path)
+
+    assert list(records) == ["10.1000/example"]
+    assert [record.evidence_record_id for record in records["10.1000/example"]] == [
+        "ev-1",
+        "ev-2",
+    ]

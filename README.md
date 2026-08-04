@@ -135,8 +135,11 @@ poetry run knowledge-engine-retrieval-benchmark
 
 It checks expected papers, Evidence Record IDs, study types, and citations
 before reporting Recall@5, reciprocal rank, evidence-link coverage, and the
-observed top results. It does not call an LLM or modify ranking. The current
-baseline and the rules for future ranking work are documented in
+observed top results. It does not call an LLM. The first measured correction
+keeps FTS5 candidate generation and deterministically reranks candidates by
+question overlap with their source-linked Evidence Record text. Mean Recall@5
+on the fixed four-question benchmark improved from `0.500` to `1.000`; the
+baseline, algorithm, exact result, and limitations are documented in
 [`docs/retrieval_benchmark_design.md`](docs/retrieval_benchmark_design.md).
 
 ## Architecture
@@ -160,9 +163,11 @@ This project reads, but never writes, three kinds of `core` data:
   -- SQL tables in `core`'s SQLite database, read via reflection.
 - **The FTS5 lexical index** (`paper_search`) -- `core`'s own SQLite
   full-text index over paper title/abstract/body text. `GET /ask`'s
-  retrieval query is ported from `core`'s `knowledge_engine.search`
-  module rather than imported, same reasoning as the graph reflection
-  above (`knowledge_engine_web/retrieval.py`).
+  candidate query is ported from `core`'s `knowledge_engine.search`
+  module rather than imported. When Evidence Records are configured, a
+  deterministic second pass ranks candidates by question overlap with stored
+  evidence question, claim, PICO, and result text. It does not use evidence
+  quality or an LLM (`knowledge_engine_web/retrieval.py`).
 - **Evidence Records** -- plain JSONL files `core` produces (e.g.
   `evidence_records.jsonl`), read directly via a configured path
   (`KE_WEB_EVIDENCE_RECORDS_PATH`), never imported from `core`. Rendered
@@ -198,7 +203,7 @@ The first three shared tasks are:
 1. Make the showcase-to-alpha journey coherent and truthful, including README
    links, snapshot freshness, and a guided evidence example.
 2. Build a golden-question benchmark and improve Ask ranking from measured
-   failures.
+   failures. (First measured correction complete.)
 3. Present one complete GLP-1/body-weight evidence map with limitations,
    citations, population differences, and reviewed relationships.
 

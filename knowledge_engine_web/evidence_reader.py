@@ -94,7 +94,7 @@ def list_evidence_records_for_doi(path: Path, doi: str) -> list[EvidenceRecordDe
     if not path.exists() or not doi:
         return []
 
-    normalized_target = _normalize_doi(doi)
+    normalized_target = normalize_doi(doi)
     matches: list[EvidenceRecordDetail] = []
     with path.open(encoding="utf-8") as handle:
         for line_number, raw_line in enumerate(handle, start=1):
@@ -106,15 +106,51 @@ def list_evidence_records_for_doi(path: Path, doi: str) -> list[EvidenceRecordDe
             except json.JSONDecodeError as exc:
                 raise EvidenceRecordsError(f"{path}:{line_number} is not valid JSON.") from exc
             record_doi = record.get("source_doi")
-            if isinstance(record_doi, str) and _normalize_doi(record_doi) == normalized_target:
+            if isinstance(record_doi, str) and normalize_doi(record_doi) == normalized_target:
                 matches.append(_to_detail(record))
     return matches
 
 
-def _normalize_doi(doi: str) -> str:
+def index_evidence_records_by_doi(path: Path) -> dict[str, tuple[EvidenceRecordDetail, ...]]:
+    """Read Evidence Records once and group them by normalized source DOI.
+
+    Retrieval reranking evaluates a bounded set of papers at once. Building one
+    immutable index avoids rescanning the JSONL file for every candidate while
+    preserving the same corruption behavior as the single-DOI reader.
+    """
+
+    if not path.exists():
+        return {}
+
+    records_by_doi: dict[str, list[EvidenceRecordDetail]] = {}
+    with path.open(encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                record: dict[str, Any] = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise EvidenceRecordsError(f"{path}:{line_number} is not valid JSON.") from exc
+            record_doi = record.get("source_doi")
+            if not isinstance(record_doi, str) or not record_doi.strip():
+                continue
+            normalized_doi = normalize_doi(record_doi)
+            records_by_doi.setdefault(normalized_doi, []).append(_to_detail(record))
+
+    return {doi: tuple(records) for doi, records in records_by_doi.items()}
+
+
+def normalize_doi(doi: str) -> str:
     """Normalize a DOI for deterministic comparison, matching `core`'s own `normalize_doi`."""
 
-    return doi.strip().lower().removeprefix("https://doi.org/").removeprefix("doi:")
+    return (
+        doi.strip()
+        .lower()
+        .removeprefix("https://doi.org/")
+        .removeprefix("http://doi.org/")
+        .removeprefix("doi:")
+    )
 
 
 def count_evidence_records(path: Path) -> int:

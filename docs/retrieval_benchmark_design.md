@@ -7,9 +7,10 @@ small, versioned set of human-curated scientific questions before changing its
 ranking. The benchmark is deterministic, uses the committed alpha SQLite
 snapshot and Evidence Records file, and never calls an LLM.
 
-This begins Current Project Path goal 2. It does not improve ranking yet. The
-first result is intentionally a truthful failing baseline that tells the next
-implementation exactly what must improve.
+This begins Current Project Path goal 2. The first committed result was a
+truthful failing baseline. The follow-up implements the smallest measured
+correction: FTS5 still generates candidates, then stored source-linked evidence
+text deterministically reranks them.
 
 ## Objective
 
@@ -75,10 +76,11 @@ not a ranking engineer adding convenient labels.
 - **Expected source ranks:** full observed ranks for every direct expected DOI.
 - **Top-five classification:** `expected`, `secondary`, or `unexpected`.
 
-The first milestone does not define a passing threshold. Freezing today's poor
-ranking as an acceptable threshold would turn a baseline into a guarantee. A
-later ranking PR must show the before/after report and justify any proposed
-regression gate.
+The initial milestone did not define a passing threshold. The measured
+follow-up now makes the committed benchmark a regression gate: every direct
+expected source must remain within the top five, yielding mean Recall@5 of
+`1.000`. This protects the four reviewed questions; it does not claim broad
+retrieval validity outside them.
 
 ## Baseline
 
@@ -103,7 +105,8 @@ More specific wording improves retrieval sharply, demonstrating that the
 sources and FTS rows exist. The likely failure is broad OR-query dilution and
 the absence of evidence-aware ranking signals, not missing documents.
 
-This is a diagnosis, not yet a ranking-design decision.
+This baseline remains recorded as the diagnosis that justified the ranking
+change.
 
 The alpha snapshot currently leaves `publication_year` null on all three direct
 gold papers. Their reviewed citation years remain explicit in the benchmark,
@@ -125,6 +128,48 @@ Alternate inputs can be supplied with `--benchmark`, `--database`, and
 `--evidence`. `--output` writes the selected format to a file. The evaluator is
 read-only and does not mutate the database or Evidence Records.
 
+## Evidence-Aware Reranking
+
+The shared `answer_retrieval` path now has two deterministic stages when an
+Evidence Records file is configured:
+
+1. SQLite FTS5 retrieves up to 500 lexical candidates using the existing
+   title/abstract/body query.
+2. For each candidate DOI, the reranker calculates question-token coverage in
+   the paper's stored Evidence Records. It weights `research_question` at 5,
+   `claim_text` at 3, the combined PICO fields at 2, and `result_summary` at 1.
+3. Candidates sort by descending evidence alignment, with original FTS rank as
+   the stable tie-breaker. A candidate with no Evidence Record or no matching
+   evidence text receives zero alignment; merely having a record is not a
+   boost.
+
+The public Ask route and benchmark call the same function. If Evidence Records
+are not configured or the file is unavailable, Ask retains the original
+lexical ranking. The alignment value is a retrieval signal only. It does not
+use or alter Evidence Quality, review tier, consensus, Claim Confidence, or any
+scientific conclusion.
+
+## Measured Result
+
+The gold fixture and expected sources were not changed. Running the same four
+questions over the same committed snapshot produces:
+
+| Question | Recall@5 before | Recall@5 after | Expected ranks before | Expected ranks after |
+| --- | ---: | ---: | --- | --- |
+| Broad GLP-1/body weight | 0/3 | 3/3 | STEP 5: 135; Gao: 141; SELECT: 347 | STEP 5: 1; Gao: 2; SELECT: 3 |
+| Long-term semaglutide | 1/2 | 2/2 | STEP 5: 43; SELECT: 4 | STEP 5: 3; SELECT: 1 |
+| Randomized evidence | 1/1 | 1/1 | Gao: 5 | Gao: 1 |
+| Two-to-four-year duration | 1/2 | 2/2 | STEP 5: 1; SELECT: 16 | STEP 5: 5; SELECT: 1 |
+
+Aggregate comparison:
+
+- mean Recall@5: `0.500` -> `1.000`;
+- mean reciprocal rank: `0.364` -> `1.000`.
+
+The correction materially fixes the broad question and does not regress the
+three specific questions. The exact committed-data result is covered by the
+test suite so a later change cannot silently restore the diagnosed failure.
+
 ## Trust Boundaries
 
 - No LLM is called.
@@ -141,22 +186,20 @@ read-only and does not mutate the database or Evidence Records.
   failure, but not enough to certify broad scientific retrieval quality.
 - The benchmark evaluates the committed alpha snapshot, not an operator's
   larger private database.
+- The reranker considers at most 500 FTS candidates. A relevant source absent
+  from that lexical pool cannot be recovered by this change.
+- Token overlap recognizes aligned language, not synonyms or deeper scientific
+  equivalence.
+- Ranking currently depends on the coverage and wording of stored Evidence
+  Records; papers without records retain lexical order behind aligned records.
 - Study-type and evidence expectations cover only the current golden sources.
 - Recall@5 does not measure snippet usefulness or citation presentation.
 - There are not yet hard regression thresholds in CI.
 
 ## Next Implementation
 
-Use this baseline to design the smallest explainable ranking correction. The
-first candidate should evaluate evidence-aware reranking and stronger treatment
-of question concepts before changing tokenization or adding model-generated
-query expansion. Any correction must:
-
-1. materially improve the broad canonical question;
-2. preserve or improve the three more specific questions;
-3. keep ranking deterministic and inspectable;
-4. avoid treating “has an Evidence Record” as proof of relevance;
-5. publish an exact before/after benchmark report.
-
-Only after retrieval behavior is measured and improved should the project move
-to Current Project Path goal 3's broader golden evidence-map completion.
+Current Project Path goal 2 now has a measured first correction. The next
+project step is goal 3: complete and review the broader GLP-1/body-weight
+evidence map. That work should expand scientific coverage and may later expand
+the gold benchmark through explicit review. It must not rewrite today's gold
+set merely to preserve a favorable metric.

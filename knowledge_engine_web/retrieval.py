@@ -1,4 +1,4 @@
-"""Read-only lexical retrieval over `core`'s SQLite FTS5 index.
+"""Read-only retrieval over `core`'s SQLite FTS5 index and Evidence Records.
 
 Reads the same `paper_search` FTS5 virtual table `core`'s
 `knowledge_engine/database.py` creates and `knowledge_engine/search.py`'s
@@ -6,18 +6,25 @@ Reads the same `paper_search` FTS5 virtual table `core`'s
 `graph_reader.py`'s "read `core`'s database directly, never import
 `knowledge_engine`" decision (`docs/web_design.md`). The FTS5 query
 logic (`build_natural_language_fts_query`, the `bm25`/`snippet` SQL) is
-copied verbatim from `core`'s `SearchService`, since it is the one
-retrieval mechanism `core` has already built and this project is
-deliberately staying a thin, honest read layer rather than reinventing
-ranking. No new candidate-selection or scoring logic of its own.
+copied verbatim from `core`'s `SearchService`. When Evidence Records are
+configured, FTS5 remains candidate generation and a deterministic second pass
+prefers candidates whose stored evidence text aligns with the question. The
+reranker never uses Evidence Quality, confidence, consensus, or an LLM.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 
 from sqlalchemy import Engine, inspect, text
+
+from knowledge_engine_web.evidence_reader import (
+    EvidenceRecordDetail,
+    index_evidence_records_by_doi,
+    normalize_doi,
+)
 
 _NATURAL_LANGUAGE_STOPWORDS = {
     "a",
@@ -40,6 +47,14 @@ _NATURAL_LANGUAGE_STOPWORDS = {
     "with",
 }
 
+_EVIDENCE_CANDIDATE_LIMIT = 500
+_EVIDENCE_FIELD_WEIGHTS = {
+    "research_question": 5.0,
+    "claim_text": 3.0,
+    "pico": 2.0,
+    "result_summary": 1.0,
+}
+
 
 @dataclass(frozen=True)
 class SearchResult:
@@ -53,6 +68,7 @@ class SearchResult:
     score: float
     snippet: str
     matched_query: str
+    evidence_alignment_score: float = 0.0
 
 
 def build_natural_language_fts_query(question: str) -> str:
@@ -70,7 +86,13 @@ def build_natural_language_fts_query(question: str) -> str:
     return " OR ".join(tokens)
 
 
-def answer_retrieval(engine: Engine, question: str, limit: int = 5) -> list[SearchResult]:
+def answer_retrieval(
+    engine: Engine,
+    question: str,
+    limit: int = 5,
+    *,
+    evidence_path: Path | None = None,
+) -> list[SearchResult]:
     """Retrieve papers relevant to a natural-language question.
 
     Retrieval only -- converts a question into a conservative FTS query
@@ -94,6 +116,11 @@ def answer_retrieval(engine: Engine, question: str, limit: int = 5) -> list[Sear
     if "paper_search" not in set(inspect(engine).get_table_names()):
         return []
 
+    evidence_by_doi = (
+        index_evidence_records_by_doi(evidence_path) if evidence_path is not None else {}
+    )
+    candidate_limit = max(limit, _EVIDENCE_CANDIDATE_LIMIT) if evidence_by_doi else limit
+
     with engine.connect() as connection:
         result_rows = connection.execute(
             text("""
@@ -111,10 +138,10 @@ def answer_retrieval(engine: Engine, question: str, limit: int = 5) -> list[Sear
                 ORDER BY score
                 LIMIT :limit
                 """),
-            {"query": fts_query, "limit": limit},
+            {"query": fts_query, "limit": candidate_limit},
         ).all()
 
-    return [
+    candidates = [
         SearchResult(
             paper_id=int(row.id),
             title=str(row.title),
@@ -127,3 +154,63 @@ def answer_retrieval(engine: Engine, question: str, limit: int = 5) -> list[Sear
         )
         for row in result_rows
     ]
+    if not evidence_by_doi:
+        return candidates[:limit]
+
+    question_tokens = _retrieval_tokens(normalized_question)
+    ranked: list[tuple[float, int, SearchResult]] = []
+    for lexical_rank, candidate in enumerate(candidates):
+        records = evidence_by_doi.get(normalize_doi(candidate.doi or ""), ())
+        alignment = max(
+            (_evidence_alignment(question_tokens, record) for record in records),
+            default=0.0,
+        )
+        ranked.append(
+            (
+                alignment,
+                lexical_rank,
+                replace(candidate, evidence_alignment_score=alignment),
+            )
+        )
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return [item[2] for item in ranked[:limit]]
+
+
+def _retrieval_tokens(value: object) -> set[str]:
+    if not isinstance(value, str):
+        return set()
+    return {
+        token
+        for token in re.findall(r"[A-Za-z][A-Za-z0-9]+", value.lower())
+        if len(token) >= 3 and token not in _NATURAL_LANGUAGE_STOPWORDS
+    }
+
+
+def _evidence_alignment(question_tokens: set[str], evidence: EvidenceRecordDetail) -> float:
+    """Return weighted question-token coverage for one stored Evidence Record."""
+
+    if not question_tokens:
+        return 0.0
+    pico = " ".join(
+        value
+        for value in (
+            evidence.population,
+            evidence.intervention,
+            evidence.comparator,
+            evidence.outcome,
+        )
+        if isinstance(value, str)
+    )
+    fields = {
+        "research_question": evidence.research_question,
+        "claim_text": evidence.claim_text,
+        "pico": pico,
+        "result_summary": evidence.result_summary,
+    }
+    weighted_coverage = sum(
+        _EVIDENCE_FIELD_WEIGHTS[field]
+        * len(question_tokens & _retrieval_tokens(value))
+        / len(question_tokens)
+        for field, value in fields.items()
+    )
+    return weighted_coverage / sum(_EVIDENCE_FIELD_WEIGHTS.values())

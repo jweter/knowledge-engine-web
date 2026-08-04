@@ -516,11 +516,10 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
             request=request, name="ask.html", context={"question": "", "results": None}
         )
 
-    engine = _engine()
-    papers = answer_retrieval(engine, question, limit=5)
-
     settings = Settings()
     evidence_path = Path(settings.evidence_records_path) if settings.evidence_records_path else None
+    engine = _engine()
+    papers = answer_retrieval(engine, question, limit=5, evidence_path=evidence_path)
 
     results = [
         {
