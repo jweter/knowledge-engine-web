@@ -510,13 +510,25 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
     free, and a person should ask for it explicitly.
     """
 
+    settings = Settings()
+    llm_model = settings.llm_model.strip() if settings.llm_model else None
+    synthesis_available = bool(llm_model)
     question = q.strip()
     if not question:
         return templates.TemplateResponse(
-            request=request, name="ask.html", context={"question": "", "results": None}
+            request=request,
+            name="ask.html",
+            context={
+                "question": "",
+                "results": None,
+                "synthesis_available": synthesis_available,
+                "synthesize_requested": False,
+                "synthesis_unavailable_notice": None,
+                "synthesis": None,
+                "synthesis_error": None,
+            },
         )
 
-    settings = Settings()
     evidence_path = Path(settings.evidence_records_path) if settings.evidence_records_path else None
     engine = _engine()
     papers = answer_retrieval(engine, question, limit=5, evidence_path=evidence_path)
@@ -529,19 +541,21 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
         for paper in papers
     ]
 
+    synthesize_requested = synthesize and synthesis_available
+    synthesis_unavailable_notice = (
+        "AI synthesis is unavailable on this deployment. Retrieval results are shown below."
+        if synthesize and not synthesis_available
+        else None
+    )
     synthesis: str | None = None
     synthesis_error: str | None = None
-    if synthesize:
-        if not settings.llm_model:
-            synthesis_error = (
-                "Synthesis is not configured on this server -- KE_WEB_LLM_MODEL must be set."
-            )
-        else:
-            try:
-                llm = OllamaLLM(model=settings.llm_model, host=settings.ollama_host)
-                synthesis = synthesize_answer(question, results, llm)
-            except LocalLLMError as exc:
-                synthesis_error = str(exc)
+    if synthesize_requested:
+        assert llm_model is not None
+        try:
+            llm = OllamaLLM(model=llm_model, host=settings.ollama_host)
+            synthesis = synthesize_answer(question, results, llm)
+        except LocalLLMError as exc:
+            synthesis_error = str(exc)
 
     return templates.TemplateResponse(
         request=request,
@@ -549,7 +563,9 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
         context={
             "question": question,
             "results": results,
-            "synthesize_requested": synthesize,
+            "synthesis_available": synthesis_available,
+            "synthesize_requested": synthesize_requested,
+            "synthesis_unavailable_notice": synthesis_unavailable_notice,
             "synthesis": synthesis,
             "synthesis_error": synthesis_error,
         },

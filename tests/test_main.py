@@ -1212,6 +1212,11 @@ class _FailingFakeLLM:
         raise LocalLLMError("Could not reach Ollama at http://x: refused.")
 
 
+class _UnexpectedLLM:
+    def __init__(self, *, model: str, host: str) -> None:
+        raise AssertionError("An unconfigured deployment must not construct an LLM.")
+
+
 def _setup_paper_with_evidence(engine: Engine, tmp_path: Path) -> Path:
     _create_fts_table_and_paper(
         engine,
@@ -1249,6 +1254,7 @@ def test_ask_without_synthesize_shows_no_synthesis_block(
     evidence_path = _setup_paper_with_evidence(engine, tmp_path)
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.setenv("KE_WEB_LLM_MODEL", "qwen2.5:1.5b")
     monkeypatch.setattr(main, "OllamaLLM", _FakeLLM)
 
     response = TestClient(app).get("/ask", params={"q": "does semaglutide reduce body weight"})
@@ -1257,7 +1263,33 @@ def test_ask_without_synthesize_shows_no_synthesis_block(
     assert "AI-generated synthesis" not in response.text
 
 
-def test_ask_synthesize_requires_llm_model_configured(
+def test_ask_form_disables_synthesis_when_model_is_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KE_WEB_LLM_MODEL", "  ")
+
+    response = TestClient(app).get("/ask")
+
+    assert response.status_code == 200
+    assert 'type="checkbox" disabled aria-disabled="true"' in response.text
+    assert "AI synthesis unavailable on this deployment; Ask is retrieval-only." in response.text
+    assert "KE_WEB_LLM_MODEL" not in response.text
+
+
+def test_ask_form_enables_synthesis_when_model_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KE_WEB_LLM_MODEL", "qwen2.5:1.5b")
+
+    response = TestClient(app).get("/ask")
+
+    assert response.status_code == 200
+    assert 'name="synthesize" value="1"' in response.text
+    assert "disabled" not in response.text
+    assert "Also generate an AI synthesis" in response.text
+
+
+def test_ask_unconfigured_synthesis_request_degrades_to_retrieval_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = build_engine(tmp_path)
@@ -1265,14 +1297,18 @@ def test_ask_synthesize_requires_llm_model_configured(
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
     monkeypatch.delenv("KE_WEB_LLM_MODEL", raising=False)
+    monkeypatch.setattr(main, "OllamaLLM", _UnexpectedLLM)
 
     response = TestClient(app).get(
         "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
     )
 
     assert response.status_code == 200
-    assert "AI-generated synthesis" in response.text
-    assert "KE_WEB_LLM_MODEL must be set" in response.text
+    assert "AI-generated synthesis" not in response.text
+    assert "AI synthesis is unavailable on this deployment." in response.text
+    assert "Retrieval results are shown below." in response.text
+    assert "KE_WEB_LLM_MODEL" not in response.text
+    assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
 
 
 def test_ask_synthesize_renders_the_grounded_narrative(

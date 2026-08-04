@@ -35,8 +35,16 @@ deployment: it requires `ollama serve` already running on the same host
 "Decision: local LLM". This works for local-network serving, but not
 for the Render alpha hosting below: a laptop or self-hosted machine
 cannot durably run Ollama *for* Render's separate hosted environment,
-so `/ask`'s synthesis checkbox stays unconfigured there until that gets
-its own architecture.
+so `/ask` renders a disabled synthesis control and remains retrieval-only
+there until that gets its own architecture. A stale or forged synthesis
+request safely degrades to retrieval without exposing environment-variable
+details.
+
+The Ollama desktop application running on an operator's laptop is appropriate
+for this local or trusted-LAN mode. Enabling Ollama's network exposure is not a
+supported way to provide inference to Render: it would couple a public service
+to laptop uptime, router and firewall configuration, and an unauthenticated
+local model endpoint.
 
 `0.0.0.0` binds every network interface on the host -- reachable from
 other machines on the same local network at `http://<host-ip>:8000`.

@@ -220,19 +220,27 @@ it, under this project's own env var namespace rather than reusing
 `ke-ai`'s `KE_AI_LLM_MODEL`/`KE_AI_OLLAMA_HOST` names -- each consuming
 process owns its own settings, even when, in practice, the same local
 Ollama server and model likely serve both. Off by default and opt-in
-per request (a checkbox on the form, not a setting that changes every
-page load): real inference costs real CPU time, and a person should ask
-for it explicitly. `LocalLLMError` (model not pulled, Ollama not
-running, malformed response) is caught and rendered inline as part of
-the synthesis panel, never a 500 -- retrieval results render normally
-either way.
+per request: when a model is configured, the form offers an enabled checkbox
+because real inference costs real CPU time and a person should ask for it
+explicitly. When no model is configured, the form instead renders a disabled
+control labeled as unavailable on that deployment. A stale or forged
+`synthesize=1` request degrades to retrieval-only output and never constructs
+an LLM client or exposes the missing environment-variable name.
+
+This is a configuration capability check, not an Ollama health probe. Once a
+model is configured, `LocalLLMError` (model not pulled, Ollama not running,
+malformed response) is still caught and rendered inline as part of the
+synthesis panel, never a 500 -- retrieval results render normally either way.
 
 Same production caveat `ai_design.md` raises: `ollama serve` is a
 separate process this project does not manage or start, and a laptop
 cannot durably serve it to the public alpha deployment (`docs/deployment.md`).
 Development and a local/LAN deployment get real synthesis for free once
-Ollama is running; the hosted Render alpha will not, until that gets its
-own architecture -- not attempted here.
+Ollama is running and `KE_WEB_LLM_MODEL` is set. The hosted Render alpha
+deliberately presents retrieval-only Ask until it gets a separately hosted,
+secured, and operationally durable inference architecture -- not attempted
+here. Exposing a laptop's Ollama listener to the public internet is not that
+architecture.
 
 ## Architecture
 
