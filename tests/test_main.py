@@ -751,6 +751,7 @@ def test_demo_page_reports_missing_anchor_honestly(
     assert response.status_code == 200
     assert "Demo record unavailable" in response.text
     assert "No substitute claim was selected" in response.text
+    assert "Try the benchmark question in experimental retrieval" in response.text
 
 
 def test_demo_page_renders_stored_anchor_and_trust_boundaries(

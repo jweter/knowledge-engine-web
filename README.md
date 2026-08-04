@@ -124,6 +124,21 @@ By default this binds to `127.0.0.1:8000` (local machine only). To
 serve on a local network, or run as a persistent systemd service, see
 `docs/deployment.md`.
 
+## Retrieval Benchmark
+
+The public Ask path has a deterministic golden-question benchmark over the
+committed alpha snapshot:
+
+```bash
+poetry run knowledge-engine-retrieval-benchmark
+```
+
+It checks expected papers, Evidence Record IDs, study types, and citations
+before reporting Recall@5, reciprocal rank, evidence-link coverage, and the
+observed top results. It does not call an LLM or modify ranking. The current
+baseline and the rules for future ranking work are documented in
+[`docs/retrieval_benchmark_design.md`](docs/retrieval_benchmark_design.md).
+
 ## Architecture
 
 This project reads `core`'s SQLite database directly, read-only, via

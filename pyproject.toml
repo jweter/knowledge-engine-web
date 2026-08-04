@@ -23,6 +23,7 @@ httpx = "^0.28.0"
 
 [tool.poetry.scripts]
 knowledge-engine-web = "knowledge_engine_web.main:run"
+knowledge-engine-retrieval-benchmark = "knowledge_engine_web.retrieval_benchmark:main"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
