@@ -296,3 +296,19 @@ def test_cli_exits_nonzero_for_invalid_input(
 
     assert exc_info.value.code == 1
     assert "Benchmark failed:" in capsys.readouterr().err
+
+
+def test_committed_benchmark_is_a_retrieval_regression_gate() -> None:
+    evaluation = evaluate_benchmark(
+        load_benchmark(Path("data/retrieval_benchmark.json")),
+        database_path=Path("data/knowledge_engine.sqlite3"),
+        evidence_path=Path("data/evidence_records.jsonl"),
+    )
+
+    assert evaluation.mean_recall_at_k == 1.0
+    assert evaluation.mean_reciprocal_rank == 1.0
+    assert all(
+        expected.rank is not None and expected.rank <= evaluation.top_k
+        for question in evaluation.questions
+        for expected in question.expected_ranks
+    )

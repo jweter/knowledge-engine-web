@@ -372,10 +372,10 @@ This is the recommended next implementation milestone.
 
 - Done: Demo links to the canonical prefilled Ask query.
 - Done: Ask is labeled experimental retrieval.
-- Done: Current Project Path goal 2 begins with the versioned, deterministic
-  golden-question benchmark in `docs/retrieval_benchmark_design.md`.
-- Deferred to the next focused PR: ranking changes justified by the recorded
-  baseline.
+- Done: The benchmark contract and measured failing baseline are recorded in
+  `docs/retrieval_benchmark_design.md`.
+- Done: The first deterministic evidence-aware reranker improves mean Recall@5
+  from `0.500` to `1.000` without changing the gold set.
 
 No ranking change belongs in Slice 1.
 

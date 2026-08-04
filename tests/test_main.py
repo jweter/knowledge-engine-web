@@ -1169,6 +1169,7 @@ def test_ask_page_renders_evidence_and_intelligence_for_a_matched_paper(
     assert "Semaglutide reduced body weight." in response.text
     assert "Evidence Quality:" in response.text
     assert "not yet assessable" in response.text  # no relationship edges yet
+    assert "Ranking signal: source-linked evidence text aligned" in response.text
 
 
 def test_ask_page_escapes_a_malicious_snippet(

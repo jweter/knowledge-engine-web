@@ -22,6 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from knowledge_engine_web.evidence_reader import (
     EvidenceRecordsError,
     list_evidence_records_for_doi,
+    normalize_doi,
 )
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 
@@ -112,18 +113,6 @@ class BenchmarkEvaluation:
     mean_recall_at_k: float
     mean_reciprocal_rank: float
     questions: tuple[QuestionEvaluation, ...]
-
-
-def normalize_doi(doi: str) -> str:
-    """Normalize DOI spelling for benchmark comparisons."""
-
-    return (
-        doi.strip()
-        .lower()
-        .removeprefix("https://doi.org/")
-        .removeprefix("http://doi.org/")
-        .removeprefix("doi:")
-    )
 
 
 def load_benchmark(path: Path) -> RetrievalBenchmark:
@@ -232,6 +221,7 @@ def evaluate_benchmark(
                 engine,
                 question.question,
                 limit=benchmark.rank_depth,
+                evidence_path=evidence_path,
             )
             evaluations.append(
                 _evaluate_question(question, results, evidence_path, benchmark.top_k)
