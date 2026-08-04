@@ -116,9 +116,12 @@ ollama pull qwen2.5:1.5b
 export KE_WEB_LLM_MODEL="qwen2.5:1.5b"
 ```
 
-This is optional too -- without it, `/ask`'s synthesis checkbox shows a
-plain "not configured" message and retrieval results still render
-normally.
+This is optional too. Without it, `/ask` presents a disabled synthesis
+control labeled as unavailable on that deployment and remains fully
+retrieval-only. Stale or manually forged synthesis requests also fall back to
+retrieval without exposing server configuration details. A configured local
+or LAN deployment continues to offer the opt-in checkbox and use its Ollama
+service normally.
 
 By default this binds to `127.0.0.1:8000` (local machine only). To
 serve on a local network, or run as a persistent systemd service, see
@@ -261,8 +264,10 @@ The first three shared tasks are:
   piece of a larger question-first "Ask" experience connecting this
   project, `knowledge-engine-ai`, and `core`. `synthesize=1` optionally
   narrates the same retrieval results and Evidence Intelligence numbers
-  into one grounded paragraph via a local, offline LLM (done; see
-  "Decision: local LLM" in `docs/web_design.md`).
+  into one grounded paragraph on configured local or LAN deployments via a
+  local, offline LLM (done; see "Decision: local LLM" in
+  `docs/web_design.md`). The hosted Render alpha remains retrieval-only until
+  a separate hosted inference architecture is deliberately chosen.
 - `GET /dashboard` -- a corpus-wide Evidence Intelligence dashboard:
   the distribution of Evidence Quality scores and Claim Confidence
   reliability tiers across every claim with evidence configured (done;

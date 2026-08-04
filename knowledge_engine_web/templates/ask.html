@@ -23,12 +23,23 @@
     placeholder="does semaglutide reduce body weight"
     autofocus
   />
+  {% if synthesis_available %}
   <label class="ask-synthesize-toggle">
     <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested %}checked{% endif %} />
     Also generate an AI synthesis (local model, real inference -- not free)
   </label>
+  {% else %}
+  <label class="ask-synthesize-toggle is-unavailable">
+    <input type="checkbox" disabled aria-disabled="true" />
+    AI synthesis unavailable on this deployment; Ask is retrieval-only.
+  </label>
+  {% endif %}
   <button type="submit">Ask</button>
 </form>
+
+{% if synthesis_unavailable_notice %}
+<p class="empty-state">{{ synthesis_unavailable_notice }}</p>
+{% endif %}
 
 {% if results is not none %}
 {% if synthesize_requested %}
