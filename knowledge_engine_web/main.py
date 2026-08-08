@@ -15,7 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine, create_engine
@@ -107,16 +107,38 @@ def _whats_changed_baseline_path() -> Path:
     return Path(Settings().whats_changed_baseline_path)
 
 
-@app.get("/", include_in_schema=False)
-def index() -> RedirectResponse:
-    """Redirect the bare domain to /graph -- the site's actual home page.
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request) -> HTMLResponse:
+    """Render the public landing page: mission, real corpus numbers, one CTA.
 
-    Without this, a first-time visitor hitting the root URL (the normal
-    thing to do) got FastAPI's default {"detail": "Not Found"} JSON,
-    since no route was ever defined for "/" itself.
+    Roadmap's "Current Project Path" item 1 ("One coherent public
+    journey") calls for connecting the mission-first public showcase
+    (https://knowledge-engine.steelzombie9999.chatgpt.site/) to this live
+    laboratory. This page is that connection point -- it never invents
+    copy or numbers the rest of the site doesn't already show: the corpus
+    stats and network visual reuse the exact same `read_graph_summary`/
+    `build_relationship_network_svg` path `/graph` uses.
     """
 
-    return RedirectResponse(url="/demo")
+    engine = _engine()
+    summary = read_graph_summary(engine)
+    relationships = list_relationships(engine)
+    evidence_path = _evidence_path()
+    titles: dict[str, str] = {}
+    if evidence_path is not None:
+        node_ids = {relationship.source_evidence_record_id for relationship in relationships} | {
+            relationship.target_evidence_record_id for relationship in relationships
+        }
+        for evidence_record_id in node_ids:
+            record = read_evidence_record(evidence_path, evidence_record_id)
+            if record is not None and record.source_title:
+                titles[evidence_record_id] = record.source_title
+    network_svg = build_relationship_network_svg(relationships, titles, width=620, height=560)
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"summary": summary, "network_svg": network_svg},
+    )
 
 
 @app.get("/demo", response_class=HTMLResponse)

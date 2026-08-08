@@ -826,13 +826,31 @@ def test_about_page_renders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert "https://buymeacoffee.com/Weterjeremy" in response.text
 
 
-def test_root_redirects_to_demo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_root_renders_the_landing_page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    build_engine(tmp_path)
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
 
-    response = TestClient(app).get("/", follow_redirects=False)
+    response = TestClient(app).get("/")
 
-    assert response.status_code in (302, 307)
-    assert response.headers["location"] == "/demo"
+    assert response.status_code == 200
+    assert "Human knowledge should compound." in response.text
+    assert 'href="/demo"' in response.text
+    assert "Stored claims" in response.text
+
+
+def test_root_shows_real_graph_counts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]), [{"id": 1, "evidence_record_id": "ev-1"}]
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/")
+
+    assert response.status_code == 200
+    assert "<strong>1</strong>" in response.text
 
 
 def test_demo_page_reports_missing_anchor_honestly(
