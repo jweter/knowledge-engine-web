@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Evidence-first scientific infrastructure{% endblock %}
+{% block description %}An evidence-first system for preserving research, tracing claims, exposing uncertainty, and turning isolated findings into connected understanding.{% endblock %}
+{% block og_title %}Knowledge Engine{% endblock %}
+{% block og_description %}An evidence-first system for preserving research, tracing claims, exposing uncertainty, and turning isolated findings into connected understanding.{% endblock %}
+{% block content %}
+<section class="landing-hero">
+  <div class="landing-hero-copy">
+    <p class="eyebrow">Open-source scientific infrastructure</p>
+    <h1>Human knowledge should compound.</h1>
+    <p class="landing-lede">
+      The long-term mission is to help humanity preserve, connect, evaluate,
+      and apply scientific knowledge with traceable evidence and visible
+      uncertainty. <code>knowledge-engine-core</code> does not decide
+      scientific truth or hide its reasoning inside an AI model.
+    </p>
+    <div class="landing-cta-row">
+      <a class="landing-cta-primary" href="/demo">See a real evidence-backed example &rarr;</a>
+      <a
+        class="landing-cta-secondary"
+        href="https://github.com/jweter/knowledge-engine-core"
+        target="_blank"
+        rel="noopener noreferrer"
+        >View on GitHub</a
+      >
+    </div>
+    <ul class="landing-trust-badges">
+      <li>Traceable sources</li>
+      <li>Visible uncertainty</li>
+      <li>Human oversight</li>
+    </ul>
+  </div>
+  <div class="landing-hero-visual">
+    {% if network_svg %}
+    <div class="graph-network landing-graph-network">{{ network_svg | safe }}</div>
+    <p class="landing-visual-caption">A real, source-linked slice of the reviewed relationship graph -- not an illustration.</p>
+    {% else %}
+    <p class="empty-state">The relationship graph is unavailable in this snapshot.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="landing-stats">
+  <div><strong>{{ summary.claims_total }}</strong><span>Stored claims</span></div>
+  <div><strong>{{ summary.relationship_edges_total }}</strong><span>Reviewed relationships</span></div>
+  <div><strong>{{ summary.citation_edges_total }}</strong><span>Citation edges</span></div>
+  <div><strong>{{ summary.concepts_total }}</strong><span>Resolved concepts</span></div>
+</section>
+<p class="disclaimer landing-stats-caption">
+  Live counts from this deployment's current snapshot -- the same numbers
+  <a href="/graph">the Graph Summary page</a> shows.
+</p>
+
+<section class="landing-pillars">
+  <div>
+    <h2>Purpose</h2>
+    <p>
+      Preserve, connect, evaluate, and apply scientific knowledge with
+      traceable evidence and visible uncertainty -- not fabricated
+      confidence.
+    </p>
+    <a href="/about">Read the full mission &rarr;</a>
+  </div>
+  <div>
+    <h2>Principles</h2>
+    <p>
+      <code>core</code> locates, validates, and persists evidence. It
+      never decides what that evidence means for a person's actual
+      question -- that seam holds everywhere on this site.
+    </p>
+    <a href="/about#the-seam">How the seam works &rarr;</a>
+  </div>
+  <div>
+    <h2>Architecture</h2>
+    <p>
+      Three repositories: <code>core</code> (evidence and graph),
+      <code>web</code> (this read-only laboratory), and <code>ai</code>
+      (the judgment layer, built in verified stages).
+    </p>
+    <a href="/roadmap">See the build sequence &rarr;</a>
+  </div>
+</section>
+
+<section class="landing-final-cta">
+  <h2>Explore the vision, then see the real thing</h2>
+  <p>
+    The
+    <a href="https://knowledge-engine.steelzombie9999.chatgpt.site/" target="_blank" rel="noopener noreferrer"
+      >public showcase</a
+    >
+    describes where this is going. Everything on this alpha is real,
+    working, and source-linked today.
+  </p>
+  <a class="landing-cta-primary" href="/demo">Start with one real claim &rarr;</a>
+</section>
+{% endblock %}
