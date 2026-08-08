@@ -75,6 +75,101 @@ def test_graph_page_escapes_a_malicious_concept_source(
     assert "&lt;script&gt;" in response.text
 
 
+def test_graph_page_renders_empty_state_with_no_relationships(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/graph")
+
+    assert response.status_code == 200
+    assert "No reviewed relationship edges are in this snapshot yet." in response.text
+    assert "<svg" not in response.text
+
+
+def test_graph_page_renders_a_relationship_network_svg(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-a"},
+                {"id": 2, "evidence_record_id": "ev-b"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 1,
+                    "target_claim_id": 2,
+                    "relationship_type": "supports",
+                }
+            ],
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    evidence_path.write_text(
+        json.dumps({"evidence_record_id": "ev-a", "source_title": "A Randomized Trial"}) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/graph")
+
+    assert response.status_code == 200
+    assert "<svg" in response.text
+    assert "A Randomized Trial" in response.text
+    assert "ev-b" in response.text  # falls back to the id when no title is on file
+    assert "2 claims connected by" in response.text
+    assert "1 reviewer-authored relationship edge" in response.text
+    assert "supports" in response.text
+
+
+def test_graph_page_escapes_a_malicious_evidence_title_in_the_network_svg(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-a"},
+                {"id": 2, "evidence_record_id": "ev-b"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_relationships"]),
+            [
+                {
+                    "id": 1,
+                    "relationship_id": "rel-1",
+                    "source_claim_id": 1,
+                    "target_claim_id": 2,
+                    "relationship_type": "supports",
+                }
+            ],
+        )
+    evidence_path = tmp_path / "evidence_records.jsonl"
+    malicious_record = {"evidence_record_id": "ev-a", "source_title": "<script>alert(1)</script>"}
+    evidence_path.write_text(json.dumps(malicious_record) + "\n", encoding="utf-8")
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+
+    response = TestClient(app).get("/graph")
+
+    assert response.status_code == 200
+    assert "<script>" not in response.text
+    assert "&lt;script&gt;" in response.text
+
+
 def test_claims_list_page_renders_no_claims(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1167,7 +1262,7 @@ def test_ask_page_renders_evidence_and_intelligence_for_a_matched_paper(
     assert response.status_code == 200
     assert "ev-1" in response.text
     assert "Semaglutide reduced body weight." in response.text
-    assert "Evidence Quality:" in response.text
+    assert "Evidence Quality" in response.text
     assert "not yet assessable" in response.text  # no relationship edges yet
     assert "Ranking signal: source-linked evidence text aligned" in response.text
 

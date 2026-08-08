@@ -40,10 +40,15 @@ from knowledge_engine_web.graph_reader import (
     RelationshipEdge,
     list_claims,
     list_relationship_candidates,
+    list_relationships,
     list_unconfirmed_claims,
     read_claim_detail,
     read_graph_summary,
     read_paper_detail,
+)
+from knowledge_engine_web.graph_visual import (
+    build_relationship_network_svg,
+    relationship_type_legend,
 )
 from knowledge_engine_web.llm import LocalLLMError, OllamaLLM
 from knowledge_engine_web.relationship_reader import (
@@ -156,11 +161,43 @@ def roadmap(request: Request) -> HTMLResponse:
 
 @app.get("/graph", response_class=HTMLResponse)
 def graph_summary(request: Request) -> HTMLResponse:
-    """Render the graph's current corpus-wide population counts."""
+    """Render the graph's current corpus-wide population counts and a
+    reviewed-relationship network visual.
 
-    summary = read_graph_summary(_engine())
+    The visual is a deterministic SVG drawn from the exact rows
+    `list_relationships` already returns -- no new query shape, no
+    inferred structure, no client-side layout library. See
+    `graph_visual.py`.
+    """
+
+    engine = _engine()
+    summary = read_graph_summary(engine)
+    relationships = list_relationships(engine)
+    evidence_path = _evidence_path()
+    titles: dict[str, str] = {}
+    if evidence_path is not None:
+        node_ids = {relationship.source_evidence_record_id for relationship in relationships} | {
+            relationship.target_evidence_record_id for relationship in relationships
+        }
+        for evidence_record_id in node_ids:
+            record = read_evidence_record(evidence_path, evidence_record_id)
+            if record is not None and record.source_title:
+                titles[evidence_record_id] = record.source_title
+    network_svg = build_relationship_network_svg(relationships, titles)
+    legend = relationship_type_legend(relationships)
     return templates.TemplateResponse(
-        request=request, name="graph_summary.html", context={"summary": summary}
+        request=request,
+        name="graph_summary.html",
+        context={
+            "summary": summary,
+            "network_svg": network_svg,
+            "network_legend": legend,
+            "network_claim_count": len(
+                {relationship.source_evidence_record_id for relationship in relationships}
+                | {relationship.target_evidence_record_id for relationship in relationships}
+            ),
+            "network_relationship_count": len(relationships),
+        },
     )
 
 
