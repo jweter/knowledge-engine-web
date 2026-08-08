@@ -43,7 +43,8 @@
 
 {% if results is not none %}
 {% if synthesize_requested %}
-<div class="ask-synthesis">
+<section class="ask-result-card ask-synthesis">
+  <p class="trust-label reviewed">AI-generated, not reviewed</p>
   <h3>AI-generated synthesis</h3>
   <p class="disclaimer">Local model, narrating only the evidence below -- not a new judgment call.</p>
   {% if synthesis_error %}
@@ -53,44 +54,55 @@
   {% else %}
   <p class="empty-state">No evidence with a stated claim was retrieved to narrate.</p>
   {% endif %}
-</div>
+</section>
 {% endif %}
 <h2>Results for &ldquo;{{ question }}&rdquo;</h2>
 {% if results %}
 <ol class="ask-results">
   {% for item in results %}
   {% set paper = item.paper %}
-  <li>
-    <p>
-      <a href="/papers/{{ paper.paper_id }}"><strong>{{ paper.title }}</strong></a><br />
+  <li class="ask-result-card">
+    <p class="trust-label">Matched paper</p>
+    <h3><a href="/papers/{{ paper.paper_id }}">{{ paper.title }}</a></h3>
+    <p class="disclaimer">
       {% if paper.doi %}DOI: {{ paper.doi }}{% endif %}
-      {% if paper.publication_year %}-- {{ paper.publication_year }}{% endif %}
+      {% if paper.publication_year %} &middot; {{ paper.publication_year }}{% endif %}
     </p>
     <p class="ask-snippet">{{ paper.snippet }}</p>
     {% if paper.evidence_alignment_score > 0 %}
     <p class="disclaimer">Ranking signal: source-linked evidence text aligned with this question.</p>
     {% endif %}
     {% if item.evidence_entries %}
-    <ul class="ask-evidence">
+    <div class="ask-evidence">
       {% for entry in item.evidence_entries %}
       {% set evidence = entry.evidence %}
       {% set intelligence = entry.intelligence %}
-      <li>
-        <a href="/claims/{{ evidence.evidence_record_id }}">{{ evidence.evidence_record_id }}</a>
-        {% if evidence.claim_text %}-- {{ evidence.claim_text }}{% endif %}
+      <div class="ask-evidence-entry">
+        <p class="trust-label">Stored evidence</p>
+        <p>
+          <a href="/claims/{{ evidence.evidence_record_id }}"><strong>{{ evidence.evidence_record_id }}</strong></a>
+        </p>
+        {% if evidence.claim_text %}<p>{{ evidence.claim_text }}</p>{% endif %}
         {% if intelligence %}
-        <br />
-        Evidence Quality: {{ intelligence.quality.score }}/100 --
-        Evidence Consensus:
-        {% if intelligence.consensus.score is not none %}{{ intelligence.consensus.score }}/100{% else %}not yet assessable{% endif %}
-        ({{ intelligence.consensus.reliability }}) --
-        Claim Confidence:
-        {% if intelligence.confidence.score is not none %}{{ intelligence.confidence.score }}/100{% else %}not yet assessable{% endif %}
-        ({{ intelligence.confidence.reliability }})
+        <p class="trust-label computed">Computed, deterministic</p>
+        <div class="ask-evidence-metrics">
+          <div>
+            <strong>{{ intelligence.quality.score }}/100</strong>
+            <span>Evidence Quality</span>
+          </div>
+          <div>
+            <strong>{% if intelligence.consensus.score is not none %}{{ intelligence.consensus.score }}/100{% else %}not yet assessable{% endif %}</strong>
+            <span>Evidence Consensus{% if intelligence.consensus.score is not none %} ({{ intelligence.consensus.reliability }}){% endif %}</span>
+          </div>
+          <div>
+            <strong>{% if intelligence.confidence.score is not none %}{{ intelligence.confidence.score }}/100{% else %}not yet assessable{% endif %}</strong>
+            <span>Claim Confidence{% if intelligence.confidence.score is not none %} ({{ intelligence.confidence.reliability }}){% endif %}</span>
+          </div>
+        </div>
         {% endif %}
-      </li>
+      </div>
       {% endfor %}
-    </ul>
+    </div>
     {% else %}
     <p class="empty-state">No evidence record matched for this paper.</p>
     {% endif %}
