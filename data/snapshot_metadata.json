@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-03T17:10:12Z",
+  "generated_at": "2026-08-08T03:12:30.725443Z",
   "corpus_id": "glp1_weight_loss",
-  "core_commit": null,
-  "evidence_records_sha256": "sha256:1b167875660660eafec014ca4074614c8320338fcea4ab47eb9712afa25f2663",
+  "core_commit": "46dba082a4d799895d8f2cb4eaf01759e3e2dbd9",
+  "evidence_records_sha256": "sha256:7a21e7f54ad1c2976f3be12f218366cdf54bd5966b430b6e24cd54ff79ab201f",
   "relationship_records_sha256": null,
   "relationship_records_note": "Relationship JSONL was not included in this snapshot.",
   "claims_count": 154,
-  "relationships_count": 11,
+  "relationships_count": 17,
   "citations_count": 5
 }
