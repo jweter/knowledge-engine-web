@@ -331,6 +331,17 @@ they go. What's been added since, following the same patterns:
   multi-corpus or multi-operator future.** Today: one env var, one
   database. Real enough for a first slice; revisit once a second real
   deployment scenario exists.
+  **Update (2026-08-09):** `core` now has 3 real corpora (GLP-1,
+  oncology, mental health), and `ke graph-build` writes every corpus's
+  claims into the same corpus-agnostic graph tables -- so the alpha's
+  `/graph` page already shows claims from all 3. `evidence_records.jsonl`
+  was still GLP-1-only until this update; `scripts/refresh-alpha-snapshot.sh`
+  now merges every corpus's `evidence_records.jsonl` (all still resolve
+  through the single `KE_WEB_EVIDENCE_RECORDS_PATH`, since evidence
+  records don't collide on `source_doi` or `evidence_record_id` across
+  corpora), so a claim's evidence detail/dashboard entry no longer
+  depends on which corpus it came from. The single-database-file part of
+  this question is still open for a real multi-operator future.
 - **Resolved: `EvidenceRecord` rendering reads its JSONL file directly**,
   via a new optional `KE_WEB_EVIDENCE_RECORDS_PATH` setting
   (`knowledge_engine_web/evidence_reader.py`), not by shelling out to
