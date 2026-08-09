@@ -8,30 +8,55 @@
 # since Render's Docker build clones this repo from GitHub with no way
 # to run a pre-build script against a gitignored local file.
 #
-# Usage: scripts/refresh-alpha-snapshot.sh /path/to/knowledge-engine-core [corpus-name]
-#   corpus-name defaults to glp1_weight_loss, core's real corpus today.
+# The graph tables copied from core's database are corpus-agnostic --
+# core's own `ke graph-build` writes claims from every corpus into the
+# same graph_claims/graph_claim_relationships/etc tables, keyed by
+# claim id, not corpus. So evidence_records.jsonl is merged from every
+# corpus under data/corpora/ too (sorted by corpus directory name for a
+# deterministic merge order): a claim from any corpus that shows up on
+# /graph must have its evidence available on the claim/evidence detail
+# pages and Evidence Intelligence dashboard, not just GLP-1's.
+#
+# Usage: scripts/refresh-alpha-snapshot.sh /path/to/knowledge-engine-core
 
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 /path/to/knowledge-engine-core [corpus-name]" >&2
+  echo "Usage: $0 /path/to/knowledge-engine-core" >&2
   exit 1
 fi
 
 core_path="$1"
-corpus_name="${2:-glp1_weight_loss}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 web_root="$(dirname "$script_dir")"
 
 database_source="$core_path/data/knowledge_engine.sqlite3"
-evidence_source="$core_path/data/corpora/$corpus_name/evidence_records.jsonl"
+corpora_root="$core_path/data/corpora"
 
-for path in "$database_source" "$evidence_source"; do
-  if [ ! -f "$path" ]; then
-    echo "Not found: $path" >&2
-    exit 1
+if [ ! -f "$database_source" ]; then
+  echo "Not found: $database_source" >&2
+  exit 1
+fi
+if [ ! -d "$corpora_root" ]; then
+  echo "Not found: $corpora_root" >&2
+  exit 1
+fi
+
+corpus_names=()
+evidence_sources=()
+for corpus_dir in "$corpora_root"/*/; do
+  corpus_name="$(basename "$corpus_dir")"
+  evidence_path="$corpus_dir/evidence_records.jsonl"
+  if [ -f "$evidence_path" ]; then
+    corpus_names+=("$corpus_name")
+    evidence_sources+=("$evidence_path")
   fi
 done
+
+if [ "${#evidence_sources[@]}" -eq 0 ]; then
+  echo "No evidence_records.jsonl found under $corpora_root" >&2
+  exit 1
+fi
 
 mkdir -p "$web_root/data"
 
@@ -50,12 +75,14 @@ else
 fi
 
 python3 "$script_dir/build_alpha_snapshot.py" "$database_source" "$web_root/data/knowledge_engine.sqlite3"
-cp "$evidence_source" "$web_root/data/evidence_records.jsonl"
+cat "${evidence_sources[@]}" > "$web_root/data/evidence_records.jsonl"
+
+corpus_id="$(IFS=,; echo "${corpus_names[*]}")"
 python3 "$script_dir/build_snapshot_metadata.py" \
-  "$core_path" "$corpus_name" \
+  "$core_path" "$corpus_id" \
   "$web_root/data/knowledge_engine.sqlite3" \
   "$web_root/data/evidence_records.jsonl" \
   "$web_root/data/snapshot_metadata.json"
 
-echo "Snapshot refreshed in $web_root/data/ from $core_path (corpus: $corpus_name)."
+echo "Snapshot refreshed in $web_root/data/ from $core_path (corpora: $corpus_id)."
 echo "This is a point-in-time copy -- commit and push ./data/ to update the deployed alpha."

@@ -152,7 +152,13 @@ only the tables `knowledge_engine_web` actually reads (graph tables,
 the FTS5 index `/ask` queries) out of `core`'s full database, which is
 hundreds of megabytes of raw paper text and embeddings this app mostly
 never touches. The trimmed result is a few megabytes -- small enough
-to commit directly. **`paper_search` is indexed on title/abstract only,
+to commit directly. **These graph tables are corpus-agnostic** -- every
+corpus `core` has (GLP-1, oncology, mental health, ...) writes into the
+same tables via `ke graph-build`, so `scripts/refresh-alpha-snapshot.sh`
+merges `evidence_records.jsonl` from every corpus directory under
+`core`'s `data/corpora/`, not just one. Otherwise a claim from a corpus
+other than GLP-1 would show up on `/graph` with no evidence available
+on its detail page. **`paper_search` is indexed on title/abstract only,
 not full body text**, which is what makes up most of `core`'s database
 size (~120 MB across today's corpus); a snapshot with full-text search
 included would be far too large to commit. This means the alpha's
