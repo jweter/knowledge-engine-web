@@ -291,20 +291,46 @@ def unconfirmed_claims(request: Request) -> HTMLResponse:
     )
 
 
+_RELATIONSHIP_CANDIDATES_MINIMUM_SHARED_CONCEPTS = 2
+_RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT = 300
+
+
 @app.get("/relationship-candidates", response_class=HTMLResponse)
 def relationship_candidates(request: Request) -> HTMLResponse:
-    """Render claim pairs sharing a PICO-resolved concept, for a human to review.
+    """Render claim pairs sharing PICO-resolved concepts, for a human to review.
 
     Mirrors `ke graph-relationship-candidates`. Structural overlap only:
     never infers, detects, or suggests a relationship type or rationale
     -- that judgment call stays entirely with the human.
+
+    Bounded for a browser, unlike the CLI's file output: a single
+    generic concept shared across hundreds of claims (e.g. "Patients")
+    otherwise produces a combinatorial explosion of near-meaningless
+    single-concept pairs -- confirmed against the real corpus at 163,946
+    candidates and a 50+ MB page when every claim's concepts are
+    included. Requiring at least 2 shared concepts (not core's
+    single-concept default) cuts that noise by 97% and is also a more
+    meaningful signal that two claims are worth a human's comparison.
+    `_RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT` caps the page itself, since
+    even the 2-concept floor is not guaranteed to stay bounded as the
+    corpus keeps growing across more domains.
     """
 
-    candidates = list_relationship_candidates(_engine())
+    all_candidates = list_relationship_candidates(
+        _engine(), minimum_shared_concepts=_RELATIONSHIP_CANDIDATES_MINIMUM_SHARED_CONCEPTS
+    )
+    total_count = len(all_candidates)
+    candidates = all_candidates[:_RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT]
     return templates.TemplateResponse(
         request=request,
         name="relationship_candidates.html",
-        context={"candidates": candidates},
+        context={
+            "candidates": candidates,
+            "total_count": total_count,
+            "shown_count": len(candidates),
+            "truncated": total_count > len(candidates),
+            "minimum_shared_concepts": _RELATIONSHIP_CANDIDATES_MINIMUM_SHARED_CONCEPTS,
+        },
     )
 
 
@@ -357,6 +383,20 @@ def relationship_candidate_compare(
     )
 
 
+def _render_bounded_relationship_candidates_report(
+    engine: Engine, evidence_path: Path | None
+) -> str:
+    """Bounded the same way the `/relationship-candidates` HTML page is -- see its docstring."""
+
+    all_candidates = list_relationship_candidates(
+        engine, minimum_shared_concepts=_RELATIONSHIP_CANDIDATES_MINIMUM_SHARED_CONCEPTS
+    )
+    return render_relationship_candidates_report(
+        all_candidates[:_RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT],
+        total_count=len(all_candidates),
+    )
+
+
 _REPORTS: dict[str, tuple[str, str, Callable[[Engine, Path | None], str]]] = {
     "graph": (
         "Graph Report",
@@ -365,10 +405,8 @@ _REPORTS: dict[str, tuple[str, str, Callable[[Engine, Path | None], str]]] = {
     ),
     "relationship-candidates": (
         "Relationship Candidates Report",
-        "Claim pairs sharing a PICO-resolved concept with no relationship edge yet.",
-        lambda engine, evidence_path: render_relationship_candidates_report(
-            list_relationship_candidates(engine)
-        ),
+        "Claim pairs sharing at least 2 PICO-resolved concepts with no relationship edge yet.",
+        _render_bounded_relationship_candidates_report,
     ),
     "unconfirmed-claims": (
         "Unconfirmed Claims Report",

@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-08T03:12:30.725443Z",
-  "corpus_id": "glp1_weight_loss",
-  "core_commit": "46dba082a4d799895d8f2cb4eaf01759e3e2dbd9",
-  "evidence_records_sha256": "sha256:7a21e7f54ad1c2976f3be12f218366cdf54bd5966b430b6e24cd54ff79ab201f",
+  "generated_at": "2026-08-10T00:36:38.633722Z",
+  "corpus_id": "glp1_weight_loss,mental_health_mdd_antidepressants,oncology_nsclc_checkpoint_inhibitors",
+  "core_commit": "7f7d964ed6af41e9f31eebb628542e03bb7cf585",
+  "evidence_records_sha256": "sha256:7616b36538ce4d6f1b41d5a49dc62903235d1c356c07fe1560d6de957bb39ace",
   "relationship_records_sha256": null,
   "relationship_records_note": "Relationship JSONL was not included in this snapshot.",
-  "claims_count": 154,
-  "relationships_count": 17,
+  "claims_count": 1821,
+  "relationships_count": 32,
   "citations_count": 5
 }

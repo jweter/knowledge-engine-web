@@ -88,3 +88,16 @@ def test_relationship_candidates_report_renders_empty_state() -> None:
     report = render_relationship_candidates_report([])
 
     assert "No claim pairs share a concept without an existing relationship yet." in report
+
+
+def test_relationship_candidates_report_notes_truncation_when_total_exceeds_shown() -> None:
+    candidate = RelationshipCandidate(
+        claim_a_evidence_record_id="ev-a",
+        claim_b_evidence_record_id="ev-b",
+        shared_concept_labels=["Semaglutide"],
+    )
+
+    report = render_relationship_candidates_report([candidate], total_count=163946)
+
+    assert "Candidate pairs found: 163946" in report
+    assert "Showing the top 1, ranked by number of shared concepts." in report

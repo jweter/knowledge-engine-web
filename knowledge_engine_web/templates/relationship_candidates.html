@@ -3,10 +3,18 @@
 {% block content %}
 <h1>Relationship Candidates</h1>
 <p class="disclaimer">
-  This page surfaces structural overlap only -- which claims share a
-  PICO-resolved concept. It never infers, detects, or suggests a
-  relationship type or rationale; that remains a human judgment call.
+  This page surfaces structural overlap only -- which claims share at
+  least {{ minimum_shared_concepts }} PICO-resolved concepts. It never
+  infers, detects, or suggests a relationship type or rationale; that
+  remains a human judgment call.
 </p>
+{% if truncated %}
+<p class="disclaimer">
+  Showing the top {{ shown_count }} of {{ total_count }} candidate pairs,
+  ranked by number of shared concepts. Bounded for readability -- this is
+  not the full list.
+</p>
+{% endif %}
 
 {% if candidates %}
 <ul>
