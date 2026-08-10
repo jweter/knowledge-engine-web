@@ -598,15 +598,23 @@ def test_unconfirmed_claims_page_renders_when_every_claim_is_confirmed(
     assert "Every claim in the graph has at least one relationship edge." in response.text
 
 
-def test_relationship_candidates_page_lists_a_shared_concept_pair(
+def test_relationship_candidates_page_lists_a_pair_sharing_two_concepts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The web page requires >=2 shared concepts, not core's >=1 default -- see main.py's
+    `_RELATIONSHIP_CANDIDATES_MINIMUM_SHARED_CONCEPTS` docstring for why (a single generic
+    concept shared across hundreds of claims produced a 163,946-pair, 50+ MB page against
+    the real corpus)."""
+
     engine = build_engine(tmp_path)
     metadata = create_graph_tables(engine)
     with engine.begin() as connection:
         connection.execute(
             insert(metadata.tables["graph_concepts"]),
-            [{"id": 1, "label": "Semaglutide", "source": "rxnorm"}],
+            [
+                {"id": 1, "label": "Semaglutide", "source": "rxnorm"},
+                {"id": 2, "label": "Body weight", "source": "mesh"},
+            ],
         )
         connection.execute(
             insert(metadata.tables["graph_claims"]),
@@ -620,6 +628,8 @@ def test_relationship_candidates_page_lists_a_shared_concept_pair(
             [
                 {"id": 1, "claim_id": 1, "concept_id": 1, "edge_role": "intervention"},
                 {"id": 2, "claim_id": 2, "concept_id": 1, "edge_role": "intervention"},
+                {"id": 3, "claim_id": 1, "concept_id": 2, "edge_role": "outcome"},
+                {"id": 4, "claim_id": 2, "concept_id": 2, "edge_role": "outcome"},
             ],
         )
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
@@ -630,6 +640,39 @@ def test_relationship_candidates_page_lists_a_shared_concept_pair(
     assert "ev-a" in response.text
     assert "ev-b" in response.text
     assert "Semaglutide" in response.text
+    assert "Body weight" in response.text
+
+
+def test_relationship_candidates_page_excludes_a_pair_sharing_only_one_concept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [{"id": 1, "label": "Patients", "source": "mesh"}],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [
+                {"id": 1, "evidence_record_id": "ev-a"},
+                {"id": 2, "evidence_record_id": "ev-b"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_concepts"]),
+            [
+                {"id": 1, "claim_id": 1, "concept_id": 1, "edge_role": "population"},
+                {"id": 2, "claim_id": 2, "concept_id": 1, "edge_role": "population"},
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/relationship-candidates")
+
+    assert response.status_code == 200
+    assert "No claim pairs share" in response.text
 
 
 def test_relationship_candidates_page_renders_no_candidates(
@@ -642,6 +685,50 @@ def test_relationship_candidates_page_renders_no_candidates(
 
     assert response.status_code == 200
     assert "No claim pairs share a concept" in response.text
+
+
+def test_relationship_candidates_page_is_bounded_when_many_pairs_exist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A regression test for the real 163,946-candidate/50+ MB page found against the
+    actual corpus once it grew to 3 domains and ~1,800 claims -- proves the display cap
+    actually bounds the page and the truncation notice is shown."""
+
+    from knowledge_engine_web.main import _RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT
+
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    claim_count = _RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT + 20
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [
+                {"id": 1, "label": "Semaglutide", "source": "rxnorm"},
+                {"id": 2, "label": "Body weight", "source": "mesh"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [{"id": i, "evidence_record_id": f"ev-{i}"} for i in range(1, claim_count + 1)],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_concepts"]),
+            [
+                {"id": 2 * i - 1, "claim_id": i, "concept_id": 1, "edge_role": "intervention"}
+                for i in range(1, claim_count + 1)
+            ]
+            + [
+                {"id": 2 * i, "claim_id": i, "concept_id": 2, "edge_role": "outcome"}
+                for i in range(1, claim_count + 1)
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/relationship-candidates")
+
+    assert response.status_code == 200
+    assert f"top {_RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT}" in response.text
+    assert "not the full list" in response.text
 
 
 def test_relationship_candidate_compare_page_renders_both_claims_side_by_side(
@@ -987,7 +1074,10 @@ def test_relationship_candidates_report_view_lists_a_pair(
     with engine.begin() as connection:
         connection.execute(
             insert(metadata.tables["graph_concepts"]),
-            [{"id": 1, "label": "Semaglutide", "source": "rxnorm"}],
+            [
+                {"id": 1, "label": "Semaglutide", "source": "rxnorm"},
+                {"id": 2, "label": "Body weight", "source": "mesh"},
+            ],
         )
         connection.execute(
             insert(metadata.tables["graph_claims"]),
@@ -1001,6 +1091,8 @@ def test_relationship_candidates_report_view_lists_a_pair(
             [
                 {"id": 1, "claim_id": 1, "concept_id": 1, "edge_role": "intervention"},
                 {"id": 2, "claim_id": 2, "concept_id": 1, "edge_role": "intervention"},
+                {"id": 3, "claim_id": 1, "concept_id": 2, "edge_role": "outcome"},
+                {"id": 4, "claim_id": 2, "concept_id": 2, "edge_role": "outcome"},
             ],
         )
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
@@ -1011,6 +1103,45 @@ def test_relationship_candidates_report_view_lists_a_pair(
     assert "# Knowledge Engine Graph Relationship Candidates" in response.text
     assert "ev-a" in response.text
     assert "ev-b" in response.text
+
+
+def test_relationship_candidates_report_view_is_bounded_when_many_pairs_exist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from knowledge_engine_web.main import _RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT
+
+    engine = build_engine(tmp_path)
+    metadata = create_graph_tables(engine)
+    claim_count = _RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT + 20
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["graph_concepts"]),
+            [
+                {"id": 1, "label": "Semaglutide", "source": "rxnorm"},
+                {"id": 2, "label": "Body weight", "source": "mesh"},
+            ],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claims"]),
+            [{"id": i, "evidence_record_id": f"ev-{i}"} for i in range(1, claim_count + 1)],
+        )
+        connection.execute(
+            insert(metadata.tables["graph_claim_concepts"]),
+            [
+                {"id": 2 * i - 1, "claim_id": i, "concept_id": 1, "edge_role": "intervention"}
+                for i in range(1, claim_count + 1)
+            ]
+            + [
+                {"id": 2 * i, "claim_id": i, "concept_id": 2, "edge_role": "outcome"}
+                for i in range(1, claim_count + 1)
+            ],
+        )
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/reports/relationship-candidates")
+
+    assert response.status_code == 200
+    assert f"Showing the top {_RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT}" in response.text
 
 
 def test_unconfirmed_claims_report_view_lists_a_claim(

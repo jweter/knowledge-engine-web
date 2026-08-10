@@ -75,17 +75,32 @@ def render_graph_summary_report(summary: GraphSummary) -> str:
     )
 
 
-def render_relationship_candidates_report(candidates: list[RelationshipCandidate]) -> str:
-    """Build the same report `ke graph-relationship-candidates` prints."""
+def render_relationship_candidates_report(
+    candidates: list[RelationshipCandidate], *, total_count: int | None = None
+) -> str:
+    """Build the same report `ke graph-relationship-candidates` prints.
 
+    Unlike the CLI (which writes an unbounded file), this project's own
+    callers pass an already-bounded `candidates` list -- a single
+    generic shared concept can otherwise produce a combinatorial
+    explosion of near-meaningless pairs (163,946 against the real
+    corpus, once it grew to 3 domains). `total_count`, when it differs
+    from `len(candidates)`, surfaces that this report was truncated
+    rather than silently reporting a partial count as the whole
+    picture.
+    """
+
+    full_count = total_count if total_count is not None else len(candidates)
     lines = [
         "# Knowledge Engine Graph Relationship Candidates",
         "",
         f"Generated: {_generated_at()}",
         "",
-        f"Candidate pairs found: {len(candidates)}",
-        "",
+        f"Candidate pairs found: {full_count}",
     ]
+    if full_count > len(candidates):
+        lines.append(f"Showing the top {len(candidates)}, ranked by number of shared concepts.")
+    lines.append("")
     if not candidates:
         lines.extend(["No claim pairs share a concept without an existing relationship yet.", ""])
     for candidate in candidates:

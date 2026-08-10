@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-08-08T03:12:13.960064+00:00",
+  "captured_at": "2026-08-10T00:36:30.795716+00:00",
   "claim_evidence_record_ids": [
     "auto-01deb76ce3afeb81",
     "auto-04e30230702f656b",
@@ -157,18 +157,24 @@
     "ev-tirzepatide-vs-semaglutide-weightloss-001"
   ],
   "claims_with_evidence_configured": 154,
-  "coverage_records_in_relationship": 8,
+  "coverage_records_in_relationship": 9,
   "coverage_total_records": 154,
-  "mean_quality_score": 62.246753246753244,
+  "mean_quality_score": 68.96103896103897,
   "relationship_ids": [
+    "rel-glp1-cardiometabolic-hfref-supports-001",
     "rel-glp1-cardiometabolic-select-supports-001",
     "rel-glp1-gao-cardiometabolic-supports-001",
     "rel-glp1-gao-select-supports-001",
+    "rel-glp1-hfref-select-supports-001",
     "rel-glp1-hfref-supports-001",
     "rel-glp1-obesity-cardiometabolic-supports-001",
     "rel-glp1-pmos-supports-001",
+    "rel-glp1-semaglutide-cardiometabolic-tirzepatide-comparison-contextualizes-001",
     "rel-glp1-step5-gao-supports-001",
+    "rel-glp1-step5-pmos-contextualizes-001",
     "rel-glp1-step5-select-supports-001",
+    "rel-glp1-tirzepatide-bariatric-regain-supports-001",
+    "rel-glp1-tirzepatide-bariatric-surmount1-whtr-contextualizes-001",
     "rel-glp1-tirzepatide-comparison-contextualizes-001",
     "rel-glp1-tirzepatide-vs-semaglutide-select-contextualizes-001",
     "rel-glp1-tirzepatide-vs-semaglutide-surmount1-contextualizes-001"
