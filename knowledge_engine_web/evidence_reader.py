@@ -79,6 +79,40 @@ def read_evidence_record(path: Path, evidence_record_id: str) -> EvidenceRecordD
     return None
 
 
+def index_evidence_records_by_id(path: Path) -> dict[str, EvidenceRecordDetail]:
+    """Read Evidence Records once and index them by `evidence_record_id`.
+
+    A caller that needs many records by ID in one pass (e.g. the
+    corpus-wide dashboard and "what changed" report, both of which look
+    up one record per claim in the graph) must not call
+    `read_evidence_record` in a loop -- each call rescans the whole file
+    from disk, so an O(claims) loop over an O(records) file becomes
+    O(claims * records) I/O and JSON parsing. Building one index up
+    front, the same rescan-avoidance reasoning as
+    `index_evidence_records_by_doi`, turns that into a single O(records)
+    pass plus O(1) dict lookups.
+    """
+
+    if not path.exists():
+        return {}
+
+    records_by_id: dict[str, EvidenceRecordDetail] = {}
+    with path.open(encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                record: dict[str, Any] = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise EvidenceRecordsError(f"{path}:{line_number} is not valid JSON.") from exc
+            record_id = record.get("evidence_record_id")
+            if isinstance(record_id, str) and record_id:
+                records_by_id[record_id] = _to_detail(record)
+
+    return records_by_id
+
+
 def list_evidence_records_for_doi(path: Path, doi: str) -> list[EvidenceRecordDetail]:
     """Return every `EvidenceRecord` whose `source_doi` matches, normalized for comparison.
 

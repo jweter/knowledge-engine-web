@@ -342,6 +342,23 @@ they go. What's been added since, following the same patterns:
   corpora), so a claim's evidence detail/dashboard entry no longer
   depends on which corpus it came from. The single-database-file part of
   this question is still open for a real multi-operator future.
+  **Update (2026-08-10):** the merge above grew the corpus-wide surfaces
+  (`/dashboard`, `/reports/what-changed`) from ~150 claims to 1,821 --
+  and both hung for 100+ seconds against the real merged data, live-
+  verified before being diagnosed. Root cause: both looped over every
+  claim in the graph calling a per-claim reader (`read_evidence_record`,
+  which rescans the whole evidence file from disk each call; `dashboard.py`
+  also called `read_claim_detail`, which re-reflects the graph tables --
+  real SQLite schema-introspection queries -- on every call). Neither cost
+  was visible at single-corpus scale. Fixed by reading each data source
+  once into an ID-keyed index and doing O(1) lookups per claim instead:
+  `evidence_reader.index_evidence_records_by_id` (new, mirrors the
+  existing `index_evidence_records_by_doi`) and `dashboard.py`'s own
+  `_index_relationships_by_evidence_record_id` (built from the existing
+  `list_relationships`, which was already written for exactly this
+  "avoid a per-claim N+1" reason but `dashboard.py` had not been switched
+  to use it). Both routes now respond in ~0.1s against the same real
+  data.
 - **Resolved: `EvidenceRecord` rendering reads its JSONL file directly**,
   via a new optional `KE_WEB_EVIDENCE_RECORDS_PATH` setting
   (`knowledge_engine_web/evidence_reader.py`), not by shelling out to

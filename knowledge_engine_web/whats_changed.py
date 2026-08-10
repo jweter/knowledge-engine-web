@@ -48,7 +48,7 @@ from knowledge_engine_web.evidence_intelligence import (
     compute_evidence_coverage,
     compute_evidence_quality,
 )
-from knowledge_engine_web.evidence_reader import read_evidence_record
+from knowledge_engine_web.evidence_reader import index_evidence_records_by_id
 from knowledge_engine_web.graph_reader import (
     ClaimListItem,
     RelationshipListItem,
@@ -81,12 +81,17 @@ def build_whats_changed_baseline(
     Mirrors `dashboard.py`'s aggregation (same `compute_evidence_quality`,
     same "touches any relationship edge" coverage definition) -- no new
     computation, just captured for later comparison instead of only
-    aggregated in place.
+    aggregated in place. Also mirrors `dashboard.py`'s "index the
+    evidence file once" fix: a per-claim `read_evidence_record` call
+    rescans the whole file from disk, so looping it over every claim in
+    the graph turns an O(records) file into an O(claims * records) read
+    pattern -- see `evidence_reader.index_evidence_records_by_id`.
     """
 
     now = now or datetime.now(UTC)
     claims = list_claims(engine)
     relationships = list_relationships(engine)
+    evidence_by_id = index_evidence_records_by_id(evidence_path)
 
     touched: set[str] = set()
     for edge in relationships:
@@ -97,7 +102,7 @@ def build_whats_changed_baseline(
     configured = 0
     covered = 0
     for claim in claims:
-        evidence = read_evidence_record(evidence_path, claim.evidence_record_id)
+        evidence = evidence_by_id.get(claim.evidence_record_id)
         if evidence is None:
             continue
         quality = compute_evidence_quality(evidence)
@@ -202,11 +207,12 @@ def build_whats_changed_summary(
         touched_all.add(edge.source_evidence_record_id)
         touched_all.add(edge.target_evidence_record_id)
 
+    evidence_by_id = index_evidence_records_by_id(evidence_path)
     quality_scores_after: list[int] = []
     configured_after = 0
     covered_after = 0
     for claim in claims:
-        evidence = read_evidence_record(evidence_path, claim.evidence_record_id)
+        evidence = evidence_by_id.get(claim.evidence_record_id)
         if evidence is None:
             continue
         quality = compute_evidence_quality(evidence)
