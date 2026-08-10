@@ -24,8 +24,46 @@ from knowledge_engine_web.evidence_intelligence import (
     compute_evidence_consensus,
     compute_evidence_quality,
 )
-from knowledge_engine_web.evidence_reader import read_evidence_record
-from knowledge_engine_web.graph_reader import list_claims, read_claim_detail
+from knowledge_engine_web.evidence_reader import index_evidence_records_by_id
+from knowledge_engine_web.graph_reader import list_claims, list_relationships
+
+
+@dataclass(frozen=True)
+class _TouchingRelationship:
+    """The two fields this module's per-claim consensus loop actually reads off an edge."""
+
+    relationship_type: str
+    other_evidence_record_id: str
+
+
+def _index_relationships_by_evidence_record_id(
+    engine: Engine,
+) -> dict[str, list[_TouchingRelationship]]:
+    """Read every relationship edge once and group it by each side's `evidence_record_id`.
+
+    `read_claim_detail` (single-claim pages) re-reflects the graph tables
+    and re-queries per call -- correct for one claim, but calling it once
+    per claim in a corpus-wide loop measurably hangs once the corpus
+    grows past a single-corpus scale (see `docs/deployment.md`'s
+    multi-corpus merge): `_reflect_graph_tables` alone does real SQLite
+    schema-introspection queries, and doing that thousands of times
+    dominates the whole request. `list_relationships` already reads
+    every edge in one bulk pass for exactly this reason (its own
+    docstring names `whats_changed.py` as the original motivating
+    caller); this indexes that same bulk read for both sides of each
+    edge instead of adding a second per-claim query path.
+    """
+
+    by_id: dict[str, list[_TouchingRelationship]] = {}
+    for edge in list_relationships(engine):
+        by_id.setdefault(edge.source_evidence_record_id, []).append(
+            _TouchingRelationship(edge.relationship_type, edge.target_evidence_record_id)
+        )
+        by_id.setdefault(edge.target_evidence_record_id, []).append(
+            _TouchingRelationship(edge.relationship_type, edge.source_evidence_record_id)
+        )
+    return by_id
+
 
 _QUALITY_BUCKETS = (
     ("80-100", 80, 101),
@@ -63,21 +101,33 @@ def build_evidence_intelligence_dashboard(
     Skips a claim entirely when `evidence_path` has no record for it --
     matching every existing claim-detail page's "not configured" posture,
     never a guessed or zero score.
+
+    Reads `evidence_path` once into an ID-keyed index rather than calling
+    `read_evidence_record` per claim, and reads the graph's relationship
+    edges once via `list_relationships` rather than calling
+    `read_claim_detail` per claim -- with every claim in the graph
+    visited here, either per-claim call turns an O(records)/O(edges)
+    read into an O(claims * records)/O(claims * edges) one, which
+    measurably hangs once the corpus grows past a single-corpus scale
+    (see `docs/deployment.md`'s multi-corpus merge). See
+    `evidence_reader.index_evidence_records_by_id` and
+    `_index_relationships_by_evidence_record_id` above.
     """
 
     claims = list_claims(engine)
+    evidence_by_id = index_evidence_records_by_id(evidence_path)
+    relationships_by_id = _index_relationships_by_evidence_record_id(engine)
     quality_scores: list[int] = []
     quality_buckets: Counter[str] = Counter()
     reliability_counts: Counter[str] = Counter()
     not_yet_assessable = 0
 
     for claim in claims:
-        evidence = read_evidence_record(evidence_path, claim.evidence_record_id)
+        evidence = evidence_by_id.get(claim.evidence_record_id)
         if evidence is None:
             continue
 
-        detail = read_claim_detail(engine, claim.evidence_record_id)
-        relationships = detail.relationships if detail is not None else []
+        relationships = relationships_by_id.get(claim.evidence_record_id, [])
 
         quality = compute_evidence_quality(evidence)
         quality_scores.append(quality.score)
@@ -93,7 +143,7 @@ def build_evidence_intelligence_dashboard(
             if other_id in seen_other_ids or other_id == claim.evidence_record_id:
                 continue
             seen_other_ids.add(other_id)
-            other_evidence = read_evidence_record(evidence_path, other_id)
+            other_evidence = evidence_by_id.get(other_id)
             if other_evidence is not None:
                 participating_qualities.append(compute_evidence_quality(other_evidence))
         confidence = compute_claim_confidence(participating_qualities, consensus)

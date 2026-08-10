@@ -9,6 +9,7 @@ from knowledge_engine_web.evidence_reader import (
     EvidenceRecordsError,
     count_evidence_records,
     index_evidence_records_by_doi,
+    index_evidence_records_by_id,
     list_evidence_records_for_doi,
     read_evidence_record,
 )
@@ -221,3 +222,60 @@ def test_index_evidence_records_by_doi_normalizes_and_groups_records(tmp_path: P
         "ev-1",
         "ev-2",
     ]
+
+
+def test_index_evidence_records_by_id_returns_an_empty_dict_when_the_file_does_not_exist(
+    tmp_path: Path,
+) -> None:
+    assert index_evidence_records_by_id(tmp_path / "missing.jsonl") == {}
+
+
+def test_index_evidence_records_by_id_keys_records_by_their_id(tmp_path: Path) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    _write_jsonl(
+        path,
+        {"evidence_record_id": "ev-1", "claim_text": "First claim."},
+        {"evidence_record_id": "ev-2", "claim_text": "Second claim."},
+    )
+
+    records = index_evidence_records_by_id(path)
+
+    assert set(records) == {"ev-1", "ev-2"}
+    assert records["ev-1"].claim_text == "First claim."
+    assert records["ev-2"].claim_text == "Second claim."
+
+
+def test_index_evidence_records_by_id_matches_read_evidence_record_for_each_id(
+    tmp_path: Path,
+) -> None:
+    """The bulk index and the single-record reader must agree -- same data, same parsing."""
+
+    path = tmp_path / "evidence_records.jsonl"
+    _write_jsonl(
+        path,
+        {"evidence_record_id": "ev-1", "claim_text": "First claim.", "study_type": "rct"},
+        {"evidence_record_id": "ev-2", "claim_text": "Second claim.", "study_type": "cohort"},
+    )
+
+    records = index_evidence_records_by_id(path)
+
+    for evidence_record_id in ("ev-1", "ev-2"):
+        assert records[evidence_record_id] == read_evidence_record(path, evidence_record_id)
+
+
+def test_index_evidence_records_by_id_skips_blank_lines(tmp_path: Path) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    path.write_text(
+        '\n{"evidence_record_id": "ev-1"}\n\n{"evidence_record_id": "ev-2"}\n\n',
+        encoding="utf-8",
+    )
+
+    assert set(index_evidence_records_by_id(path)) == {"ev-1", "ev-2"}
+
+
+def test_index_evidence_records_by_id_raises_on_a_malformed_json_line(tmp_path: Path) -> None:
+    path = tmp_path / "evidence_records.jsonl"
+    path.write_text("not json\n", encoding="utf-8")
+
+    with pytest.raises(EvidenceRecordsError):
+        index_evidence_records_by_id(path)

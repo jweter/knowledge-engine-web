@@ -18,10 +18,28 @@ into one; callers must keep them displayed separately.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 from knowledge_engine_web.evidence_reader import EvidenceRecordDetail
-from knowledge_engine_web.graph_reader import RelationshipEdge
+
+
+class _HasRelationshipType(Protocol):
+    """The only field `compute_evidence_consensus` reads off a relationship edge.
+
+    A `Protocol`, satisfied structurally by both `graph_reader.RelationshipEdge`
+    (single-claim pages) and a corpus-wide caller's own lightweight
+    per-claim view (`dashboard.py`, built from one bulk `list_relationships`
+    pass to avoid a per-claim N+1 query) -- so this function does not need
+    to import or depend on either concrete type, and a caller building its
+    own view never has to construct a full `RelationshipEdge` just to
+    supply fields (`direction`/`rationale`) it never fetched.
+    """
+
+    @property
+    def relationship_type(self) -> str: ...
+
 
 CLINICAL_MEDICINE_V1 = "clinical_medicine_v1"
 
@@ -133,7 +151,9 @@ class EvidenceConsensus:
     reliability: str
 
 
-def compute_evidence_consensus(relationships: list[RelationshipEdge]) -> EvidenceConsensus:
+def compute_evidence_consensus(
+    relationships: Sequence[_HasRelationshipType],
+) -> EvidenceConsensus:
     """Compute Evidence Consensus from the relationship edges touching one claim.
 
     `supersedes` edges do not count toward eligibility -- they retire the
