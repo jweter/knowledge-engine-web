@@ -25,5 +25,16 @@ class Settings(BaseSettings):
     alpha_password: str | None = None
     llm_model: str | None = None
     ollama_host: str = "http://127.0.0.1:11434"
+    # AI-O13: `run_research_question`'s two new inputs, under this
+    # project's own KE_WEB_ namespace like everything else here --
+    # `llm_model`/`ollama_host` above are reused as-is since one Ollama
+    # host and model already serves this process's own `/ask
+    # synthesize=1` path. `sources_path` is genuinely new: this project
+    # has never needed a `sources.csv` before (its own retrieval reads
+    # `core`'s SQLite database directly), but `ke evidence-report`
+    # (what `knowledge_engine_ai`'s retrieval shells out to) requires
+    # one alongside the evidence file.
+    sources_path: str | None = None
+    session_db_path: str = "data/research_sessions.db"
 
     model_config = SettingsConfigDict(env_prefix="KE_WEB_", env_file=".env", extra="ignore")

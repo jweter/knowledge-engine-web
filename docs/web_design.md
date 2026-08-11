@@ -255,9 +255,43 @@ the case for a full multi-module orchestrator (session persistence,
 verification, observability, not ~150 lines of an Ollama HTTP client)
 is different in kind, not just degree, from the small-mirror case this
 project already declined once. See that document for the full
-reasoning, the architecture decision, and the step-wise plan; nothing
-in that plan is implemented yet, and this section is a pointer so the
-initiative is discoverable from this repo too.
+reasoning, the architecture decision, and the step-wise plan.
+
+### AI-O13: config surface
+
+`knowledge-engine-ai` is now a real `pyproject.toml` dependency (a git
+dependency -- there is no shared package registry between these sibling
+repos, and unlike `core`, this really is a Python import, not database
+reflection). `llm_model`/`ollama_host` above are reused as-is for
+`run_research_question`'s local-LLM call -- one Ollama host and model
+already serves this process. Two settings are genuinely new, since this
+project has never needed them before:
+
+- `KE_WEB_SOURCES_PATH` (`sources_path`, default `None`): `ke
+  evidence-report` (what `knowledge_engine_ai`'s retrieval shells out
+  to) requires a `sources.csv` alongside the evidence file. This
+  project's own retrieval has never needed one -- it reads `core`'s
+  SQLite database directly. The deployed alpha's data snapshot does not
+  currently ship a `sources.csv`; adding one is required before AI-O14
+  can route the live `/ask` page through this, not before AI-O13's own
+  local/dev-scoped proof.
+- `KE_WEB_SESSION_DB_PATH` (`session_db_path`, default
+  `data/research_sessions.db`): the durable SQLite store
+  `knowledge_engine_ai.sessions.SessionRepository` persists Research
+  Copilot sessions to. New durable state this project has not carried
+  before -- AI-O15 (session-persistence decision for the deployed
+  environment) is where whether this survives a Render redeploy gets
+  decided for real; this default is a sane local/dev value, not yet a
+  production decision.
+
+A real dependency-weight finding, not yet solved by this step:
+`knowledge_engine_ai`'s retrieval shells out to the `ke` CLI, so
+`run_research_question` only actually works here (not just imports
+cleanly) once `core`'s full dependency stack -- torch included -- is on
+`PATH` too. `pip install`ing `knowledge-engine-ai` alone stays genuinely
+light (confirmed: only `typer`/`click`/`rich` and their small
+transitive deps pulled in); the Docker/deployment-weight question is
+AI-O16 territory, named here rather than silently deferred.
 
 ## Architecture
 
