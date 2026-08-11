@@ -5,8 +5,12 @@
 <p class="disclaimer">
   This page surfaces structural overlap only -- which claims share at
   least {{ minimum_shared_concepts }} PICO-resolved concepts. It never
-  infers, detects, or suggests a relationship type or rationale; that
-  remains a human judgment call.
+  infers, detects, or suggests a relationship type or rationale itself;
+  <code>core</code>'s automated classifier (<code>ke
+  relationship-classify-automate</code>) runs over pairs like these,
+  proposing a type only when its quoted evidence passes deterministic
+  grounding verification -- see the linked comparison page for a given
+  pair's actual relationship status.
 </p>
 {% if truncated %}
 <p class="disclaimer">

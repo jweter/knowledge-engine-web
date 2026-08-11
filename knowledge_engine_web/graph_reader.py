@@ -450,8 +450,10 @@ def list_relationship_candidates(
     `GraphRepository.relationship_candidates` exactly: structural overlap
     only -- never a relationship type or rationale. A pair already linked
     by an existing relationship edge, in either direction, is excluded,
-    since a human has already made that call for it. See
-    `docs/m49_graph_relationship_candidates.md` in `knowledge-engine-core`.
+    since a relationship has already been classified for it -- by
+    `core`'s automated, grounding-verified classifier by default, or by
+    hand. See `docs/m49_graph_relationship_candidates.md` in
+    `knowledge-engine-core`.
     """
 
     tables = _reflect_graph_tables(engine)

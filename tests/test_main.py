@@ -84,7 +84,7 @@ def test_graph_page_renders_empty_state_with_no_relationships(
     response = TestClient(app).get("/graph")
 
     assert response.status_code == 200
-    assert "No reviewed relationship edges are in this snapshot yet." in response.text
+    assert "No grounding-verified relationship edges are in this snapshot yet." in response.text
     assert "<svg" not in response.text
 
 
@@ -128,7 +128,7 @@ def test_graph_page_renders_a_relationship_network_svg(
     assert "A Randomized Trial" in response.text
     assert "ev-b" in response.text  # falls back to the id when no title is on file
     assert "2 claims connected by" in response.text
-    assert "1 reviewer-authored relationship edge" in response.text
+    assert "1 grounding-verified relationship edge" in response.text
     assert "supports" in response.text
 
 
@@ -993,7 +993,7 @@ def test_demo_page_renders_stored_anchor_and_trust_boundaries(
     assert "-10.2% versus -1.5%" in response.text
     assert "Stored evidence" in response.text
     assert "Computed, deterministic" in response.text
-    assert "Human-reviewed structure" in response.text
+    assert "Grounding-verified structure" in response.text
     assert f'href="/claims/{evidence_id}"' in response.text
 
 

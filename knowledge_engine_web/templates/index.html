@@ -27,13 +27,13 @@
     <ul class="landing-trust-badges">
       <li>Traceable sources</li>
       <li>Visible uncertainty</li>
-      <li>Human oversight</li>
+      <li>Grounding-verified, not asserted</li>
     </ul>
   </div>
   <div class="landing-hero-visual">
     {% if network_svg %}
     <div class="graph-network landing-graph-network">{{ network_svg | safe }}</div>
-    <p class="landing-visual-caption">A real, source-linked slice of the reviewed relationship graph -- not an illustration.</p>
+    <p class="landing-visual-caption">A real, source-linked slice of the grounding-verified relationship graph -- not an illustration.</p>
     {% else %}
     <p class="empty-state">The relationship graph is unavailable in this snapshot.</p>
     {% endif %}
@@ -42,7 +42,7 @@
 
 <section class="landing-stats">
   <div><strong>{{ summary.claims_total }}</strong><span>Stored claims</span></div>
-  <div><strong>{{ summary.relationship_edges_total }}</strong><span>Reviewed relationships</span></div>
+  <div><strong>{{ summary.relationship_edges_total }}</strong><span>Grounding-verified relationships</span></div>
   <div><strong>{{ summary.citation_edges_total }}</strong><span>Citation edges</span></div>
   <div><strong>{{ summary.concepts_total }}</strong><span>Resolved concepts</span></div>
 </section>

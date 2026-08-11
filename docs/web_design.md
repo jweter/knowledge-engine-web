@@ -109,7 +109,7 @@ What this section originally excluded, and what's true of each today:
   own dataclasses, the same "read `core`'s data, never its code"
   posture as `graph_reader.py`). This is not a loosening of the seam's
   actual substance: the computation is fully deterministic (no LLM, no
-  statistical model), reads only already-stored, already-human-reviewed
+  statistical model), reads only already-stored, already-classified
   fields, and this project still never sets or infers
   `research_question`, `evidence_direction`, or authors a
   `RelationshipRecord` -- `core_interface_contract.md`'s own "Revised

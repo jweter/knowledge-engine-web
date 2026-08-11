@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Knowledge Engine -- Evidence Demo{% endblock %}
-{% block description %}A source-linked walkthrough of one real GLP-1 evidence record, its deterministic assessment, and reviewed relationships.{% endblock %}
+{% block description %}A source-linked walkthrough of one real GLP-1 evidence record, its deterministic assessment, and grounding-verified relationships.{% endblock %}
 {% block content %}
 <section class="demo-hero">
   <p class="eyebrow">Public evidence journey</p>
   <h1>What does one inspectable scientific claim look like?</h1>
-  <p>Follow a real SELECT trial result from stored evidence to deterministic assessment and human-reviewed relationships. This page does not answer the broader scientific question.</p>
+  <p>Follow a real SELECT trial result from stored evidence to deterministic assessment and grounding-verified relationships. This page does not answer the broader scientific question.</p>
 </section>
 
 {% if claim and evidence %}
@@ -38,9 +38,9 @@
 </section>
 
 <section class="demo-section">
-  <p class="trust-label reviewed">Human-reviewed structure</p>
+  <p class="trust-label reviewed">Grounding-verified structure</p>
   <h2>Relationships and limitations</h2>
-  <p>{{ claim.relationships|length }} reviewed relationship edge{{ "s" if claim.relationships|length != 1 else "" }} connect this claim to other evidence records.</p>
+  <p>{{ claim.relationships|length }} grounding-verified relationship edge{{ "s" if claim.relationships|length != 1 else "" }} connect this claim to other evidence records.</p>
   {% if claim.relationships %}
   <ul class="demo-relationships">
     {% for relationship in claim.relationships[:3] %}
@@ -53,7 +53,7 @@
   </ul>
   {% if claim.relationships|length > 3 %}
   <p class="disclaimer">
-    {{ claim.relationships|length - 3 }} additional reviewed relationship{{ "s" if claim.relationships|length - 3 != 1 else "" }} are available on the complete claim record.
+    {{ claim.relationships|length - 3 }} additional grounding-verified relationship{{ "s" if claim.relationships|length - 3 != 1 else "" }} are available on the complete claim record.
   </p>
   {% endif %}
   {% endif %}

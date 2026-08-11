@@ -6,12 +6,15 @@
   Both claims' full evidence content side by side -- the same fields
   <code>ke relationship-review-worksheet</code> assembles into a
   Markdown document, rendered here as a browsable page instead. This
-  page never infers, scores, or suggests a relationship; deciding
-  whether one exists, and authoring it, remains entirely a human
-  judgment call, made directly in <code>core</code>'s
+  page itself never infers, scores, or suggests a relationship: deciding
+  whether one exists is, by default, <code>core</code>'s automated
+  classifier's job (<code>ke relationship-classify-automate</code>), which
+  proposes a type only when its quoted evidence passes deterministic
+  grounding verification against these two claims' own text. A reviewer
+  can still author one by hand directly in <code>core</code>'s
   <code>relationship_records.jsonl</code> (see <code>ke
   relationship-review-worksheet</code>'s generated template for the
-  exact JSON shape).
+  exact JSON shape) -- both paths validate identically.
 </p>
 
 {% if shared_concept_labels %}

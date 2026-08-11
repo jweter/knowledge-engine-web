@@ -121,8 +121,11 @@ def render_relationship_candidates_report(
             "",
             "This report surfaces structural overlap only -- which claims "
             "share a PICO-resolved concept. It never infers, detects, or "
-            "suggests a relationship type or rationale; that remains a "
-            "human judgment call.",
+            "suggests a relationship type or rationale itself; `core`'s "
+            "automated classifier (`ke relationship-classify-automate`) "
+            "runs over pairs like these by default, proposing a type only "
+            "when its quoted evidence passes deterministic grounding "
+            "verification.",
             "",
         ]
     )
