@@ -6,7 +6,7 @@ Evidence Intelligence"), the one exception is a deterministic,
 no-LLM confidence-scoring computation
 (`knowledge_engine_web/evidence_intelligence.py`) -- still never an
 invented number, still never a judgment call this project makes itself,
-just arithmetic over already-stored, already-human-reviewed fields.
+just arithmetic over already-stored, already-classified fields.
 """
 
 from __future__ import annotations
@@ -270,7 +270,7 @@ def unconfirmed_claims(request: Request) -> HTMLResponse:
     Mirrors `ke graph-unconfirmed-claims` -- the only "gap" this project
     can honestly surface without guessing. A claim listed here has no
     `supports`/`contradicts`/`qualifies`/`contextualizes`/`supersedes`
-    edge yet, meaning no second claim has been reviewed and explicitly
+    edge yet, meaning no second claim has been classified and explicitly
     related to it. Not a judgment about the underlying science.
     """
 
@@ -283,7 +283,7 @@ def unconfirmed_claims(request: Request) -> HTMLResponse:
             "heading": "Unconfirmed Claims",
             "description": (
                 "A claim listed here has no relationship edge yet -- meaning no "
-                "second claim has been reviewed and explicitly related to it, "
+                "second claim has been classified and explicitly related to it, "
                 "nothing more. Not a judgment about the underlying science."
             ),
             "empty_message": "Every claim in the graph has at least one relationship edge.",
@@ -297,11 +297,15 @@ _RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT = 300
 
 @app.get("/relationship-candidates", response_class=HTMLResponse)
 def relationship_candidates(request: Request) -> HTMLResponse:
-    """Render claim pairs sharing PICO-resolved concepts, for a human to review.
+    """Render claim pairs sharing PICO-resolved concepts, before classification.
 
     Mirrors `ke graph-relationship-candidates`. Structural overlap only:
-    never infers, detects, or suggests a relationship type or rationale
-    -- that judgment call stays entirely with the human.
+    this page itself never infers, detects, or suggests a relationship
+    type or rationale -- `core`'s automated classifier (`ke
+    relationship-classify-automate`) runs over pairs like these by
+    default, proposing a type only when its quoted evidence passes
+    deterministic grounding verification; a reviewer can also author one
+    by hand via the linked compare page.
 
     Bounded for a browser, unlike the CLI's file output: a single
     generic concept shared across hundreds of claims (e.g. "Patients")
@@ -310,7 +314,7 @@ def relationship_candidates(request: Request) -> HTMLResponse:
     candidates and a 50+ MB page when every claim's concepts are
     included. Requiring at least 2 shared concepts (not core's
     single-concept default) cuts that noise by 97% and is also a more
-    meaningful signal that two claims are worth a human's comparison.
+    meaningful signal that two claims are worth classifying next.
     `_RELATIONSHIP_CANDIDATES_DISPLAY_LIMIT` caps the page itself, since
     even the 2-concept floor is not guaranteed to stay bounded as the
     corpus keeps growing across more domains.
@@ -341,14 +345,17 @@ def relationship_candidates(request: Request) -> HTMLResponse:
 def relationship_candidate_compare(
     request: Request, evidence_record_id_a: str, evidence_record_id_b: str
 ) -> HTMLResponse:
-    """Render two claims' full evidence content side by side, for reviewing one candidate pair.
+    """Render two claims' full evidence content side by side, for one candidate pair.
 
     The same fields `ke relationship-review-worksheet` assembles into a
     Markdown document, rendered as a browsable page instead -- reviewing
     from the browser rather than a generated CLI document, the last
     named item from `docs/future_ideas.md`'s Reviewer Tooling section.
-    Never infers, scores, or suggests a relationship; deciding whether
-    one exists remains entirely a human judgment call, authored
+    This page itself never infers, scores, or suggests a relationship:
+    deciding whether one exists is, by default, `core`'s automated
+    classifier's job (`ke relationship-classify-automate`), which
+    proposes a type only when its quoted evidence passes deterministic
+    grounding verification. A reviewer can still author one by hand
     directly in `core`'s `relationship_records.jsonl`.
     """
 

@@ -29,12 +29,12 @@
 {% endif %}
 
 <section class="demo-section">
-  <p class="trust-label reviewed">Human-reviewed relationships</p>
+  <p class="trust-label reviewed">Grounding-verified relationships</p>
   <h2>Relationship Network</h2>
   {% if network_svg %}
   <p class="disclaimer">
     {{ network_claim_count }} claim{{ "s" if network_claim_count != 1 else "" }} connected by
-    {{ network_relationship_count }} reviewer-authored relationship edge{{ "s" if network_relationship_count != 1 else "" }}.
+    {{ network_relationship_count }} grounding-verified relationship edge{{ "s" if network_relationship_count != 1 else "" }}.
     Node size reflects how many relationships touch that claim; nothing here
     is inferred, ranked, or scored. Hover a node or edge for detail.
   </p>
@@ -47,7 +47,7 @@
   </ul>
   {% endif %}
   {% else %}
-  <p class="empty-state">No reviewed relationship edges are in this snapshot yet.</p>
+  <p class="empty-state">No grounding-verified relationship edges are in this snapshot yet.</p>
   {% endif %}
 </section>
 {% endblock %}

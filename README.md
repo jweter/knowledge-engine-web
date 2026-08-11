@@ -49,7 +49,7 @@ Consensus, Claim Confidence, Evidence Coverage --
 `knowledge_engine_web/evidence_intelligence.py`, independently
 rebuilding `core`'s own `docs/evidence_intelligence_design.md` formula).
 This is a location change, not a loosening of the seam: the computation
-is fully deterministic, reads only already-stored, already-human-reviewed
+is fully deterministic, reads only already-stored, already-classified
 fields, and never involves an LLM or a judgment call this project makes
 itself. See `docs/web_design.md`'s Out of Scope section for the full
 rationale, and `core_interface_contract.md`'s own "Revised in M58" note
@@ -301,11 +301,15 @@ The first three shared tasks are:
   candidate pair from `/relationship-candidates` (done; see
   `knowledge_engine_web/templates/relationship_compare.html`). The same
   fields `ke relationship-review-worksheet` assembles into a Markdown
-  document, browsable here instead of generated -- never infers, scores,
-  or suggests a relationship, that stays a human judgment call authored
-  directly in `core`'s `relationship_records.jsonl`. The fourth and
-  final item from "Planned: Reviewer & Evidence Intelligence Tooling" in
-  `core`'s `docs/roadmap.md`.
+  document, browsable here instead of generated -- this page itself
+  never infers, scores, or suggests a relationship: deciding whether one
+  exists is, by default, `core`'s automated classifier's job (`ke
+  relationship-classify-automate`, M72), accepted only after its quoted
+  evidence passes deterministic grounding verification. A reviewer can
+  still author one by hand directly in `core`'s
+  `relationship_records.jsonl`. The fourth and final item from "Planned:
+  Reviewer & Evidence Intelligence Tooling" in `core`'s
+  `docs/roadmap.md`.
 
 ## Repository Family
 
