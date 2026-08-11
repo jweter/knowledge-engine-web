@@ -14,6 +14,15 @@ jinja2 = "^3.1.4"
 uvicorn = "^0.34.0"
 pydantic-settings = "^2.3.0"
 sqlalchemy = "^2.0.31"
+# AI-O13: git dependency, not a path dependency -- these are separate
+# GitHub repos with no shared package registry, and unlike core (read
+# via SQLAlchemy reflection, never imported), this really is a Python
+# import. See docs/web_design.md's "Planned: full orchestrator
+# integration" section for why, and knowledge-engine-ai's
+# docs/web_integration_design.md for the real dependency-weight cost
+# this adds (core's full stack, torch included, once `ke` needs to run
+# as a subprocess) -- deferred to AI-O16, not solved by this step.
+knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", branch = "main" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"
