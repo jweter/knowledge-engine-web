@@ -242,6 +242,23 @@ secured, and operationally durable inference architecture -- not attempted
 here. Exposing a laptop's Ollama listener to the public internet is not that
 architecture.
 
+## Planned: full orchestrator integration (reopens the decision above, on purpose)
+
+`knowledge-engine-ai`'s `docs/web_integration_design.md` (its `AI-O12`
+through `AI-O17` plan) proposes adding `knowledge-engine-ai` as a real
+`knowledge-engine-web` dependency and routing `/ask` through its full
+orchestrator -- durable sessions, parallel retrieval with contradiction
+search, Skeptic verification, session synthesis -- rather than this
+project's own retrieval-plus-narration path above. That plan engages
+directly with the "Decision: local LLM" rejection immediately above:
+the case for a full multi-module orchestrator (session persistence,
+verification, observability, not ~150 lines of an Ollama HTTP client)
+is different in kind, not just degree, from the small-mirror case this
+project already declined once. See that document for the full
+reasoning, the architecture decision, and the step-wise plan; nothing
+in that plan is implemented yet, and this section is a pointer so the
+initiative is discoverable from this repo too.
+
 ## Architecture
 
 As originally scoped for the first slice (`config.py`, `graph_reader.py`,
