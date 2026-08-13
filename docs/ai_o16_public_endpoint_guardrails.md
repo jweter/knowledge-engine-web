@@ -121,7 +121,8 @@ hosted prerequisites exist.
 
 ## Next Handoff
 
-AI-O17 owns live end-to-end verification only after an operator has supplied a
-durable session disk, core runtime and corpus inputs, and a secured inference
-service reachable by Render. AI-O16 does not silently satisfy those deployment
-decisions.
+AI-O17 completed the end-to-end verification on a fully configured local
+deployment; see `docs/ai_o17_live_verification.md`. The same rehearsal remains
+required on Render only after an operator supplies a durable session disk,
+core runtime and corpus inputs, and a secured hosted inference service. The
+local result does not silently satisfy those deployment decisions.

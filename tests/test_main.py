@@ -1455,6 +1455,7 @@ def _copilot_result() -> SimpleNamespace:
     return SimpleNamespace(
         session_id="session-123",
         narrative="Semaglutide reduces body weight [ev-1].",
+        narrative_releaseable=True,
         synthesis_error=None,
         close_result=SimpleNamespace(status=SimpleNamespace(value="completed")),
         workflow=SimpleNamespace(steps=(SimpleNamespace(succeeded=True),)),
@@ -1624,6 +1625,36 @@ def test_ask_copilot_result_marks_an_incomplete_workflow(
     assert "Workflow:</strong> 1 step(s) failed" in response.text
     assert "No narrative" in response.text
     assert "complete answer." in response.text
+
+
+def test_ask_withholds_a_narrative_when_the_close_gate_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    result = _copilot_result()
+    result.narrative_releaseable = False
+    result.close_result = SimpleNamespace(status=SimpleNamespace(value="blocked"))
+    result.verification = SimpleNamespace(is_clean=False)
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: result,
+    )
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "Close gate:</strong> blocked" in response.text
+    assert "draft narrative was recorded but is withheld" in response.text
+    assert "Semaglutide reduces body weight [ev-1]." not in response.text
+    assert "Resolved citations" not in response.text
+    assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
 
 
 def test_ask_synthesize_reports_a_sanitized_copilot_error_inline(

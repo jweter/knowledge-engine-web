@@ -78,12 +78,18 @@
   {% endif %}
   {% if copilot_result.synthesis_error %}
   <p class="empty-state">The local model did not produce a narrative. The session recorded the failure.</p>
-  {% elif copilot_result.narrative %}
+  {% elif copilot_result.narrative_releaseable %}
   <p>{{ copilot_result.narrative }}</p>
+  {% elif copilot_result.narrative %}
+  <p class="empty-state">
+    A draft narrative was recorded but is withheld because deterministic
+    verification or the Research ISA close gate did not pass. Inspect the
+    durable session and unresolved criteria before using it.
+  </p>
   {% else %}
   <p class="empty-state">No evidence with a stated claim was retrieved to narrate.</p>
   {% endif %}
-  {% if copilot_result.session_report and copilot_result.session_report.sourced_claims %}
+  {% if copilot_result.narrative_releaseable and copilot_result.session_report and copilot_result.session_report.sourced_claims %}
   <h4>Resolved citations</h4>
   <ul>
     {% for claim in copilot_result.session_report.sourced_claims %}

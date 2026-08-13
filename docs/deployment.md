@@ -50,6 +50,13 @@ for the current single-instance, password-gated alpha; they are not distributed
 abuse prevention. Busy, limited, and timed-out attempts leave deterministic
 retrieval visible. See `docs/ai_o16_public_endpoint_guardrails.md`.
 
+AI-O17 completed a measured local Web-to-AI-to-Core rehearsal with Ollama. A
+generated narrative is now shown only when the AI layer reports that the
+independent workflow, citation, and contradiction close gate passed. Blocked
+drafts remain in the durable session for operator inspection and are withheld
+from the page while deterministic retrieval stays visible. See
+`docs/ai_o17_live_verification.md`.
+
 This works for local-network serving, but not for the Render alpha hosting
 below: a laptop or self-hosted machine cannot durably run Ollama *for* Render's
 separate hosted environment, and Render does not yet carry core or durable
