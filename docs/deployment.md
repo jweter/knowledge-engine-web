@@ -27,6 +27,7 @@ export KE_WEB_EVIDENCE_RECORDS_PATH="/path/to/evidence_records.jsonl"
 export KE_WEB_RELATIONSHIP_RECORDS_PATH="/path/to/relationship_records.jsonl"
 export KE_WEB_SOURCES_PATH="/path/to/sources.csv"
 export KE_WEB_SESSION_DB_PATH="/path/to/data/research_sessions.db"
+export KE_WEB_SESSION_STORAGE_MODE="local"
 export KE_WEB_KE_EXECUTABLE="/path/to/core/.venv/bin/ke"
 export KE_WEB_LLM_MODEL="qwen2.5:1.5b"  # final optional Research Copilot prerequisite
 poetry run knowledge-engine-web
@@ -42,6 +43,21 @@ This works for local-network serving, but not for the Render alpha hosting
 below: a laptop or self-hosted machine cannot durably run Ollama *for* Render's
 separate hosted environment, and Render does not yet carry core or durable
 Research Session storage. `/ask` therefore remains retrieval-only there.
+
+### Durable Research Sessions
+
+Local mode intentionally accepts a writable SQLite path. A hosted deployment
+must use `KE_WEB_SESSION_STORAGE_MODE=persistent`, configure
+`KE_WEB_SESSION_PERSISTENT_ROOT`, and keep `KE_WEB_SESSION_DB_PATH` canonically
+inside that root. Missing mounts and symlink escapes fail closed without
+affecting retrieval.
+
+The Render blueprint declares `/var/data` as the required persistent root but
+does not provision a disk. Render filesystems are ephemeral unless a paid
+persistent disk is attached. Before enabling Research Copilot, attach a disk at
+`/var/data` through the Render dashboard, then perform the restart/redeploy
+survival check in `docs/ai_o15_deployed_session_persistence.md`. Do not expose a
+laptop filesystem or substitute an ephemeral container path.
 
 The Ollama desktop application running on an operator's laptop is appropriate
 for this local or trusted-LAN mode. Enabling Ollama's network exposure is not a

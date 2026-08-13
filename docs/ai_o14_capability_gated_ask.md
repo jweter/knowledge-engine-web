@@ -122,7 +122,7 @@ AI-O14 does not:
 
 ## Next Handoff
 
-AI-O15: decide and implement the deployed Research Session persistence
-boundary. The trigger is a concrete decision to enable Research Copilot on a
-persistent deployment; until then, the public alpha remains honestly
-retrieval-only.
+AI-O15 is complete: deployed Research Sessions require a canonically contained
+persistent mount, while local development may use local SQLite. See
+`docs/ai_o15_deployed_session_persistence.md`. AI-O16 is next: bound execution
+time and request concurrency before public Research Copilot is enabled.

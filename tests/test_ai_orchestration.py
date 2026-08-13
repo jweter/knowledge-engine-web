@@ -72,6 +72,144 @@ def test_capability_check_does_not_create_the_session_database(tmp_path: Path) -
     assert not session_db.exists()
 
 
+def test_persistent_session_storage_accepts_a_database_inside_the_mount(
+    tmp_path: Path,
+) -> None:
+    persistent_root = tmp_path / "persistent"
+    persistent_root.mkdir()
+    settings = _ready_settings(tmp_path)
+    settings = Settings(
+        _env_file=None,
+        **(
+            settings.model_dump()
+            | {
+                "session_db_path": str(persistent_root / "research_sessions.sqlite3"),
+                "session_storage_mode": "persistent",
+                "session_persistent_root": str(persistent_root),
+            }
+        ),
+    )
+
+    capability = evaluate_ai_capability(settings)
+
+    assert capability.available
+    assert capability.session_storage_mode == "persistent"
+
+
+@pytest.mark.parametrize("root_value", [None, " "])
+def test_persistent_session_storage_requires_a_configured_root(
+    tmp_path: Path, root_value: str | None
+) -> None:
+    settings = _ready_settings(tmp_path)
+    settings = Settings(
+        _env_file=None,
+        **(
+            settings.model_dump()
+            | {
+                "session_storage_mode": "persistent",
+                "session_persistent_root": root_value,
+            }
+        ),
+    )
+
+    capability = evaluate_ai_capability(settings)
+
+    assert not capability.available
+    assert capability.reason_code == "persistent_session_root_unavailable"
+
+
+def test_persistent_session_storage_rejects_a_database_outside_the_mount(
+    tmp_path: Path,
+) -> None:
+    persistent_root = tmp_path / "persistent"
+    persistent_root.mkdir()
+    settings = _ready_settings(tmp_path)
+    settings = Settings(
+        _env_file=None,
+        **(
+            settings.model_dump()
+            | {
+                "session_storage_mode": "persistent",
+                "session_persistent_root": str(persistent_root),
+            }
+        ),
+    )
+
+    capability = evaluate_ai_capability(settings)
+
+    assert not capability.available
+    assert capability.reason_code == "persistent_session_path_invalid"
+
+
+@pytest.mark.parametrize(
+    ("database_path", "persistent_root"),
+    [
+        ("relative/sessions.sqlite3", "relative"),
+        ("relative/sessions.sqlite3", None),
+    ],
+)
+def test_persistent_session_storage_rejects_relative_paths(
+    tmp_path: Path, database_path: str, persistent_root: str | None
+) -> None:
+    root_value = persistent_root or str(tmp_path)
+    settings = _ready_settings(tmp_path)
+    settings = Settings(
+        _env_file=None,
+        **(
+            settings.model_dump()
+            | {
+                "session_db_path": database_path,
+                "session_storage_mode": "persistent",
+                "session_persistent_root": root_value,
+            }
+        ),
+    )
+
+    capability = evaluate_ai_capability(settings)
+
+    assert not capability.available
+    assert capability.reason_code == "persistent_session_path_invalid"
+
+
+def test_persistent_session_storage_rejects_a_symlink_escape(tmp_path: Path) -> None:
+    persistent_root = tmp_path / "persistent"
+    outside = tmp_path / "outside"
+    persistent_root.mkdir()
+    outside.mkdir()
+    link = persistent_root / "linked"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"This environment cannot create directory symlinks: {exc}")
+
+    settings = _ready_settings(tmp_path)
+    settings = Settings(
+        _env_file=None,
+        **(
+            settings.model_dump()
+            | {
+                "session_db_path": str(link / "research_sessions.sqlite3"),
+                "session_storage_mode": "persistent",
+                "session_persistent_root": str(persistent_root),
+            }
+        ),
+    )
+
+    capability = evaluate_ai_capability(settings)
+
+    assert not capability.available
+    assert capability.reason_code == "persistent_session_path_invalid"
+
+
+def test_render_blueprint_requires_persistent_session_storage() -> None:
+    blueprint = (Path(__file__).parents[1] / "render.yaml").read_text(encoding="utf-8")
+
+    assert "KE_WEB_SESSION_STORAGE_MODE" in blueprint
+    assert "value: persistent" in blueprint
+    assert "KE_WEB_SESSION_PERSISTENT_ROOT" in blueprint
+    assert "value: /var/data" in blueprint
+
+
 def test_run_ai_orchestration_wires_current_settings_and_closes_connection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

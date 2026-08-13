@@ -123,6 +123,9 @@ presents a disabled Research Copilot control and remains fully retrieval-only.
 Stale or manually forged requests also fall back to retrieval without exposing
 server configuration details. See
 [`docs/ai_o14_capability_gated_ask.md`](docs/ai_o14_capability_gated_ask.md).
+Persistent deployments must additionally place the Research Session database
+inside an explicitly configured persistent mount; see
+[`docs/ai_o15_deployed_session_persistence.md`](docs/ai_o15_deployed_session_persistence.md).
 
 By default this binds to `127.0.0.1:8000` (local machine only). To
 serve on a local network, or run as a persistent systemd service, see
@@ -272,8 +275,9 @@ The first three shared tasks are:
   Research Copilot's durable retrieval, local narration, deterministic
   verification, sourced citations, and close gate on fully configured local or
   LAN deployments (AI-O14 complete). The hosted Render alpha remains
-  retrieval-only until durable session, core-runtime, inference, and operator
-  controls are deliberately chosen.
+  retrieval-only. AI-O15 now fails closed unless deployed sessions use a real
+  persistent mount; core runtime, hosted inference, and AI-O16 operator
+  controls remain deliberately unresolved.
 - `GET /dashboard` -- a corpus-wide Evidence Intelligence dashboard:
   the distribution of Evidence Quality scores and Claim Confidence
   reliability tiers across every claim with evidence configured (done;

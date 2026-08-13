@@ -126,6 +126,8 @@ def test_research_copilot_is_callable_through_the_web_boundary(
         sources_path=str(sources),
         evidence_records_path=str(evidence),
         session_db_path=str(session_db),
+        session_storage_mode="persistent",
+        session_persistent_root=str(tmp_path),
         llm_model="qwen2.5:1.5b",
         ke_executable=str(_write_fake_ke_executable(tmp_path)),
     )
@@ -159,6 +161,8 @@ def test_settings_new_fields_default_to_none_and_a_local_data_path() -> None:
 
     assert settings.sources_path is None
     assert settings.session_db_path == "data/research_sessions.db"
+    assert settings.session_storage_mode == "local"
+    assert settings.session_persistent_root is None
     assert settings.ke_executable == "ke"
 
 
@@ -167,6 +171,8 @@ def test_settings_new_fields_default_to_none_and_a_local_data_path() -> None:
     [
         ("KE_WEB_SOURCES_PATH", "/tmp/x/sources.csv", "sources_path"),
         ("KE_WEB_SESSION_DB_PATH", "/tmp/x/sessions.db", "session_db_path"),
+        ("KE_WEB_SESSION_STORAGE_MODE", "persistent", "session_storage_mode"),
+        ("KE_WEB_SESSION_PERSISTENT_ROOT", "/tmp/x", "session_persistent_root"),
         ("KE_WEB_KE_EXECUTABLE", "/tmp/x/ke", "ke_executable"),
     ],
 )
