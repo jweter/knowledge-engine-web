@@ -3,7 +3,7 @@
 # for testing hosting/browsers/latency, not a live-updating service.
 # See docs/deployment.md's "Alpha hosting (Render)" section: refresh the
 # snapshot with scripts/refresh-alpha-snapshot.sh before each rebuild.
-FROM python:3.12-slim AS base
+FROM python:3.14-slim AS base
 
 ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
