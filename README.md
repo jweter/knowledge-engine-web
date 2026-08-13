@@ -106,22 +106,23 @@ This is optional as well -- without it, relationship edges still show
 their type and rationale exactly as before, just without the
 provenance line.
 
-To also let the `/ask` page generate a local, offline AI synthesis of
-the retrieved evidence (opt-in per request, via a checkbox -- see
-`docs/web_design.md`'s "Decision: local LLM"), run
-[Ollama](https://ollama.com), pull a model, and point this project at it:
+To let `/ask` run the complete local Research Copilot workflow (opt-in per
+request), configure Ollama, core's `ke` executable, corpus metadata, evidence,
+and the durable local session store:
 
 ```bash
 ollama pull qwen2.5:1.5b
 export KE_WEB_LLM_MODEL="qwen2.5:1.5b"
+export KE_WEB_SOURCES_PATH="/path/to/sources.csv"
+export KE_WEB_KE_EXECUTABLE="/path/to/core/.venv/bin/ke"
+export KE_WEB_SESSION_DB_PATH="data/research_sessions.db"
 ```
 
-This is optional too. Without it, `/ask` presents a disabled synthesis
-control labeled as unavailable on that deployment and remains fully
-retrieval-only. Stale or manually forged synthesis requests also fall back to
-retrieval without exposing server configuration details. A configured local
-or LAN deployment continues to offer the opt-in checkbox and use its Ollama
-service normally.
+All prerequisites are optional as a group. If any is unavailable, `/ask`
+presents a disabled Research Copilot control and remains fully retrieval-only.
+Stale or manually forged requests also fall back to retrieval without exposing
+server configuration details. See
+[`docs/ai_o14_capability_gated_ask.md`](docs/ai_o14_capability_gated_ask.md).
 
 By default this binds to `127.0.0.1:8000` (local machine only). To
 serve on a local network, or run as a persistent systemd service, see
@@ -267,12 +268,12 @@ The first three shared tasks are:
   (done). Retrieval plus already-computed signals only -- no cross-paper
   synthesis, no single "the answer" verdict; the project owner's first
   piece of a larger question-first "Ask" experience connecting this
-  project, `knowledge-engine-ai`, and `core`. `synthesize=1` optionally
-  narrates the same retrieval results and Evidence Intelligence numbers
-  into one grounded paragraph on configured local or LAN deployments via a
-  local, offline LLM (done; see "Decision: local LLM" in
-  `docs/web_design.md`). The hosted Render alpha remains retrieval-only until
-  a separate hosted inference architecture is deliberately chosen.
+  project, `knowledge-engine-ai`, and `core`. `synthesize=1` now invokes
+  Research Copilot's durable retrieval, local narration, deterministic
+  verification, sourced citations, and close gate on fully configured local or
+  LAN deployments (AI-O14 complete). The hosted Render alpha remains
+  retrieval-only until durable session, core-runtime, inference, and operator
+  controls are deliberately chosen.
 - `GET /dashboard` -- a corpus-wide Evidence Intelligence dashboard:
   the distribution of Evidence Quality scores and Claim Confidence
   reliability tiers across every claim with evidence configured (done;

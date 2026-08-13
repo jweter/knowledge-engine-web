@@ -25,9 +25,10 @@ import sys
 from pathlib import Path
 
 import pytest
-from knowledge_engine_ai.copilot.run_research_question import run_research_question
 from knowledge_engine_ai.sessions.repository import SessionRepository, new_connection
 
+from knowledge_engine_web import ai_orchestration
+from knowledge_engine_web.ai_orchestration import run_ai_orchestration
 from knowledge_engine_web.config import Settings
 
 _EVIDENCE_REPORT_PAYLOAD = {
@@ -112,7 +113,9 @@ def _write_fake_ke_executable(tmp_path: Path) -> Path:
     return wrapper
 
 
-def test_run_research_question_is_callable_with_web_settings(tmp_path: Path) -> None:
+def test_research_copilot_is_callable_through_the_web_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     sources = tmp_path / "sources.csv"
     evidence = tmp_path / "evidence.jsonl"
     sources.write_text("")
@@ -124,21 +127,17 @@ def test_run_research_question_is_callable_with_web_settings(tmp_path: Path) -> 
         evidence_records_path=str(evidence),
         session_db_path=str(session_db),
         llm_model="qwen2.5:1.5b",
+        ke_executable=str(_write_fake_ke_executable(tmp_path)),
     )
     assert settings.sources_path is not None
     assert settings.evidence_records_path is not None
 
-    session_repository = SessionRepository(new_connection(settings.session_db_path))
-    fake_ke = _write_fake_ke_executable(tmp_path)
-
-    result = run_research_question(
-        "does semaglutide reduce body weight",
-        session_repository=session_repository,
-        sources=Path(settings.sources_path),
-        evidence=Path(settings.evidence_records_path),
-        llm=_FakeLLM(),
-        ke_executable=str(fake_ke),
+    monkeypatch.setattr(
+        ai_orchestration,
+        "OllamaLLM",
+        lambda *, model, host: _FakeLLM(),
     )
+    result = run_ai_orchestration(settings, "does semaglutide reduce body weight")
 
     assert result.narrative == "Semaglutide reduced body weight [ev-1]."
     assert result.verification is not None
@@ -160,6 +159,7 @@ def test_settings_new_fields_default_to_none_and_a_local_data_path() -> None:
 
     assert settings.sources_path is None
     assert settings.session_db_path == "data/research_sessions.db"
+    assert settings.ke_executable == "ke"
 
 
 @pytest.mark.parametrize(
@@ -167,6 +167,7 @@ def test_settings_new_fields_default_to_none_and_a_local_data_path() -> None:
     [
         ("KE_WEB_SOURCES_PATH", "/tmp/x/sources.csv", "sources_path"),
         ("KE_WEB_SESSION_DB_PATH", "/tmp/x/sessions.db", "session_db_path"),
+        ("KE_WEB_KE_EXECUTABLE", "/tmp/x/ke", "ke_executable"),
     ],
 )
 def test_settings_new_fields_read_from_env(

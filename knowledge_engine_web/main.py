@@ -20,6 +20,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine, create_engine
 
+from knowledge_engine_web.ai_orchestration import (
+    AIOrchestrationError,
+    evaluate_ai_capability,
+    run_ai_orchestration,
+)
 from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.dashboard import build_evidence_intelligence_dashboard
@@ -50,7 +55,6 @@ from knowledge_engine_web.graph_visual import (
     build_relationship_network_svg,
     relationship_type_legend,
 )
-from knowledge_engine_web.llm import LocalLLMError, OllamaLLM
 from knowledge_engine_web.relationship_reader import (
     list_relationship_records_for_evidence_record_id,
 )
@@ -62,7 +66,6 @@ from knowledge_engine_web.report_renderer import (
 )
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 from knowledge_engine_web.snapshot_metadata import read_snapshot_metadata
-from knowledge_engine_web.synthesis import synthesize_answer
 from knowledge_engine_web.whats_changed import build_whats_changed_summary
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -606,17 +609,16 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
     claim exists for them -- never a new number, never a judgment this
     project invents for the occasion.
 
-    `synthesize=1` is the one opt-in exception: a local, offline LLM
-    (served by Ollama, `KE_WEB_LLM_MODEL` required) narrates that same
-    already-computed evidence into one grounded paragraph -- see
-    `knowledge_engine_web/synthesis.py` and `docs/web_design.md`'s
-    "Decision: local LLM" section. Off by default: real inference, not
-    free, and a person should ask for it explicitly.
+    `synthesize=1` is the one opt-in exception: when the complete local
+    Research Copilot runtime is available, `knowledge-engine-ai` runs its
+    durable retrieval, narration, verification, and close-gate workflow.
+    This page still shows its own deterministic retrieval independently,
+    including whenever the optional AI runtime is unavailable.
     """
 
     settings = Settings()
-    llm_model = settings.llm_model.strip() if settings.llm_model else None
-    synthesis_available = bool(llm_model)
+    ai_capability = evaluate_ai_capability(settings)
+    synthesis_available = ai_capability.available
     question = q.strip()
     if not question:
         return templates.TemplateResponse(
@@ -628,8 +630,8 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
                 "synthesis_available": synthesis_available,
                 "synthesize_requested": False,
                 "synthesis_unavailable_notice": None,
-                "synthesis": None,
-                "synthesis_error": None,
+                "copilot_result": None,
+                "copilot_error": None,
             },
         )
 
@@ -647,19 +649,17 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
 
     synthesize_requested = synthesize and synthesis_available
     synthesis_unavailable_notice = (
-        "AI synthesis is unavailable on this deployment. Retrieval results are shown below."
+        "Research Copilot is unavailable on this deployment. Retrieval results are shown below."
         if synthesize and not synthesis_available
         else None
     )
-    synthesis: str | None = None
-    synthesis_error: str | None = None
+    copilot_result = None
+    copilot_error: str | None = None
     if synthesize_requested:
-        assert llm_model is not None
         try:
-            llm = OllamaLLM(model=llm_model, host=settings.ollama_host)
-            synthesis = synthesize_answer(question, results, llm)
-        except LocalLLMError as exc:
-            synthesis_error = str(exc)
+            copilot_result = run_ai_orchestration(settings, question)
+        except AIOrchestrationError as exc:
+            copilot_error = str(exc)
 
     return templates.TemplateResponse(
         request=request,
@@ -670,8 +670,8 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
             "synthesis_available": synthesis_available,
             "synthesize_requested": synthesize_requested,
             "synthesis_unavailable_notice": synthesis_unavailable_notice,
-            "synthesis": synthesis,
-            "synthesis_error": synthesis_error,
+            "copilot_result": copilot_result,
+            "copilot_error": copilot_error,
         },
     )
 

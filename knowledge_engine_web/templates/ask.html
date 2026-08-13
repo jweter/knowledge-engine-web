@@ -9,8 +9,9 @@
   answer" verdict.
   Each matched paper's own evidence records show their own, separately
   computed Evidence Intelligence numbers (see <a href="/about">About</a>)
-  where a graph claim exists for them. Optional AI narration is explicitly
-  requested, labeled, and does not become new evidence or scientific review.
+  where a graph claim exists for them. Optional Research Copilot narration is
+  explicitly requested, independently verified against retrieved records, and
+  does not become new evidence or scientific review.
 </p>
 
 <form method="get" action="/ask" class="ask-form">
@@ -26,12 +27,12 @@
   {% if synthesis_available %}
   <label class="ask-synthesize-toggle">
     <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested %}checked{% endif %} />
-    Also generate an AI synthesis (local model, real inference -- not free)
+    Also run Research Copilot (local model, durable session, real inference)
   </label>
   {% else %}
   <label class="ask-synthesize-toggle is-unavailable">
     <input type="checkbox" disabled aria-disabled="true" />
-    AI synthesis unavailable on this deployment; Ask is retrieval-only.
+    Research Copilot unavailable on this deployment; Ask is retrieval-only.
   </label>
   {% endif %}
   <button type="submit">Ask</button>
@@ -45,14 +46,51 @@
 {% if synthesize_requested %}
 <section class="ask-result-card ask-synthesis">
   <p class="trust-label reviewed">AI-generated, not reviewed</p>
-  <h3>AI-generated synthesis</h3>
-  <p class="disclaimer">Local model, narrating only the evidence below -- not a new judgment call.</p>
-  {% if synthesis_error %}
-  <p class="empty-state">{{ synthesis_error }}</p>
-  {% elif synthesis %}
-  <p>{{ synthesis }}</p>
+  <h3>Research Copilot result</h3>
+  <p class="disclaimer">
+    Local-model narration over a durable retrieval session, followed by
+    deterministic citation and qualifier checks. This is not a scientific
+    judgment or new evidence.
+  </p>
+  {% if copilot_error %}
+  <p class="empty-state">{{ copilot_error }}</p>
+  {% elif copilot_result %}
+  {% set failed_steps = copilot_result.workflow.steps | rejectattr('succeeded') | list %}
+  <p>
+    <strong>Session:</strong> <code>{{ copilot_result.session_id }}</code><br />
+    <strong>Workflow:</strong> {% if failed_steps %}{{ failed_steps | length }} step(s) failed{% else %}completed{% endif %}<br />
+    <strong>Close gate:</strong> {{ copilot_result.close_result.status.value }}<br />
+    <strong>Verification:</strong>
+    {% if copilot_result.verification is none %}not run
+    {% elif copilot_result.verification.is_clean %}passed
+    {% else %}flagged for review{% endif %}
+  </p>
+  {% if failed_steps %}
+  <p class="empty-state">
+    The durable session recorded an incomplete retrieval workflow. No narrative
+    should be treated as a complete answer.
+  </p>
+  {% endif %}
+  {% if copilot_result.synthesis_error %}
+  <p class="empty-state">The local model did not produce a narrative. The session recorded the failure.</p>
+  {% elif copilot_result.narrative %}
+  <p>{{ copilot_result.narrative }}</p>
   {% else %}
   <p class="empty-state">No evidence with a stated claim was retrieved to narrate.</p>
+  {% endif %}
+  {% if copilot_result.session_report and copilot_result.session_report.sourced_claims %}
+  <h4>Resolved citations</h4>
+  <ul>
+    {% for claim in copilot_result.session_report.sourced_claims %}
+    <li>
+      <strong>{{ claim.evidence_record_id }}</strong> -- {{ claim.paper_citation }}
+      {% if claim.paper_doi %}(DOI: {{ claim.paper_doi }}){% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% else %}
+  <p class="empty-state">No Research Copilot result was returned.</p>
   {% endif %}
 </section>
 {% endif %}
