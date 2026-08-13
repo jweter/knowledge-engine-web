@@ -259,8 +259,8 @@ reasoning, the architecture decision, and the step-wise plan.
 
 ### AI-O13: config surface
 
-`knowledge-engine-ai` is now a real `pyproject.toml` dependency (a git
-dependency -- there is no shared package registry between these sibling
+`knowledge-engine-ai` is now a real `pyproject.toml` dependency (an immutable
+git-revision dependency -- there is no shared package registry between these sibling
 repos, and unlike `core`, this really is a Python import, not database
 reflection). `llm_model`/`ollama_host` above are reused as-is for
 `run_research_question`'s local-LLM call -- one Ollama host and model

@@ -19,7 +19,9 @@ depend on being present in CI (`core` itself, a running local model).
 from __future__ import annotations
 
 import json
+import os
 import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -100,7 +102,14 @@ def _write_fake_ke_executable(tmp_path: Path) -> Path:
         "sys.exit(f'unexpected command: {sys.argv}')\n"
     )
     script.chmod(script.stat().st_mode | stat.S_IEXEC)
-    return script
+    if os.name != "nt":
+        return script
+
+    # Windows CreateProcess cannot execute a shebang-based Python file.
+    # A command wrapper keeps this a real subprocess test on every platform.
+    wrapper = tmp_path / "fake_ke.cmd"
+    wrapper.write_text(f'@"{sys.executable}" "{script}" %*\n')
+    return wrapper
 
 
 def test_run_research_question_is_callable_with_web_settings(tmp_path: Path) -> None:
