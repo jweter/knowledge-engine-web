@@ -1,11 +1,13 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, MetaData, Table, insert, text
 
 from knowledge_engine_web import main
+from knowledge_engine_web.ai_orchestration import AICapability, AIOrchestrationError
 from knowledge_engine_web.main import app
 from tests._fixtures import build_engine, create_graph_tables, create_papers_table
 
@@ -1436,29 +1438,36 @@ def test_ask_page_escapes_a_malicious_snippet(
     assert "&lt;script&gt;" in response.text
 
 
-class _FakeLLM:
-    def __init__(self, *, model: str, host: str) -> None:
-        self.model = model
-        self.host = host
-
-    def generate(self, prompt: str, *, max_tokens: int = 400) -> str:
-        assert "does semaglutide reduce body weight" in prompt
-        return "Semaglutide reduces body weight [ev-1]."
+def _available_capability() -> AICapability:
+    return AICapability(available=True)
 
 
-class _FailingFakeLLM:
-    def __init__(self, *, model: str, host: str) -> None:
-        pass
-
-    def generate(self, prompt: str, *, max_tokens: int = 400) -> str:
-        from knowledge_engine_web.llm import LocalLLMError
-
-        raise LocalLLMError("Could not reach Ollama at http://x: refused.")
+def _unavailable_capability() -> AICapability:
+    return AICapability(
+        available=False,
+        reason_code="model_not_configured",
+        visitor_message="Research Copilot is unavailable on this deployment.",
+    )
 
 
-class _UnexpectedLLM:
-    def __init__(self, *, model: str, host: str) -> None:
-        raise AssertionError("An unconfigured deployment must not construct an LLM.")
+def _copilot_result() -> SimpleNamespace:
+    return SimpleNamespace(
+        session_id="session-123",
+        narrative="Semaglutide reduces body weight [ev-1].",
+        synthesis_error=None,
+        close_result=SimpleNamespace(status=SimpleNamespace(value="completed")),
+        workflow=SimpleNamespace(steps=(SimpleNamespace(succeeded=True),)),
+        verification=SimpleNamespace(is_clean=True),
+        session_report=SimpleNamespace(
+            sourced_claims=(
+                SimpleNamespace(
+                    evidence_record_id="ev-1",
+                    paper_citation="A Trial of Semaglutide. (2026).",
+                    paper_doi="10.1000/example",
+                ),
+            )
+        ),
+    )
 
 
 def _setup_paper_with_evidence(engine: Engine, tmp_path: Path) -> Path:
@@ -1498,39 +1507,40 @@ def test_ask_without_synthesize_shows_no_synthesis_block(
     evidence_path = _setup_paper_with_evidence(engine, tmp_path)
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
-    monkeypatch.setenv("KE_WEB_LLM_MODEL", "qwen2.5:1.5b")
-    monkeypatch.setattr(main, "OllamaLLM", _FakeLLM)
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
 
     response = TestClient(app).get("/ask", params={"q": "does semaglutide reduce body weight"})
 
     assert response.status_code == 200
-    assert "AI-generated synthesis" not in response.text
+    assert "Research Copilot result" not in response.text
 
 
-def test_ask_form_disables_synthesis_when_model_is_not_configured(
+def test_ask_form_disables_copilot_when_runtime_is_not_available(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("KE_WEB_LLM_MODEL", "  ")
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _unavailable_capability())
 
     response = TestClient(app).get("/ask")
 
     assert response.status_code == 200
     assert 'type="checkbox" disabled aria-disabled="true"' in response.text
-    assert "AI synthesis unavailable on this deployment; Ask is retrieval-only." in response.text
+    assert (
+        "Research Copilot unavailable on this deployment; Ask is retrieval-only." in response.text
+    )
     assert "KE_WEB_LLM_MODEL" not in response.text
 
 
-def test_ask_form_enables_synthesis_when_model_is_configured(
+def test_ask_form_enables_copilot_when_runtime_is_available(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("KE_WEB_LLM_MODEL", "qwen2.5:1.5b")
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
 
     response = TestClient(app).get("/ask")
 
     assert response.status_code == 200
     assert 'name="synthesize" value="1"' in response.text
     assert "disabled" not in response.text
-    assert "Also generate an AI synthesis" in response.text
+    assert "Also run Research Copilot" in response.text
 
 
 def test_ask_unconfigured_synthesis_request_degrades_to_retrieval_only(
@@ -1540,8 +1550,12 @@ def test_ask_unconfigured_synthesis_request_degrades_to_retrieval_only(
     evidence_path = _setup_paper_with_evidence(engine, tmp_path)
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
-    monkeypatch.delenv("KE_WEB_LLM_MODEL", raising=False)
-    monkeypatch.setattr(main, "OllamaLLM", _UnexpectedLLM)
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _unavailable_capability())
+    monkeypatch.setattr(
+        main,
+        "run_ai_orchestration",
+        lambda settings, question: pytest.fail("unavailable runtime must not be invoked"),
+    )
 
     response = TestClient(app).get(
         "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
@@ -1549,47 +1563,82 @@ def test_ask_unconfigured_synthesis_request_degrades_to_retrieval_only(
 
     assert response.status_code == 200
     assert "AI-generated synthesis" not in response.text
-    assert "AI synthesis is unavailable on this deployment." in response.text
+    assert "Research Copilot is unavailable on this deployment." in response.text
     assert "Retrieval results are shown below." in response.text
     assert "KE_WEB_LLM_MODEL" not in response.text
     assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
 
 
-def test_ask_synthesize_renders_the_grounded_narrative(
+def test_ask_synthesize_renders_the_research_copilot_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = build_engine(tmp_path)
     evidence_path = _setup_paper_with_evidence(engine, tmp_path)
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
-    monkeypatch.setenv("KE_WEB_LLM_MODEL", "qwen2.5:1.5b")
-    monkeypatch.setattr(main, "OllamaLLM", _FakeLLM)
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(main, "run_ai_orchestration", lambda settings, question: _copilot_result())
 
     response = TestClient(app).get(
         "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
     )
 
     assert response.status_code == 200
-    assert "AI-generated synthesis" in response.text
+    assert "Research Copilot result" in response.text
     assert "Semaglutide reduces body weight [ev-1]." in response.text
+    assert "session-123" in response.text
+    assert "Close gate:</strong> completed" in response.text
+    assert "Workflow:</strong> completed" in response.text
+    assert "Verification:</strong>" in response.text
+    assert "A Trial of Semaglutide. (2026)." in response.text
 
 
-def test_ask_synthesize_reports_a_local_llm_error_inline(
+def test_ask_copilot_result_marks_an_incomplete_workflow(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = build_engine(tmp_path)
     evidence_path = _setup_paper_with_evidence(engine, tmp_path)
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
-    monkeypatch.setenv("KE_WEB_LLM_MODEL", "qwen2.5:1.5b")
-    monkeypatch.setattr(main, "OllamaLLM", _FailingFakeLLM)
+    result = _copilot_result()
+    result.workflow = SimpleNamespace(steps=(SimpleNamespace(succeeded=False),))
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(main, "run_ai_orchestration", lambda settings, question: result)
 
     response = TestClient(app).get(
         "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
     )
 
     assert response.status_code == 200
-    assert "Could not reach Ollama" in response.text
+    assert "Workflow:</strong> 1 step(s) failed" in response.text
+    assert "No narrative" in response.text
+    assert "complete answer." in response.text
+
+
+def test_ask_synthesize_reports_a_sanitized_copilot_error_inline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+
+    def fail(settings: object, question: str) -> None:
+        raise AIOrchestrationError(
+            "Research Copilot could not complete this request. "
+            "Deterministic retrieval results are still shown below."
+        )
+
+    monkeypatch.setattr(main, "run_ai_orchestration", fail)
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "Research Copilot could not complete this request" in response.text
+    assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
 
 
 def test_dashboard_page_shows_not_configured_message_without_evidence_path(

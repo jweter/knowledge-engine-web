@@ -189,6 +189,12 @@ edges still render exactly as before, just without the provenance line.
 
 ## Decision: local LLM
 
+This section records the first web-local narration implementation. AI-O14 has
+now replaced `/ask`'s use of the mirrored `llm.py` and `synthesis.py` modules
+with the full `knowledge-engine-ai.run_research_question` workflow. The active
+contract is `docs/ai_o14_capability_gated_ask.md`; this history explains why
+local Ollama and explicit opt-in remain project policy.
+
 Same owner decision `knowledge-engine-ai`'s `docs/ai_design.md` already
 made and this project inherits without relitigating: local, offline
 inference served by [Ollama](https://ollama.com), never a hosted API --
@@ -242,10 +248,10 @@ secured, and operationally durable inference architecture -- not attempted
 here. Exposing a laptop's Ollama listener to the public internet is not that
 architecture.
 
-## Planned: full orchestrator integration (reopens the decision above, on purpose)
+## Implemented: full orchestrator integration (AI-O13 and AI-O14)
 
 `knowledge-engine-ai`'s `docs/web_integration_design.md` (its `AI-O12`
-through `AI-O17` plan) proposes adding `knowledge-engine-ai` as a real
+through `AI-O17` plan) proposed adding `knowledge-engine-ai` as a real
 `knowledge-engine-web` dependency and routing `/ask` through its full
 orchestrator -- durable sessions, parallel retrieval with contradiction
 search, Skeptic verification, session synthesis -- rather than this
@@ -254,8 +260,9 @@ directly with the "Decision: local LLM" rejection immediately above:
 the case for a full multi-module orchestrator (session persistence,
 verification, observability, not ~150 lines of an Ollama HTTP client)
 is different in kind, not just degree, from the small-mirror case this
-project already declined once. See that document for the full
-reasoning, the architecture decision, and the step-wise plan.
+project declined once. AI-O13 added the pinned dependency and configuration;
+AI-O14 routes opted-in `/ask` requests through the orchestrator behind the
+complete capability gate below.
 
 ### AI-O13: config surface
 
@@ -264,7 +271,7 @@ git-revision dependency -- there is no shared package registry between these sib
 repos, and unlike `core`, this really is a Python import, not database
 reflection). `llm_model`/`ollama_host` above are reused as-is for
 `run_research_question`'s local-LLM call -- one Ollama host and model
-already serves this process. Two settings are genuinely new, since this
+already serves this process. Three settings are genuinely new, since this
 project has never needed them before:
 
 - `KE_WEB_SOURCES_PATH` (`sources_path`, default `None`): `ke
@@ -272,9 +279,9 @@ project has never needed them before:
   to) requires a `sources.csv` alongside the evidence file. This
   project's own retrieval has never needed one -- it reads `core`'s
   SQLite database directly. The deployed alpha's data snapshot does not
-  currently ship a `sources.csv`; adding one is required before AI-O14
-  can route the live `/ask` page through this, not before AI-O13's own
-  local/dev-scoped proof.
+  currently ship a `sources.csv`; the AI-O14 capability gate therefore keeps
+  that deployment retrieval-only while configured local deployments may use
+  the complete workflow.
 - `KE_WEB_SESSION_DB_PATH` (`session_db_path`, default
   `data/research_sessions.db`): the durable SQLite store
   `knowledge_engine_ai.sessions.SessionRepository` persists Research
@@ -283,6 +290,10 @@ project has never needed them before:
   environment) is where whether this survives a Render redeploy gets
   decided for real; this default is a sane local/dev value, not yet a
   production decision.
+- `KE_WEB_KE_EXECUTABLE` (`ke_executable`, default `ke`): the core CLI
+  `knowledge-engine-ai` invokes through its documented subprocess boundary.
+  Local deployments with separate virtual environments may configure an
+  explicit executable path.
 
 A real dependency-weight finding, not yet solved by this step:
 `knowledge_engine_ai`'s retrieval shells out to the `ke` CLI, so
@@ -292,6 +303,23 @@ cleanly) once `core`'s full dependency stack -- torch included -- is on
 light (confirmed: only `typer`/`click`/`rich` and their small
 transitive deps pulled in); the Docker/deployment-weight question is
 AI-O16 territory, named here rather than silently deferred.
+
+### AI-O14: capability-gated `/ask`
+
+AI-O14 is complete. `knowledge_engine_web.ai_orchestration` checks the full
+static runtime contract: configured Ollama model, existing `sources.csv` and
+Evidence Records files, a resolvable `ke` executable, and a writable Research
+Session store location. `/ask?synthesize=1` then calls
+`run_research_question`, which owns durable sessions, parallel primary and
+contradiction-oriented retrieval, local narration, deterministic verification,
+sourced citations, and the Research ISA close gate.
+
+The check intentionally does not contact Ollama on ordinary page loads. Runtime
+failures are sanitized and deterministic retrieval remains visible. The Render
+alpha remains retrieval-only because it does not yet carry the corpus metadata,
+core runtime, durable session storage, or hosted inference required by the
+gate. See `docs/ai_o14_capability_gated_ask.md` for the exact contract and the
+AI-O15 handoff.
 
 ## Architecture
 

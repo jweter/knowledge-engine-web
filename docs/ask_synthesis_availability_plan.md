@@ -2,8 +2,9 @@
 
 ## Status
 
-Approved implementation plan for making `/ask` capability-aware on deployments
-that do not run an LLM backend.
+Implemented historical plan for the former web-local synthesis path. AI-O14
+superseded the single-setting capability rule with the complete Research
+Copilot gate documented in `docs/ai_o14_capability_gated_ask.md`.
 
 ## Problem
 

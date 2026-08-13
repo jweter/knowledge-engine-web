@@ -25,20 +25,23 @@ export KE_WEB_PORT="8000"
 export KE_WEB_DATABASE_URL="sqlite:///path/to/knowledge_engine.sqlite3"
 export KE_WEB_EVIDENCE_RECORDS_PATH="/path/to/evidence_records.jsonl"
 export KE_WEB_RELATIONSHIP_RECORDS_PATH="/path/to/relationship_records.jsonl"
-export KE_WEB_LLM_MODEL="qwen2.5:1.5b"  # optional -- enables /ask's synthesis checkbox
+export KE_WEB_SOURCES_PATH="/path/to/sources.csv"
+export KE_WEB_SESSION_DB_PATH="/path/to/data/research_sessions.db"
+export KE_WEB_KE_EXECUTABLE="/path/to/core/.venv/bin/ke"
+export KE_WEB_LLM_MODEL="qwen2.5:1.5b"  # final optional Research Copilot prerequisite
 poetry run knowledge-engine-web
 ```
 
-`KE_WEB_LLM_MODEL` is genuinely optional and specific to this kind of
-deployment: it requires `ollama serve` already running on the same host
-(`ollama pull qwen2.5:1.5b` once) -- see `docs/web_design.md`'s
-"Decision: local LLM". This works for local-network serving, but not
-for the Render alpha hosting below: a laptop or self-hosted machine
-cannot durably run Ollama *for* Render's separate hosted environment,
-so `/ask` renders a disabled synthesis control and remains retrieval-only
-there until that gets its own architecture. A stale or forged synthesis
-request safely degrades to retrieval without exposing environment-variable
-details.
+Research Copilot is optional and enabled only when the model, `sources.csv`,
+Evidence Records, `ke` executable, and writable session-store location are all
+available. The static check does not contact Ollama or create state merely to
+render a form. Once requested, Ollama and core runtime failures are sanitized
+and retrieval remains visible. See `docs/ai_o14_capability_gated_ask.md`.
+
+This works for local-network serving, but not for the Render alpha hosting
+below: a laptop or self-hosted machine cannot durably run Ollama *for* Render's
+separate hosted environment, and Render does not yet carry core or durable
+Research Session storage. `/ask` therefore remains retrieval-only there.
 
 The Ollama desktop application running on an operator's laptop is appropriate
 for this local or trusted-LAN mode. Enabling Ollama's network exposure is not a
