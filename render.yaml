@@ -25,3 +25,13 @@ services:
         value: /var/data
       - key: KE_WEB_SESSION_DB_PATH
         value: /var/data/research_sessions.sqlite3
+      # AI-O16: process-local safety defaults for the optional compute path.
+      # They do not make the missing hosted AI prerequisites available.
+      - key: KE_WEB_AI_REQUEST_TIMEOUT_SECONDS
+        value: "180"
+      - key: KE_WEB_AI_MAX_CONCURRENT_REQUESTS
+        value: "1"
+      - key: KE_WEB_AI_RATE_LIMIT_REQUESTS
+        value: "3"
+      - key: KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS
+        value: "600"

@@ -332,8 +332,9 @@ alpha remains retrieval-only until an operator attaches and verifies one.
 
 The decision, Render procedure, data sensitivity, scaling constraints, and
 resume boundary are recorded in
-`docs/ai_o15_deployed_session_persistence.md`. AI-O16 is the next implementation
-milestone.
+`docs/ai_o15_deployed_session_persistence.md`. AI-O16 is implemented in
+`docs/ai_o16_public_endpoint_guardrails.md`: one shared execution deadline,
+process-local concurrency/rate controls, and explicit waiting/timeout UX.
 
 ## Architecture
 

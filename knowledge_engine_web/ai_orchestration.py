@@ -13,6 +13,7 @@ import shutil
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from knowledge_engine_ai.copilot.run_research_question import (
     ResearchQuestionResult,
@@ -21,7 +22,14 @@ from knowledge_engine_ai.copilot.run_research_question import (
 from knowledge_engine_ai.llm import OllamaLLM
 from knowledge_engine_ai.sessions.repository import SessionRepository, new_connection
 
+from knowledge_engine_web.ai_guardrails import AIRequestGuard
 from knowledge_engine_web.config import Settings
+
+_GLOBAL_AI_REQUEST_GUARD = AIRequestGuard()
+_EXECUTION_TIMEOUT_FRAGMENTS = (
+    "configured execution time limit",
+    "did not respond within",
+)
 
 
 @dataclass(frozen=True)
@@ -36,6 +44,24 @@ class AICapability:
 
 class AIOrchestrationError(RuntimeError):
     """The optional Research Copilot runtime could not complete safely."""
+
+
+class _WorkflowStepLike(Protocol):
+    @property
+    def error(self) -> str | None: ...
+
+
+class _WorkflowLike(Protocol):
+    @property
+    def steps(self) -> tuple[_WorkflowStepLike, ...]: ...
+
+
+class _ResearchResultLike(Protocol):
+    @property
+    def workflow(self) -> _WorkflowLike: ...
+
+    @property
+    def synthesis_error(self) -> str | None: ...
 
 
 def evaluate_ai_capability(settings: Settings) -> AICapability:
@@ -61,7 +87,12 @@ def evaluate_ai_capability(settings: Settings) -> AICapability:
     return AICapability(available=True, session_storage_mode=settings.session_storage_mode)
 
 
-def run_ai_orchestration(settings: Settings, question: str) -> ResearchQuestionResult:
+def run_ai_orchestration(
+    settings: Settings,
+    question: str,
+    *,
+    timeout_seconds: float | None = None,
+) -> ResearchQuestionResult:
     """Run one durable Research Copilot session using configured local inputs."""
 
     capability = evaluate_ai_capability(settings)
@@ -88,6 +119,7 @@ def run_ai_orchestration(settings: Settings, question: str) -> ResearchQuestionR
             evidence=Path(settings.evidence_records_path),
             llm=OllamaLLM(model=model, host=settings.ollama_host),
             ke_executable=executable,
+            timeout_seconds=timeout_seconds,
         )
     except Exception as exc:
         # This integration crosses SQLite, subprocess, file, and local-model
@@ -100,6 +132,42 @@ def run_ai_orchestration(settings: Settings, question: str) -> ResearchQuestionR
     finally:
         if connection is not None:
             connection.close()
+
+
+def run_guarded_ai_orchestration(
+    settings: Settings,
+    question: str,
+    *,
+    client_key: str,
+    guard: AIRequestGuard | None = None,
+) -> ResearchQuestionResult:
+    """Admit and run one bounded Research Copilot request."""
+
+    request_guard = guard if guard is not None else _GLOBAL_AI_REQUEST_GUARD
+    with request_guard.admit(
+        client_key,
+        max_concurrent_requests=settings.ai_max_concurrent_requests,
+        rate_limit_requests=settings.ai_rate_limit_requests,
+        rate_limit_window_seconds=settings.ai_rate_limit_window_seconds,
+    ):
+        return run_ai_orchestration(
+            settings,
+            question,
+            timeout_seconds=settings.ai_request_timeout_seconds,
+        )
+
+
+def result_reached_execution_limit(result: _ResearchResultLike) -> bool:
+    """Return whether durable workflow state records an execution timeout."""
+
+    errors = [
+        error
+        for step in result.workflow.steps
+        if (error := getattr(step, "error", None)) is not None
+    ]
+    if result.synthesis_error:
+        errors.append(result.synthesis_error)
+    return any(fragment in error for error in errors for fragment in _EXECUTION_TIMEOUT_FRAGMENTS)
 
 
 def _unavailable(reason_code: str) -> AICapability:
@@ -170,5 +238,7 @@ __all__ = [
     "AICapability",
     "AIOrchestrationError",
     "evaluate_ai_capability",
+    "result_reached_execution_limit",
     "run_ai_orchestration",
+    "run_guarded_ai_orchestration",
 ]

@@ -253,6 +253,18 @@ th {
   cursor: pointer;
 }
 
+.ask-form button[aria-busy="true"] {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.ask-running-status {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
 .ask-form .ask-synthesize-toggle {
   display: flex;
   align-items: center;

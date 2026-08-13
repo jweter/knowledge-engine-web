@@ -10,6 +10,7 @@ consuming process, not `core` itself.
 
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,5 +37,9 @@ class Settings(BaseSettings):
     session_storage_mode: Literal["local", "persistent"] = "local"
     session_persistent_root: str | None = None
     ke_executable: str = "ke"
+    ai_request_timeout_seconds: float = Field(default=180.0, gt=0)
+    ai_max_concurrent_requests: int = Field(default=1, gt=0)
+    ai_rate_limit_requests: int = Field(default=3, gt=0)
+    ai_rate_limit_window_seconds: float = Field(default=600.0, gt=0)
 
     model_config = SettingsConfigDict(env_prefix="KE_WEB_", env_file=".env", extra="ignore")

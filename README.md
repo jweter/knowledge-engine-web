@@ -126,6 +126,9 @@ server configuration details. See
 Persistent deployments must additionally place the Research Session database
 inside an explicitly configured persistent mount; see
 [`docs/ai_o15_deployed_session_persistence.md`](docs/ai_o15_deployed_session_persistence.md).
+AI-O16 bounds the optional compute path with a shared execution deadline,
+single-process concurrency ceiling, and small per-client fixed-window limit;
+see [`docs/ai_o16_public_endpoint_guardrails.md`](docs/ai_o16_public_endpoint_guardrails.md).
 
 By default this binds to `127.0.0.1:8000` (local machine only). To
 serve on a local network, or run as a persistent systemd service, see
@@ -276,8 +279,9 @@ The first three shared tasks are:
   verification, sourced citations, and close gate on fully configured local or
   LAN deployments (AI-O14 complete). The hosted Render alpha remains
   retrieval-only. AI-O15 now fails closed unless deployed sessions use a real
-  persistent mount; core runtime, hosted inference, and AI-O16 operator
-  controls remain deliberately unresolved.
+  persistent mount, and AI-O16 adds bounded execution, concurrency/rate
+  controls, and an honest waiting/failure experience. Core runtime, a paid
+  persistent disk, and secured hosted inference remain operator prerequisites.
 - `GET /dashboard` -- a corpus-wide Evidence Intelligence dashboard:
   the distribution of Evidence Quality scores and Claim Confidence
   reliability tiers across every claim with evidence configured (done;
