@@ -335,6 +335,10 @@ resume boundary are recorded in
 `docs/ai_o15_deployed_session_persistence.md`. AI-O16 is implemented in
 `docs/ai_o16_public_endpoint_guardrails.md`: one shared execution deadline,
 process-local concurrency/rate controls, and explicit waiting/timeout UX.
+AI-O17 is implemented in `docs/ai_o17_live_verification.md`: the complete local
+Web-to-AI-to-Core path passed its independent workflow, citation, and
+contradiction gates, and Web now withholds generated drafts whenever that gate
+does not pass. This verification does not enable the Render alpha.
 
 ## Architecture
 
