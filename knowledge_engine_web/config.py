@@ -8,6 +8,8 @@ under this project's own `KE_WEB_` prefix -- this is a distinct
 consuming process, not `core` itself.
 """
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +33,8 @@ class Settings(BaseSettings):
     # SQLite database directly and does not depend on these settings.
     sources_path: str | None = None
     session_db_path: str = "data/research_sessions.db"
+    session_storage_mode: Literal["local", "persistent"] = "local"
+    session_persistent_root: str | None = None
     ke_executable: str = "ke"
 
     model_config = SettingsConfigDict(env_prefix="KE_WEB_", env_file=".env", extra="ignore")

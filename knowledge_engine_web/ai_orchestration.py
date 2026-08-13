@@ -31,6 +31,7 @@ class AICapability:
     available: bool
     reason_code: str | None = None
     visitor_message: str | None = None
+    session_storage_mode: str | None = None
 
 
 class AIOrchestrationError(RuntimeError):
@@ -54,9 +55,10 @@ def evaluate_ai_capability(settings: Settings) -> AICapability:
         return _unavailable("evidence_unavailable")
     if _resolve_executable(settings.ke_executable) is None:
         return _unavailable("core_cli_unavailable")
-    if not _session_store_is_usable(Path(settings.session_db_path)):
-        return _unavailable("session_store_unavailable")
-    return AICapability(available=True)
+    session_capability = _evaluate_session_storage(settings)
+    if not session_capability.available:
+        return session_capability
+    return AICapability(available=True, session_storage_mode=settings.session_storage_mode)
 
 
 def run_ai_orchestration(settings: Settings, question: str) -> ResearchQuestionResult:
@@ -130,6 +132,38 @@ def _session_store_is_usable(path: Path) -> bool:
     if path.exists():
         return path.is_file() and os.access(path, os.W_OK)
     return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
+def _evaluate_session_storage(settings: Settings) -> AICapability:
+    database_path = Path(settings.session_db_path)
+    if settings.session_storage_mode == "local":
+        if not _session_store_is_usable(database_path):
+            return _unavailable("session_store_unavailable")
+        return AICapability(available=True, session_storage_mode="local")
+
+    persistent_root_value = settings.session_persistent_root
+    if persistent_root_value is None or not persistent_root_value.strip():
+        return _unavailable("persistent_session_root_unavailable")
+
+    persistent_root = Path(persistent_root_value.strip())
+    if not persistent_root.is_absolute() or not database_path.is_absolute():
+        return _unavailable("persistent_session_path_invalid")
+    if not persistent_root.is_dir() or not os.access(persistent_root, os.W_OK):
+        return _unavailable("persistent_session_root_unavailable")
+
+    try:
+        resolved_root = persistent_root.resolve(strict=True)
+        resolved_database = database_path.resolve(strict=False)
+    except OSError:
+        return _unavailable("persistent_session_path_invalid")
+
+    if resolved_database == resolved_root or not resolved_database.is_relative_to(resolved_root):
+        return _unavailable("persistent_session_path_invalid")
+
+    if not _session_store_is_usable(database_path):
+        return _unavailable("session_store_unavailable")
+
+    return AICapability(available=True, session_storage_mode="persistent")
 
 
 __all__ = [

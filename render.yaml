@@ -15,3 +15,13 @@ services:
         sync: false
       - key: KE_WEB_ALPHA_PASSWORD
         sync: false
+      # AI-O15: public Research Copilot must fail closed unless an operator
+      # provisions a real Render persistent disk mounted at /var/data. These
+      # settings do not create or purchase that disk; without it, /ask remains
+      # retrieval-only even if the other AI settings are added later.
+      - key: KE_WEB_SESSION_STORAGE_MODE
+        value: persistent
+      - key: KE_WEB_SESSION_PERSISTENT_ROOT
+        value: /var/data
+      - key: KE_WEB_SESSION_DB_PATH
+        value: /var/data/research_sessions.sqlite3

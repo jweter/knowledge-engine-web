@@ -321,6 +321,20 @@ core runtime, durable session storage, or hosted inference required by the
 gate. See `docs/ai_o14_capability_gated_ask.md` for the exact contract and the
 AI-O15 handoff.
 
+### AI-O15: deployed Research Session persistence
+
+AI-O15 is complete. Local development retains a local SQLite default. A
+persistent deployment must explicitly select `persistent` mode and place the
+session database inside a configured, writable persistent root; canonical
+resolution rejects traversal and symlink escape. The Render blueprint declares
+that contract at `/var/data` but does not provision a paid disk, so the public
+alpha remains retrieval-only until an operator attaches and verifies one.
+
+The decision, Render procedure, data sensitivity, scaling constraints, and
+resume boundary are recorded in
+`docs/ai_o15_deployed_session_persistence.md`. AI-O16 is the next implementation
+milestone.
+
 ## Architecture
 
 As originally scoped for the first slice (`config.py`, `graph_reader.py`,
