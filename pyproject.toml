@@ -25,8 +25,9 @@ sqlalchemy = "^2.0.31"
 # integration" section for why, and knowledge-engine-ai's
 # docs/web_integration_design.md for the real dependency-weight cost
 # this adds (core's full stack, torch included, once `ke` needs to run
-# as a subprocess) -- deferred to AI-O16, not solved by this step.
-knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "6e5693c09a80768e7d4f47fca608b70c2f6664ec" }
+# as a subprocess). AI-O16 bounds that runtime but does not make it part
+# of the current Render image or provision hosted inference.
+knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "108ff2a0da91b6e1c1924ab12034a696f55029c1" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"

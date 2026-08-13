@@ -94,9 +94,9 @@ not ship `sources.csv`, the core `ke` runtime, a durable Research Session store,
 or an authenticated hosted Ollama service. AI-O14 does not solve those operator
 decisions by quietly inflating the image or exposing a laptop model endpoint.
 
-AI-O15 must decide durable hosted session storage before public Research
-Copilot is enabled. AI-O16 then owns timeouts, concurrency, rate limits, and the
-deployment weight of core. A hosted inference service still requires its own
+AI-O15 decided durable hosted session storage, and AI-O16 now owns the bounded
+execution, concurrency, rate-limit, and waiting/failure contract. A hosted
+inference service still requires its own
 authentication, privacy, provenance, and cost controls.
 
 ## Testing
@@ -123,6 +123,7 @@ AI-O14 does not:
 ## Next Handoff
 
 AI-O15 is complete: deployed Research Sessions require a canonically contained
-persistent mount, while local development may use local SQLite. See
-`docs/ai_o15_deployed_session_persistence.md`. AI-O16 is next: bound execution
-time and request concurrency before public Research Copilot is enabled.
+persistent mount, while local development may use local SQLite. AI-O16 is also
+implemented: one shared execution deadline, process-local admission controls,
+and honest waiting/failure UX. See `docs/ai_o15_deployed_session_persistence.md`
+and `docs/ai_o16_public_endpoint_guardrails.md`.

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, MetaData, Table, insert, text
 
 from knowledge_engine_web import main
+from knowledge_engine_web.ai_guardrails import AIAdmissionError
 from knowledge_engine_web.ai_orchestration import AICapability, AIOrchestrationError
 from knowledge_engine_web.main import app
 from tests._fixtures import build_engine, create_graph_tables, create_papers_table
@@ -1539,8 +1540,10 @@ def test_ask_form_enables_copilot_when_runtime_is_available(
 
     assert response.status_code == 200
     assert 'name="synthesize" value="1"' in response.text
-    assert "disabled" not in response.text
+    assert 'type="checkbox" disabled' not in response.text
     assert "Also run Research Copilot" in response.text
+    assert 'id="ask-running-status"' in response.text
+    assert 'aria-busy", "true"' in response.text
 
 
 def test_ask_unconfigured_synthesis_request_degrades_to_retrieval_only(
@@ -1553,8 +1556,8 @@ def test_ask_unconfigured_synthesis_request_degrades_to_retrieval_only(
     monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _unavailable_capability())
     monkeypatch.setattr(
         main,
-        "run_ai_orchestration",
-        lambda settings, question: pytest.fail("unavailable runtime must not be invoked"),
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: pytest.fail("unavailable runtime must not be invoked"),
     )
 
     response = TestClient(app).get(
@@ -1577,7 +1580,11 @@ def test_ask_synthesize_renders_the_research_copilot_result(
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
     monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
-    monkeypatch.setattr(main, "run_ai_orchestration", lambda settings, question: _copilot_result())
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: _copilot_result(),
+    )
 
     response = TestClient(app).get(
         "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
@@ -1601,9 +1608,13 @@ def test_ask_copilot_result_marks_an_incomplete_workflow(
     monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
     result = _copilot_result()
-    result.workflow = SimpleNamespace(steps=(SimpleNamespace(succeeded=False),))
+    result.workflow = SimpleNamespace(steps=(SimpleNamespace(succeeded=False, error="failed"),))
     monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
-    monkeypatch.setattr(main, "run_ai_orchestration", lambda settings, question: result)
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: result,
+    )
 
     response = TestClient(app).get(
         "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
@@ -1624,13 +1635,13 @@ def test_ask_synthesize_reports_a_sanitized_copilot_error_inline(
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
     monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
 
-    def fail(settings: object, question: str) -> None:
+    def fail(settings: object, question: str, **kwargs: object) -> None:
         raise AIOrchestrationError(
             "Research Copilot could not complete this request. "
             "Deterministic retrieval results are still shown below."
         )
 
-    monkeypatch.setattr(main, "run_ai_orchestration", fail)
+    monkeypatch.setattr(main, "run_guarded_ai_orchestration", fail)
 
     response = TestClient(app).get(
         "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
@@ -1638,6 +1649,65 @@ def test_ask_synthesize_reports_a_sanitized_copilot_error_inline(
 
     assert response.status_code == 200
     assert "Research Copilot could not complete this request" in response.text
+    assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
+
+
+def test_ask_reports_admission_rejection_without_hiding_retrieval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+
+    def reject(settings: object, question: str, **kwargs: object) -> None:
+        raise AIAdmissionError(
+            "rate_limit_reached",
+            "Research Copilot has received too many requests recently. Please wait and try again.",
+        )
+
+    monkeypatch.setattr(main, "run_guarded_ai_orchestration", reject)
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "too many requests recently" in response.text
+    assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
+
+
+def test_ask_reports_timeout_and_keeps_the_durable_session_visible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    result = _copilot_result()
+    result.workflow = SimpleNamespace(
+        steps=(
+            SimpleNamespace(
+                succeeded=False,
+                error="`ke evidence-report` exceeded the configured execution time limit.",
+            ),
+        )
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: result,
+    )
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "reached its execution time limit" in response.text
+    assert "session-123" in response.text
     assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
 
 

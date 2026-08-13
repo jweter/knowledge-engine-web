@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pytest
 from knowledge_engine_ai.sessions.repository import SessionRepository, new_connection
+from pydantic import ValidationError
 
 from knowledge_engine_web import ai_orchestration
 from knowledge_engine_web.ai_orchestration import run_ai_orchestration
@@ -75,7 +76,14 @@ _EVIDENCE_REPORT_PAYLOAD = {
 
 
 class _FakeLLM:
-    def generate(self, prompt: str, *, max_tokens: int = 400) -> str:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 400,
+        timeout_seconds: float | None = None,
+    ) -> str:
+        del timeout_seconds
         assert "does semaglutide reduce body weight" in prompt
         return "Semaglutide reduced body weight [ev-1]."
 
@@ -164,23 +172,49 @@ def test_settings_new_fields_default_to_none_and_a_local_data_path() -> None:
     assert settings.session_storage_mode == "local"
     assert settings.session_persistent_root is None
     assert settings.ke_executable == "ke"
+    assert settings.ai_request_timeout_seconds == 180.0
+    assert settings.ai_max_concurrent_requests == 1
+    assert settings.ai_rate_limit_requests == 3
+    assert settings.ai_rate_limit_window_seconds == 600.0
 
 
 @pytest.mark.parametrize(
-    ("env_var", "value", "attribute"),
+    ("env_var", "value", "attribute", "expected"),
     [
-        ("KE_WEB_SOURCES_PATH", "/tmp/x/sources.csv", "sources_path"),
-        ("KE_WEB_SESSION_DB_PATH", "/tmp/x/sessions.db", "session_db_path"),
-        ("KE_WEB_SESSION_STORAGE_MODE", "persistent", "session_storage_mode"),
-        ("KE_WEB_SESSION_PERSISTENT_ROOT", "/tmp/x", "session_persistent_root"),
-        ("KE_WEB_KE_EXECUTABLE", "/tmp/x/ke", "ke_executable"),
+        ("KE_WEB_SOURCES_PATH", "/tmp/x/sources.csv", "sources_path", "/tmp/x/sources.csv"),
+        ("KE_WEB_SESSION_DB_PATH", "/tmp/x/sessions.db", "session_db_path", "/tmp/x/sessions.db"),
+        ("KE_WEB_SESSION_STORAGE_MODE", "persistent", "session_storage_mode", "persistent"),
+        ("KE_WEB_SESSION_PERSISTENT_ROOT", "/tmp/x", "session_persistent_root", "/tmp/x"),
+        ("KE_WEB_KE_EXECUTABLE", "/tmp/x/ke", "ke_executable", "/tmp/x/ke"),
+        ("KE_WEB_AI_REQUEST_TIMEOUT_SECONDS", "45", "ai_request_timeout_seconds", 45.0),
+        ("KE_WEB_AI_MAX_CONCURRENT_REQUESTS", "2", "ai_max_concurrent_requests", 2),
+        ("KE_WEB_AI_RATE_LIMIT_REQUESTS", "4", "ai_rate_limit_requests", 4),
+        ("KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS", "30", "ai_rate_limit_window_seconds", 30.0),
     ],
 )
 def test_settings_new_fields_read_from_env(
-    monkeypatch: pytest.MonkeyPatch, env_var: str, value: str, attribute: str
+    monkeypatch: pytest.MonkeyPatch,
+    env_var: str,
+    value: str,
+    attribute: str,
+    expected: object,
 ) -> None:
     monkeypatch.setenv(env_var, value)
 
     settings = Settings(_env_file=None)
 
-    assert getattr(settings, attribute) == value
+    assert getattr(settings, attribute) == expected
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("ai_request_timeout_seconds", 0),
+        ("ai_max_concurrent_requests", 0),
+        ("ai_rate_limit_requests", 0),
+        ("ai_rate_limit_window_seconds", 0),
+    ],
+)
+def test_ai_guardrail_settings_must_be_positive(field: str, value: int) -> None:
+    with pytest.raises(ValidationError):
+        Settings.model_validate({field: value})

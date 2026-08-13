@@ -20,10 +20,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine, create_engine
 
+from knowledge_engine_web.ai_guardrails import AIAdmissionError
 from knowledge_engine_web.ai_orchestration import (
     AIOrchestrationError,
     evaluate_ai_capability,
-    run_ai_orchestration,
+    result_reached_execution_limit,
+    run_guarded_ai_orchestration,
 )
 from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
@@ -657,7 +659,20 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
     copilot_error: str | None = None
     if synthesize_requested:
         try:
-            copilot_result = run_ai_orchestration(settings, question)
+            client_key = request.client.host if request.client is not None else "unknown"
+            copilot_result = run_guarded_ai_orchestration(
+                settings,
+                question,
+                client_key=client_key,
+            )
+            if result_reached_execution_limit(copilot_result):
+                copilot_error = (
+                    "Research Copilot reached its execution time limit. The durable session "
+                    "records the incomplete workflow; deterministic retrieval results are "
+                    "still shown below."
+                )
+        except AIAdmissionError as exc:
+            copilot_error = exc.visitor_message
         except AIOrchestrationError as exc:
             copilot_error = str(exc)
 

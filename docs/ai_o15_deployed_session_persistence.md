@@ -132,7 +132,8 @@ AI-O15 does not:
 
 ## Next Handoff
 
-AI-O16: guard the real compute-bearing endpoint with bounded execution,
-concurrency/rate controls, and an honest in-progress/failure experience. The
-hosted-inference decision remains a separate prerequisite before AI-O17 can
-claim a public end-to-end Research Copilot run.
+AI-O16 is implemented in `docs/ai_o16_public_endpoint_guardrails.md`: the real
+compute-bearing endpoint has bounded execution, process-local concurrency/rate
+controls, and an honest in-progress/failure experience. The hosted-inference
+decision remains a separate prerequisite before AI-O17 can claim a public
+end-to-end Research Copilot run.

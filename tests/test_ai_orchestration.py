@@ -7,10 +7,13 @@ from types import SimpleNamespace
 import pytest
 
 from knowledge_engine_web import ai_orchestration
+from knowledge_engine_web.ai_guardrails import AIRequestGuard
 from knowledge_engine_web.ai_orchestration import (
     AIOrchestrationError,
     evaluate_ai_capability,
+    result_reached_execution_limit,
     run_ai_orchestration,
+    run_guarded_ai_orchestration,
 )
 from knowledge_engine_web.config import Settings
 
@@ -210,6 +213,15 @@ def test_render_blueprint_requires_persistent_session_storage() -> None:
     assert "value: /var/data" in blueprint
 
 
+def test_render_blueprint_declares_ai_o16_guardrail_defaults() -> None:
+    blueprint = (Path(__file__).parents[1] / "render.yaml").read_text(encoding="utf-8")
+
+    assert "KE_WEB_AI_REQUEST_TIMEOUT_SECONDS" in blueprint
+    assert "KE_WEB_AI_MAX_CONCURRENT_REQUESTS" in blueprint
+    assert "KE_WEB_AI_RATE_LIMIT_REQUESTS" in blueprint
+    assert "KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS" in blueprint
+
+
 def test_run_ai_orchestration_wires_current_settings_and_closes_connection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -238,6 +250,65 @@ def test_run_ai_orchestration_wires_current_settings_and_closes_connection(
     assert captured["evidence"] == Path(settings.evidence_records_path or "")
     assert captured["ke_executable"] == sys.executable
     assert captured["model"] == "qwen2.5:1.5b"
+
+
+def test_guarded_orchestration_passes_the_configured_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _ready_settings(tmp_path)
+    settings = Settings(
+        _env_file=None,
+        **(settings.model_dump() | {"ai_request_timeout_seconds": 42.0}),
+    )
+    captured: dict[str, object] = {}
+    expected = SimpleNamespace(session_id="session-123")
+
+    def fake_run(
+        settings: Settings,
+        question: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> object:
+        captured["question"] = question
+        captured["timeout_seconds"] = timeout_seconds
+        return expected
+
+    monkeypatch.setattr(ai_orchestration, "run_ai_orchestration", fake_run)
+
+    result = run_guarded_ai_orchestration(
+        settings,
+        "question",
+        client_key="client-a",
+        guard=AIRequestGuard(),
+    )
+
+    assert result.session_id == "session-123"
+    assert captured == {"question": "question", "timeout_seconds": 42.0}
+
+
+def test_result_detects_a_durable_workflow_timeout() -> None:
+    timed_out = SimpleNamespace(
+        workflow=SimpleNamespace(
+            steps=(
+                SimpleNamespace(
+                    error="`ke evidence-report` exceeded the configured execution time limit."
+                ),
+            )
+        ),
+        synthesis_error=None,
+    )
+    complete = SimpleNamespace(
+        workflow=SimpleNamespace(steps=(SimpleNamespace(error=None),)),
+        synthesis_error=None,
+    )
+    model_timed_out = SimpleNamespace(
+        workflow=SimpleNamespace(steps=(SimpleNamespace(error=None),)),
+        synthesis_error="Ollama at a private endpoint did not respond within 42s.",
+    )
+
+    assert result_reached_execution_limit(timed_out)
+    assert result_reached_execution_limit(model_timed_out)
+    assert not result_reached_execution_limit(complete)
 
 
 def test_run_ai_orchestration_sanitizes_runtime_failures(

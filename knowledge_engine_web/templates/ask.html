@@ -14,7 +14,7 @@
   does not become new evidence or scientific review.
 </p>
 
-<form method="get" action="/ask" class="ask-form">
+<form method="get" action="/ask" class="ask-form" id="ask-form">
   <label for="q">Question</label>
   <input
     type="text"
@@ -35,7 +35,11 @@
     Research Copilot unavailable on this deployment; Ask is retrieval-only.
   </label>
   {% endif %}
-  <button type="submit">Ask</button>
+  <button type="submit" id="ask-submit">Ask</button>
+  <p class="ask-running-status" id="ask-running-status" role="status" aria-live="polite" hidden>
+    Research Copilot is running. Retrieval, synthesis, and verification may take a few minutes.
+    Deterministic retrieval will remain available if it cannot complete.
+  </p>
 </form>
 
 {% if synthesis_unavailable_notice %}
@@ -54,7 +58,8 @@
   </p>
   {% if copilot_error %}
   <p class="empty-state">{{ copilot_error }}</p>
-  {% elif copilot_result %}
+  {% endif %}
+  {% if copilot_result %}
   {% set failed_steps = copilot_result.workflow.steps | rejectattr('succeeded') | list %}
   <p>
     <strong>Session:</strong> <code>{{ copilot_result.session_id }}</code><br />
@@ -89,7 +94,7 @@
     {% endfor %}
   </ul>
   {% endif %}
-  {% else %}
+  {% elif not copilot_error %}
   <p class="empty-state">No Research Copilot result was returned.</p>
   {% endif %}
 </section>
@@ -151,4 +156,20 @@
 <p class="empty-state">No relevant papers found in the indexed corpus.</p>
 {% endif %}
 {% endif %}
+<script>
+  (() => {
+    const form = document.getElementById("ask-form");
+    const submit = document.getElementById("ask-submit");
+    const status = document.getElementById("ask-running-status");
+    if (!form || !submit || !status) return;
+    form.addEventListener("submit", () => {
+      const copilot = form.querySelector('input[name="synthesize"]:checked');
+      if (!copilot) return;
+      submit.disabled = true;
+      submit.setAttribute("aria-busy", "true");
+      submit.textContent = "Working";
+      status.hidden = false;
+    });
+  })();
+</script>
 {% endblock %}

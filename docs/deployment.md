@@ -30,6 +30,10 @@ export KE_WEB_SESSION_DB_PATH="/path/to/data/research_sessions.db"
 export KE_WEB_SESSION_STORAGE_MODE="local"
 export KE_WEB_KE_EXECUTABLE="/path/to/core/.venv/bin/ke"
 export KE_WEB_LLM_MODEL="qwen2.5:1.5b"  # final optional Research Copilot prerequisite
+export KE_WEB_AI_REQUEST_TIMEOUT_SECONDS="180"
+export KE_WEB_AI_MAX_CONCURRENT_REQUESTS="1"
+export KE_WEB_AI_RATE_LIMIT_REQUESTS="3"
+export KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS="600"
 poetry run knowledge-engine-web
 ```
 
@@ -38,6 +42,13 @@ Evidence Records, `ke` executable, and writable session-store location are all
 available. The static check does not contact Ollama or create state merely to
 render a form. Once requested, Ollama and core runtime failures are sanitized
 and retrieval remains visible. See `docs/ai_o14_capability_gated_ask.md`.
+
+AI-O16 applies one shared deadline to core subprocesses and Ollama generation,
+admits only the configured number of concurrent Research Copilot runs, and uses
+a small process-local per-client fixed-window limit. These controls are suitable
+for the current single-instance, password-gated alpha; they are not distributed
+abuse prevention. Busy, limited, and timed-out attempts leave deterministic
+retrieval visible. See `docs/ai_o16_public_endpoint_guardrails.md`.
 
 This works for local-network serving, but not for the Render alpha hosting
 below: a laptop or self-hosted machine cannot durably run Ollama *for* Render's
@@ -67,14 +78,10 @@ local model endpoint.
 
 `0.0.0.0` binds every network interface on the host -- reachable from
 other machines on the same local network at `http://<host-ip>:8000`.
-This project has no authentication, rate-limiting, or write access of
-any kind (see `docs/web_design.md`'s Out of Scope), so treat this as
-trusted-network-only. It is explicitly **not** a hardening story for
-public internet exposure -- that remains deliberately out of scope
-until there is real concurrent read+write traffic to design against
-(the same "verify against real data before designing" discipline this
-project follows everywhere else), not something to scaffold
-speculatively now.
+The optional Research Copilot path has process-local admission controls, but
+local-network operation should still be treated as trusted-network-only unless
+the alpha credentials are configured. These controls are not a general public
+internet hardening story and do not make an unauthenticated Ollama endpoint safe.
 
 ## Running it as a systemd service
 
