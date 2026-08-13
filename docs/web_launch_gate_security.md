@@ -23,8 +23,8 @@ That is not an acceptable deployment boundary.
 - Starlette is a direct dependency on the 1.6 release line. The direct
   constraint makes the audited security floor visible in project metadata.
 - `knowledge-engine-ai` is pinned to commit
-  `1cdbeb8b64749605f67b57fbc801b2eab37ccfce`, the reviewed AI-O12 package
-  revision already represented by the previous lockfile.
+  `6e5693c09a80768e7d4f47fca608b70c2f6664ec`, the merged AI launch-gate
+  revision that removes its obsolete vulnerable Click dependency.
 - Dependabot checks Python, GitHub Actions, and Docker dependencies weekly.
 - CI audits the resolved Python environment with `pip-audit` on every pull
   request and push to `main`.

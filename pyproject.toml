@@ -26,7 +26,7 @@ sqlalchemy = "^2.0.31"
 # docs/web_integration_design.md for the real dependency-weight cost
 # this adds (core's full stack, torch included, once `ke` needs to run
 # as a subprocess) -- deferred to AI-O16, not solved by this step.
-knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "1cdbeb8b64749605f67b57fbc801b2eab37ccfce" }
+knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "6e5693c09a80768e7d4f47fca608b70c2f6664ec" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"
