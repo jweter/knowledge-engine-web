@@ -183,6 +183,11 @@ This project reads, but never writes, three kinds of `core` data:
 
 ## Roadmap
 
+The deployment dependency boundary and its remaining public-launch gates are
+documented in [`docs/web_launch_gate_security.md`](docs/web_launch_gate_security.md).
+Runtime dependencies are locked, the AI package is pinned to an immutable
+commit, and Dependabot monitors Python, GitHub Actions, and Docker dependencies.
+
 The project family now follows one ordered path: unify the public showcase and
 this live alpha into one truthful journey; benchmark and improve Ask retrieval;
 complete one defensible GLP-1/body-weight evidence map; build structured
