@@ -80,14 +80,16 @@ def _write_evidence(path: Path) -> None:
 
 def _benchmark_payload() -> dict[str, object]:
     return {
-        "schema_version": 1,
-        "benchmark_id": "test-benchmark-v1",
+        "schema_version": 2,
+        "benchmark_id": "test-benchmark-v2",
         "description": "A deterministic test benchmark.",
         "top_k": 3,
         "rank_depth": 10,
+        "gated_domain_ids": ["metabolic_health"],
         "questions": [
             {
                 "question_id": "weight-loss",
+                "domain_id": "metabolic_health",
                 "question": "Does semaglutide reduce body weight?",
                 "expected_results": [
                     {
@@ -155,7 +157,7 @@ def test_load_benchmark_normalizes_dois(tmp_path: Path) -> None:
     assert question.acceptable_secondary_dois == ("10.1000/secondary",)
 
 
-@pytest.mark.parametrize("schema_version", [True, 2, "1", None])
+@pytest.mark.parametrize("schema_version", [True, 3, "2", None])
 def test_load_benchmark_rejects_unsupported_schema_versions(
     tmp_path: Path, schema_version: object
 ) -> None:
@@ -165,6 +167,33 @@ def test_load_benchmark_rejects_unsupported_schema_versions(
     _write_benchmark(path, payload)
 
     with pytest.raises(RetrievalBenchmarkError, match="Unsupported benchmark schema_version"):
+        load_benchmark(path)
+
+
+def test_load_benchmark_preserves_version_1_compatibility(tmp_path: Path) -> None:
+    path = tmp_path / "benchmark.json"
+    payload = _benchmark_payload()
+    payload["schema_version"] = 1
+    payload.pop("gated_domain_ids")
+    questions = payload["questions"]
+    assert isinstance(questions, list)
+    questions[0].pop("domain_id")
+    _write_benchmark(path, payload)
+
+    benchmark = load_benchmark(path)
+
+    assert benchmark.schema_version == 1
+    assert benchmark.gated_domain_ids == ("legacy",)
+    assert benchmark.questions[0].domain_id == "legacy"
+
+
+def test_load_benchmark_rejects_unknown_gated_domain(tmp_path: Path) -> None:
+    path = tmp_path / "benchmark.json"
+    payload = _benchmark_payload()
+    payload["gated_domain_ids"] = ["unknown"]
+    _write_benchmark(path, payload)
+
+    with pytest.raises(RetrievalBenchmarkError, match="Unknown gated domain IDs"):
         load_benchmark(path)
 
 
@@ -205,6 +234,61 @@ def test_evaluate_benchmark_reports_rank_metrics_and_evidence_links(tmp_path: Pa
         "secondary",
         "unexpected",
     }
+
+
+def test_evaluate_benchmark_reports_macro_metrics_for_each_domain(tmp_path: Path) -> None:
+    benchmark_path, database_path, evidence_path = _build_benchmark_inputs(tmp_path)
+    payload = json.loads(benchmark_path.read_text(encoding="utf-8"))
+    second_question = dict(payload["questions"][0])
+    second_question["question_id"] = "weight-loss-second-domain"
+    second_question["domain_id"] = "clinical_pharmacology"
+    payload["questions"].append(second_question)
+    payload["gated_domain_ids"].append("clinical_pharmacology")
+    _write_benchmark(benchmark_path, payload)
+
+    evaluation = evaluate_benchmark(
+        load_benchmark(benchmark_path),
+        database_path=database_path,
+        evidence_path=evidence_path,
+    )
+
+    assert evaluation.domain_count == 2
+    assert evaluation.macro_domain_recall_at_k == 1.0
+    assert evaluation.macro_domain_reciprocal_rank in {1.0, 0.5}
+    assert evaluation.regression_gate_passed is True
+    assert [domain.domain_id for domain in evaluation.domains] == [
+        "metabolic_health",
+        "clinical_pharmacology",
+    ]
+
+
+def test_regression_gate_fails_when_a_gated_expected_source_misses_top_k(
+    tmp_path: Path,
+) -> None:
+    benchmark_path, database_path, evidence_path = _build_benchmark_inputs(tmp_path)
+    payload = json.loads(benchmark_path.read_text(encoding="utf-8"))
+    payload["top_k"] = 1
+    payload["questions"][0]["expected_results"].append(
+        {
+            "doi": "10.1000/secondary",
+            "title": "Semaglutide systematic review",
+            "publication_year": 2022,
+            "study_type": "systematic_review_meta_analysis",
+            "citation": "Scientist B. Systematic Review. 2022. doi:10.1000/secondary.",
+            "evidence_record_ids": ["ev-secondary"],
+        }
+    )
+    payload["questions"][0]["acceptable_secondary_dois"] = []
+    _write_benchmark(benchmark_path, payload)
+
+    evaluation = evaluate_benchmark(
+        load_benchmark(benchmark_path),
+        database_path=database_path,
+        evidence_path=evidence_path,
+    )
+
+    assert evaluation.regression_gate_passed is False
+    assert evaluation.domains[0].all_expected_within_top_k is False
 
 
 def test_evaluate_benchmark_does_not_modify_the_database(tmp_path: Path) -> None:
@@ -259,9 +343,14 @@ def test_renderers_are_deterministic_and_machine_readable(tmp_path: Path) -> Non
     rendered = render_evaluation(evaluation)
     payload = json.loads(evaluation_as_json(evaluation))
 
-    assert "Golden retrieval benchmark: test-benchmark-v1" in rendered
+    assert "Golden retrieval benchmark: test-benchmark-v2" in rendered
+    assert "Regression gate: passed (metabolic_health)" in rendered
+    assert "metabolic_health/weight-loss" in rendered
     assert "Expected source ranks:" in rendered
-    assert payload["benchmark_id"] == "test-benchmark-v1"
+    assert payload["benchmark_id"] == "test-benchmark-v2"
+    assert payload["domain_count"] == 1
+    assert payload["macro_domain_recall_at_k"] == 1.0
+    assert payload["regression_gate_passed"] is True
     assert payload["questions"][0]["question_id"] == "weight-loss"
 
 
@@ -305,8 +394,24 @@ def test_committed_benchmark_is_a_retrieval_regression_gate() -> None:
         evidence_path=Path("data/evidence_records.jsonl"),
     )
 
+    assert evaluation.question_count == 12
+    assert evaluation.domain_count == 3
     assert evaluation.mean_recall_at_k == 1.0
-    assert evaluation.mean_reciprocal_rank == 1.0
+    assert evaluation.mean_reciprocal_rank == pytest.approx(11 / 12)
+    assert evaluation.macro_domain_recall_at_k == 1.0
+    assert evaluation.macro_domain_reciprocal_rank == pytest.approx(11 / 12)
+    assert evaluation.regression_gate_passed is True
+    assert set(evaluation.gated_domain_ids) == {
+        "glp1_weight_loss",
+        "oncology_nsclc_checkpoint_inhibitors",
+        "mental_health_mdd_antidepressants",
+    }
+    domain_mrr = {domain.domain_id: domain.mean_reciprocal_rank for domain in evaluation.domains}
+    assert domain_mrr == {
+        "glp1_weight_loss": 1.0,
+        "oncology_nsclc_checkpoint_inhibitors": 0.875,
+        "mental_health_mdd_antidepressants": 0.875,
+    }
     assert all(
         expected.rank is not None and expected.rank <= evaluation.top_k
         for question in evaluation.questions

@@ -376,6 +376,10 @@ This is the recommended next implementation milestone.
   `docs/retrieval_benchmark_design.md`.
 - Done: The first deterministic evidence-aware reranker improves mean Recall@5
   from `0.500` to `1.000` without changing the gold set.
+- Done: benchmark version 2 extends the gate to twelve reviewed questions
+  across GLP-1, NSCLC, and MDD. Every direct source remains within the top five;
+  macro domain Recall@5 is `1.000` and macro domain reciprocal rank is `0.917`.
+  No further ranking change was made without a measured direct-recall defect.
 
 No ranking change belongs in Slice 1.
 

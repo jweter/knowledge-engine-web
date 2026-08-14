@@ -1,12 +1,18 @@
 {
-  "schema_version": 1,
-  "benchmark_id": "glp1-body-weight-golden-questions-v1",
-  "description": "Golden questions for measuring whether Ask retrieves direct, source-linked GLP-1 body-weight evidence ahead of incidental keyword matches.",
+  "schema_version": 2,
+  "benchmark_id": "cross-domain-golden-questions-v2",
+  "description": "Golden questions for measuring whether Ask retrieves direct, source-linked evidence across metabolic health, oncology, and mental health ahead of incidental keyword matches.",
   "top_k": 5,
   "rank_depth": 1000,
+  "gated_domain_ids": [
+    "glp1_weight_loss",
+    "oncology_nsclc_checkpoint_inhibitors",
+    "mental_health_mdd_antidepressants"
+  ],
   "questions": [
     {
       "question_id": "glp1-class-body-weight",
+      "domain_id": "glp1_weight_loss",
       "question": "Do GLP-1 receptor agonists reduce body weight in adults with overweight or obesity?",
       "expected_results": [
         {
@@ -38,6 +44,7 @@
     },
     {
       "question_id": "semaglutide-long-term-effect",
+      "domain_id": "glp1_weight_loss",
       "question": "Does semaglutide produce sustained long-term body-weight reduction in adults with overweight or obesity without diabetes?",
       "expected_results": [
         {
@@ -61,6 +68,7 @@
     },
     {
       "question_id": "semaglutide-randomized-evidence",
+      "domain_id": "glp1_weight_loss",
       "question": "What does randomized trial evidence show about semaglutide and body-weight reduction in adults without diabetes?",
       "expected_results": [
         {
@@ -79,6 +87,7 @@
     },
     {
       "question_id": "semaglutide-duration",
+      "domain_id": "glp1_weight_loss",
       "question": "Is semaglutide-associated weight loss maintained for two to four years in adults with overweight or obesity?",
       "expected_results": [
         {
@@ -99,6 +108,172 @@
         }
       ],
       "acceptable_secondary_dois": ["10.3389/fphar.2022.935823"]
+    },
+    {
+      "question_id": "nsclc-checkpoint-inhibitors-overall-survival",
+      "domain_id": "oncology_nsclc_checkpoint_inhibitors",
+      "question": "Do immune checkpoint inhibitors improve overall survival in adults with advanced non-small-cell lung cancer?",
+      "expected_results": [
+        {
+          "doi": "10.7717/peerj.21402",
+          "title": "Efficacy and safety of Programmed Death Ligand 1 inhibitors versus Programmed Death 1 inhibitors in the first-line treatment of advanced non-small cell lung cancer: a meta-analysis of randomized controlled trials.",
+          "publication_year": 2026,
+          "study_type": "systematic_review_meta_analysis",
+          "citation": "Dang C et al. PeerJ. 2026. doi:10.7717/peerj.21402.",
+          "evidence_record_ids": ["ev-oncology-dang-2026-icichemo-vs-chemo-os-001"]
+        },
+        {
+          "doi": "10.3390/cancers18081239",
+          "title": "Real-World Data on the Effectiveness of Immunotherapy on Advanced NSCLC: A Retrospective Cohort Study.",
+          "publication_year": 2026,
+          "study_type": "cohort_study",
+          "citation": "Katsarolis A et al. Cancers. 2026. doi:10.3390/cancers18081239.",
+          "evidence_record_ids": ["ev-oncology-katsarolis-2026-greek-realworld-os-001"]
+        }
+      ],
+      "acceptable_secondary_dois": [
+        "10.3389/fimmu.2026.1791664",
+        "10.1093/ejcts/ezag028",
+        "10.2340/1651-226x.2026.45827",
+        "10.1016/j.isci.2026.114730",
+        "10.3389/fimmu.2026.1847913"
+      ]
+    },
+    {
+      "question_id": "nsclc-first-line-ici-chemotherapy-os",
+      "domain_id": "oncology_nsclc_checkpoint_inhibitors",
+      "question": "Do PD-1 or PD-L1 inhibitors combined with chemotherapy improve overall survival compared with chemotherapy alone in treatment-naive advanced non-small-cell lung cancer?",
+      "expected_results": [
+        {
+          "doi": "10.7717/peerj.21402",
+          "title": "Efficacy and safety of Programmed Death Ligand 1 inhibitors versus Programmed Death 1 inhibitors in the first-line treatment of advanced non-small cell lung cancer: a meta-analysis of randomized controlled trials.",
+          "publication_year": 2026,
+          "study_type": "systematic_review_meta_analysis",
+          "citation": "Dang C et al. PeerJ. 2026. doi:10.7717/peerj.21402.",
+          "evidence_record_ids": ["ev-oncology-dang-2026-icichemo-vs-chemo-os-001"]
+        }
+      ],
+      "acceptable_secondary_dois": [
+        "10.3389/fimmu.2026.1791664",
+        "10.3390/cancers18081239"
+      ]
+    },
+    {
+      "question_id": "nsclc-liver-metastases-first-line",
+      "domain_id": "oncology_nsclc_checkpoint_inhibitors",
+      "question": "Does first-line PD-1 inhibitor plus chemotherapy improve progression-free and overall survival in adults with driver-negative NSCLC and liver metastases?",
+      "expected_results": [
+        {
+          "doi": "10.3389/fimmu.2026.1791664",
+          "title": "Efficacy of first-line treatment in driver gene-negative non-small cell lung cancer with liver metastases: a Bayesian network meta-analysis.",
+          "publication_year": 2026,
+          "study_type": "systematic_review_meta_analysis",
+          "citation": "Wu W et al. Frontiers in Immunology. 2026. doi:10.3389/fimmu.2026.1791664.",
+          "evidence_record_ids": ["ev-oncology-wu-2026-liver-mets-network-meta-pfs-os-001"]
+        }
+      ],
+      "acceptable_secondary_dois": ["10.7717/peerj.21402"]
+    },
+    {
+      "question_id": "nsclc-stage-ii-perioperative-pembrolizumab",
+      "domain_id": "oncology_nsclc_checkpoint_inhibitors",
+      "question": "Does perioperative pembrolizumab plus chemotherapy improve event-free or overall survival in adults with resectable clinical stage II NSCLC?",
+      "expected_results": [
+        {
+          "doi": "10.1093/ejcts/ezag028",
+          "title": "A Subgroup Analysis of Perioperative Pembrolizumab in Clinical Stage II Non-Small-Cell Lung Cancer from the Randomized KEYNOTE-671 Study.",
+          "publication_year": 2026,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Tsuboi M et al. European Journal of Cardio-Thoracic Surgery. 2026. doi:10.1093/ejcts/ezag028.",
+          "evidence_record_ids": ["ev-oncology-tsuboi-2026-keynote671-stageii-efs-os-001"]
+        }
+      ],
+      "acceptable_secondary_dois": []
+    },
+    {
+      "question_id": "mdd-antidepressants-symptom-severity",
+      "domain_id": "mental_health_mdd_antidepressants",
+      "question": "Do SSRIs and SNRIs reduce depressive symptom severity in adults with major depressive disorder?",
+      "expected_results": [
+        {
+          "doi": "10.1002/npr2.12422",
+          "title": "Antidepressants available in Japan for older people with major depressive disorder: A systematic review and meta-analysis.",
+          "publication_year": 2024,
+          "study_type": "systematic_review_meta_analysis",
+          "citation": "Kishi T et al. Neuropsychopharmacology Reports. 2024. doi:10.1002/npr2.12422.",
+          "evidence_record_ids": ["ev-mh-kishi-2024-japan-older-adults-meta-001"]
+        }
+      ],
+      "acceptable_secondary_dois": [
+        "10.1186/s12888-023-05382-8",
+        "10.7759/cureus.67941",
+        "10.1192/bjp.2025.13",
+        "10.1186/s12888-024-05833-w"
+      ]
+    },
+    {
+      "question_id": "mdd-older-adults-placebo",
+      "domain_id": "mental_health_mdd_antidepressants",
+      "question": "Do antidepressants improve response and depressive symptom severity compared with placebo in older adults with major depressive disorder?",
+      "expected_results": [
+        {
+          "doi": "10.1002/npr2.12422",
+          "title": "Antidepressants available in Japan for older people with major depressive disorder: A systematic review and meta-analysis.",
+          "publication_year": 2024,
+          "study_type": "systematic_review_meta_analysis",
+          "citation": "Kishi T et al. Neuropsychopharmacology Reports. 2024. doi:10.1002/npr2.12422.",
+          "evidence_record_ids": ["ev-mh-kishi-2024-japan-older-adults-meta-001"]
+        }
+      ],
+      "acceptable_secondary_dois": []
+    },
+    {
+      "question_id": "mdd-escitalopram-active-comparators",
+      "domain_id": "mental_health_mdd_antidepressants",
+      "question": "How does escitalopram compare with other antidepressants for response and remission in adults with major depressive disorder?",
+      "expected_results": [
+        {
+          "doi": "10.1186/s12888-023-05382-8",
+          "title": "Escitalopram versus other antidepressive agents for major depressive disorder: a systematic review and meta-analysis.",
+          "publication_year": 2023,
+          "study_type": "systematic_review_meta_analysis",
+          "citation": "Yin J et al. BMC Psychiatry. 2023. doi:10.1186/s12888-023-05382-8.",
+          "evidence_record_ids": ["ev-mh-yin-2023-escitalopram-vs-other-antidepressants-meta-001"]
+        }
+      ],
+      "acceptable_secondary_dois": ["10.1186/s12888-024-05833-w"]
+    },
+    {
+      "question_id": "mdd-inadequate-ssri-response",
+      "domain_id": "mental_health_mdd_antidepressants",
+      "question": "What treatment strategies improve depressive symptoms after an inadequate response to an SSRI or SNRI in adults with major depressive disorder?",
+      "expected_results": [
+        {
+          "doi": "10.1192/bjp.2025.13",
+          "title": "The DEPRE'5 study: pragmatic, multicentre, five-arm, parallel-group randomised controlled trial with blinded assessment to compare treatment strategies in major depression after a failed selective serotonin reuptake inhibitor treatment.",
+          "publication_year": 2025,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Perez V et al. British Journal of Psychiatry. 2025. doi:10.1192/bjp.2025.13.",
+          "evidence_record_ids": ["ev-mh-perez-2025-depre5-second-line-strategies-001"]
+        },
+        {
+          "doi": "10.1038/s41386-024-01862-x",
+          "title": "Efficacy and safety of aticaprant, a kappa receptor antagonist, adjunctive to oral SSRI/SNRI antidepressant in major depressive disorder: results of a phase 2 randomized, double-blind, placebo-controlled study.",
+          "publication_year": 2024,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Schmidt ME et al. Neuropsychopharmacology. 2024. doi:10.1038/s41386-024-01862-x.",
+          "evidence_record_ids": ["ev-mh-schmidt-2024-aticaprant-adjunctive-ssri-snri-rct-001"]
+        },
+        {
+          "doi": "10.1186/s12916-025-03951-0",
+          "title": "Agomelatine as adjunctive therapy with SSRIs or SNRIs for major depressive disorder: a multicentre, double-blind, randomized, placebo-controlled trial.",
+          "publication_year": 2025,
+          "study_type": "randomized_controlled_trial",
+          "citation": "Ju Y et al. BMC Medicine. 2025. doi:10.1186/s12916-025-03951-0.",
+          "evidence_record_ids": ["ev-mh-ju-2025-agomelatine-adjunctive-ssri-snri-rct-001"]
+        }
+      ],
+      "acceptable_secondary_dois": []
     }
   ]
 }

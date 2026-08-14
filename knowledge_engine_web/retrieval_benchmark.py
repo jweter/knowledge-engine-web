@@ -26,7 +26,8 @@ from knowledge_engine_web.evidence_reader import (
 )
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 
-BENCHMARK_SCHEMA_VERSION = 1
+BENCHMARK_SCHEMA_VERSION = 2
+SUPPORTED_BENCHMARK_SCHEMA_VERSIONS = frozenset({1, BENCHMARK_SCHEMA_VERSION})
 
 
 class RetrievalBenchmarkError(RuntimeError):
@@ -50,6 +51,7 @@ class GoldenQuestion:
     """One natural-language question and its direct and secondary source sets."""
 
     question_id: str
+    domain_id: str
     question: str
     expected_results: tuple[ExpectedResult, ...]
     acceptable_secondary_dois: tuple[str, ...]
@@ -64,6 +66,7 @@ class RetrievalBenchmark:
     description: str
     top_k: int
     rank_depth: int
+    gated_domain_ids: tuple[str, ...]
     questions: tuple[GoldenQuestion, ...]
 
 
@@ -92,6 +95,7 @@ class QuestionEvaluation:
     """Deterministic metrics and diagnostics for one question."""
 
     question_id: str
+    domain_id: str
     question: str
     expected_count: int
     expected_found_at_k: int
@@ -103,6 +107,17 @@ class QuestionEvaluation:
 
 
 @dataclass(frozen=True)
+class DomainEvaluation:
+    """Macro metrics for one scientific domain in the benchmark."""
+
+    domain_id: str
+    question_count: int
+    mean_recall_at_k: float
+    mean_reciprocal_rank: float
+    all_expected_within_top_k: bool
+
+
+@dataclass(frozen=True)
 class BenchmarkEvaluation:
     """Aggregate and per-question retrieval results."""
 
@@ -110,8 +125,14 @@ class BenchmarkEvaluation:
     benchmark_id: str
     top_k: int
     question_count: int
+    domain_count: int
     mean_recall_at_k: float
     mean_reciprocal_rank: float
+    macro_domain_recall_at_k: float
+    macro_domain_reciprocal_rank: float
+    gated_domain_ids: tuple[str, ...]
+    regression_gate_passed: bool
+    domains: tuple[DomainEvaluation, ...]
     questions: tuple[QuestionEvaluation, ...]
 
 
@@ -128,7 +149,10 @@ def load_benchmark(path: Path) -> RetrievalBenchmark:
     if not isinstance(payload, dict):
         raise RetrievalBenchmarkError("Benchmark root must be a JSON object.")
     schema_version = payload.get("schema_version")
-    if isinstance(schema_version, bool) or schema_version != BENCHMARK_SCHEMA_VERSION:
+    if (
+        isinstance(schema_version, bool)
+        or schema_version not in SUPPORTED_BENCHMARK_SCHEMA_VERSIONS
+    ):
         raise RetrievalBenchmarkError(f"Unsupported benchmark schema_version: {schema_version!r}.")
 
     benchmark_id = _required_text(payload, "benchmark_id", "benchmark")
@@ -152,6 +176,11 @@ def load_benchmark(path: Path) -> RetrievalBenchmark:
         if question_id in seen_question_ids:
             raise RetrievalBenchmarkError(f"Duplicate question_id: {question_id}")
         seen_question_ids.add(question_id)
+        domain_id = (
+            _required_text(raw_question, "domain_id", context)
+            if schema_version == BENCHMARK_SCHEMA_VERSION
+            else "legacy"
+        )
         question_text = _required_text(raw_question, "question", context)
 
         raw_expected = raw_question.get("expected_results")
@@ -181,18 +210,39 @@ def load_benchmark(path: Path) -> RetrievalBenchmark:
         questions.append(
             GoldenQuestion(
                 question_id=question_id,
+                domain_id=domain_id,
                 question=question_text,
                 expected_results=expected,
                 acceptable_secondary_dois=secondary,
             )
         )
 
+    declared_domain_ids = tuple(dict.fromkeys(question.domain_id for question in questions))
+    if schema_version == BENCHMARK_SCHEMA_VERSION:
+        raw_gated_domains = payload.get("gated_domain_ids")
+        if (
+            not isinstance(raw_gated_domains, list)
+            or not raw_gated_domains
+            or not all(isinstance(value, str) and value.strip() for value in raw_gated_domains)
+        ):
+            raise RetrievalBenchmarkError("gated_domain_ids must contain non-empty domain IDs.")
+        gated_domain_ids = tuple(value.strip() for value in raw_gated_domains)
+        if len(set(gated_domain_ids)) != len(gated_domain_ids):
+            raise RetrievalBenchmarkError("gated_domain_ids must not contain duplicates.")
+        unknown_gated_domains = set(gated_domain_ids) - set(declared_domain_ids)
+        if unknown_gated_domains:
+            unknown = ", ".join(sorted(unknown_gated_domains))
+            raise RetrievalBenchmarkError(f"Unknown gated domain IDs: {unknown}.")
+    else:
+        gated_domain_ids = declared_domain_ids
+
     return RetrievalBenchmark(
-        schema_version=BENCHMARK_SCHEMA_VERSION,
+        schema_version=schema_version,
         benchmark_id=benchmark_id,
         description=description,
         top_k=top_k,
         rank_depth=rank_depth,
+        gated_domain_ids=gated_domain_ids,
         questions=tuple(questions),
     )
 
@@ -230,13 +280,32 @@ def evaluate_benchmark(
         engine.dispose()
 
     count = len(evaluations)
+    domain_evaluations = _evaluate_domains(evaluations, benchmark.top_k)
+    gated_domains = {
+        domain.domain_id: domain
+        for domain in domain_evaluations
+        if domain.domain_id in benchmark.gated_domain_ids
+    }
     return BenchmarkEvaluation(
-        schema_version=BENCHMARK_SCHEMA_VERSION,
+        schema_version=benchmark.schema_version,
         benchmark_id=benchmark.benchmark_id,
         top_k=benchmark.top_k,
         question_count=count,
+        domain_count=len(domain_evaluations),
         mean_recall_at_k=sum(item.recall_at_k for item in evaluations) / count,
         mean_reciprocal_rank=sum(item.reciprocal_rank for item in evaluations) / count,
+        macro_domain_recall_at_k=(
+            sum(item.mean_recall_at_k for item in domain_evaluations) / len(domain_evaluations)
+        ),
+        macro_domain_reciprocal_rank=(
+            sum(item.mean_reciprocal_rank for item in domain_evaluations) / len(domain_evaluations)
+        ),
+        gated_domain_ids=benchmark.gated_domain_ids,
+        regression_gate_passed=all(
+            gated_domains[domain_id].all_expected_within_top_k
+            for domain_id in benchmark.gated_domain_ids
+        ),
+        domains=domain_evaluations,
         questions=tuple(evaluations),
     )
 
@@ -247,14 +316,30 @@ def render_evaluation(evaluation: BenchmarkEvaluation) -> str:
     lines = [
         f"Golden retrieval benchmark: {evaluation.benchmark_id}",
         f"Questions: {evaluation.question_count}",
+        f"Domains: {evaluation.domain_count}",
         f"Mean Recall@{evaluation.top_k}: {evaluation.mean_recall_at_k:.3f}",
         f"Mean reciprocal rank: {evaluation.mean_reciprocal_rank:.3f}",
+        (f"Macro domain Recall@{evaluation.top_k}: {evaluation.macro_domain_recall_at_k:.3f}"),
+        (f"Macro domain reciprocal rank: {evaluation.macro_domain_reciprocal_rank:.3f}"),
+        (
+            "Regression gate: "
+            f"{'passed' if evaluation.regression_gate_passed else 'failed'} "
+            f"({', '.join(evaluation.gated_domain_ids)})"
+        ),
+        "Domain results:",
     ]
+    for domain in evaluation.domains:
+        gate = "all expected within top k" if domain.all_expected_within_top_k else "baseline gaps"
+        lines.append(
+            f"  - {domain.domain_id}: {domain.question_count} question(s), "
+            f"Recall@{evaluation.top_k} {domain.mean_recall_at_k:.3f}, "
+            f"MRR {domain.mean_reciprocal_rank:.3f}, {gate}"
+        )
     for question in evaluation.questions:
         lines.extend(
             [
                 "",
-                f"[{question.question_id}] {question.question}",
+                f"[{question.domain_id}/{question.question_id}] {question.question}",
                 (
                     f"Recall@{evaluation.top_k}: {question.expected_found_at_k}/"
                     f"{question.expected_count} ({question.recall_at_k:.3f})"
@@ -469,6 +554,7 @@ def _evaluate_question(
 
     return QuestionEvaluation(
         question_id=question.question_id,
+        domain_id=question.domain_id,
         question=question.question,
         expected_count=len(expected_dois),
         expected_found_at_k=found_at_k,
@@ -478,6 +564,36 @@ def _evaluate_question(
         expected_ranks=expected_ranks,
         top_results=tuple(ranked_results),
     )
+
+
+def _evaluate_domains(
+    questions: Sequence[QuestionEvaluation], top_k: int
+) -> tuple[DomainEvaluation, ...]:
+    grouped: dict[str, list[QuestionEvaluation]] = {}
+    for question in questions:
+        grouped.setdefault(question.domain_id, []).append(question)
+
+    domains: list[DomainEvaluation] = []
+    for domain_id, domain_questions in grouped.items():
+        count = len(domain_questions)
+        domains.append(
+            DomainEvaluation(
+                domain_id=domain_id,
+                question_count=count,
+                mean_recall_at_k=(
+                    sum(question.recall_at_k for question in domain_questions) / count
+                ),
+                mean_reciprocal_rank=(
+                    sum(question.reciprocal_rank for question in domain_questions) / count
+                ),
+                all_expected_within_top_k=all(
+                    expected.rank is not None and expected.rank <= top_k
+                    for question in domain_questions
+                    for expected in question.expected_ranks
+                ),
+            )
+        )
+    return tuple(domains)
 
 
 if __name__ == "__main__":
