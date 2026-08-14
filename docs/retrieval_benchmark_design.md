@@ -1,4 +1,4 @@
-# Golden-Question Retrieval Benchmark
+# Cross-Domain Golden-Question Retrieval Benchmark
 
 ## Decision
 
@@ -7,10 +7,11 @@ small, versioned set of human-curated scientific questions before changing its
 ranking. The benchmark is deterministic, uses the committed alpha SQLite
 snapshot and Evidence Records file, and never calls an LLM.
 
-This begins Current Project Path goal 2. The first committed result was a
-truthful failing baseline. The follow-up implements the smallest measured
-correction: FTS5 still generates candidates, then stored source-linked evidence
-text deterministically reranks them.
+This began Current Project Path goal 2. The first committed result was a
+truthful failing GLP-1 baseline. The follow-up implemented the smallest
+measured correction: FTS5 still generates candidates, then stored source-linked
+evidence text deterministically reranks them. Version 2 now asks whether that
+same path generalizes across the project's three reviewed scientific domains.
 
 ## Objective
 
@@ -38,31 +39,42 @@ before computing metrics. The benchmark keeps the curated citation year when
 the trimmed alpha snapshot's paper row has no year. Stale or contradictory
 expectations fail explicitly instead of silently changing the gold standard.
 
-## Version 1 Contract
+## Version 2 Contract
 
 `data/retrieval_benchmark.json` contains:
 
-- `schema_version`: integer `1`;
+- `schema_version`: integer `2`;
 - a stable `benchmark_id`;
 - `top_k` and full `rank_depth` evaluation bounds;
+- `gated_domain_ids`, naming domains whose direct expectations must all remain
+  within the top-k regression boundary;
 - natural-language golden questions;
+- one stable `domain_id` per question;
 - direct expected papers with DOI, title, year, study type, citation, and
   Evidence Record IDs;
 - acceptable secondary DOI values that are useful context but do not satisfy
   direct recall.
 
-The first benchmark uses four forms of the GLP-1/body-weight question:
+Version 1 files remain readable as one `legacy` domain and retain their original
+all-questions regression behavior. Writers use version 2.
+
+The benchmark retains four forms of the GLP-1/body-weight question:
 
 - broad drug-class and body-weight effect;
 - long-term semaglutide effect;
 - randomized-evidence summary;
 - two-to-four-year durability.
 
-The direct gold set is deliberately limited to the three sources already
-curated end to end in the public evidence journey: STEP 5, the Gao systematic
-review/meta-analysis, and the SELECT prespecified analysis. Expanding that set
-belongs to Current Project Path goal 3 and requires scientific coverage review,
-not a ranking engineer adding convenient labels.
+It adds four oncology and four mental-health questions selected from Core's
+reviewed golden evidence maps. Questions cover each domain's broad research
+question plus narrower population, comparator, intervention, or treatment-line
+slices. Direct expected sources must answer the exact wording. Reviewed but
+narrower sources may be marked acceptable secondary context; they never count
+as direct recall.
+
+The gold set is deliberately limited to sources curated end to end in reviewed
+golden maps. Expanding it requires scientific coverage review, not a ranking
+engineer adding convenient labels after seeing output.
 
 ## Metrics
 
@@ -75,12 +87,17 @@ not a ranking engineer adding convenient labels.
   relevance by itself.
 - **Expected source ranks:** full observed ranks for every direct expected DOI.
 - **Top-five classification:** `expected`, `secondary`, or `unexpected`.
+- **Macro domain Recall@5 and reciprocal rank:** compute each domain's mean
+  first, then average domains equally so oncology's larger corpus cannot hide
+  weakness in another domain.
+- **Regression gate:** passes only when every direct expected source in every
+  named gated domain remains within the top five.
 
-The initial milestone did not define a passing threshold. The measured
-follow-up now makes the committed benchmark a regression gate: every direct
-expected source must remain within the top five, yielding mean Recall@5 of
-`1.000`. This protects the four reviewed questions; it does not claim broad
-retrieval validity outside them.
+The initial milestone did not define a passing threshold. The measured GLP-1
+follow-up made its four questions a regression gate. Version 2 extends that
+same top-five requirement to all three reviewed domains after recording the
+cross-domain baseline. This protects twelve reviewed questions; it does not
+claim broad retrieval validity outside them.
 
 ## Baseline
 
@@ -170,6 +187,34 @@ The correction materially fixes the broad question and does not regress the
 three specific questions. The exact committed-data result is covered by the
 test suite so a later change cannot silently restore the diagnosed failure.
 
+## Cross-Domain Version 2 Baseline
+
+The version 2 gold set was curated from Core's reviewed GLP-1, NSCLC checkpoint
+inhibitor, and MDD antidepressant evidence maps before changing ranking. It
+contains twelve questions: four per domain. The first run against the published
+alpha snapshot produced:
+
+| Domain | Questions | Mean Recall@5 | Mean reciprocal rank | All direct sources in top 5 |
+| --- | ---: | ---: | ---: | --- |
+| GLP-1/body weight | 4 | 1.000 | 1.000 | yes |
+| NSCLC/checkpoint inhibitors | 4 | 1.000 | 0.875 | yes |
+| MDD/antidepressants | 4 | 1.000 | 0.875 | yes |
+
+Aggregate version 2 baseline:
+
+- mean Recall@5: `1.000`;
+- mean reciprocal rank: `0.917`;
+- macro domain Recall@5: `1.000`;
+- macro domain reciprocal rank: `0.917`;
+- all three domain regression gates: passed.
+
+The non-perfect reciprocal rank is preserved. On each broad non-GLP-1
+question, a narrower but genuinely relevant reviewed golden-map source ranked
+first while every direct source remained within the top three. Those sources
+are labeled secondary context, not silently promoted into the direct gold set.
+Because the measured baseline found no direct-recall failure, this milestone
+makes no ranking change.
+
 ## Trust Boundaries
 
 - No LLM is called.
@@ -182,8 +227,8 @@ test suite so a later change cannot silently restore the diagnosed failure.
 
 ## Known Limitations
 
-- Four questions and three direct papers are enough to expose the current
-  failure, but not enough to certify broad scientific retrieval quality.
+- Twelve questions across three domains are a meaningful generalization check,
+  but not enough to certify broad scientific retrieval quality.
 - The benchmark evaluates the committed alpha snapshot, not an operator's
   larger private database.
 - The reranker considers at most 500 FTS candidates. A relevant source absent
@@ -192,14 +237,17 @@ test suite so a later change cannot silently restore the diagnosed failure.
   equivalence.
 - Ranking currently depends on the coverage and wording of stored Evidence
   Records; papers without records retain lexical order behind aligned records.
-- Study-type and evidence expectations cover only the current golden sources.
+- Study-type and evidence expectations cover only reviewed golden-map sources.
 - Recall@5 does not measure snippet usefulness or citation presentation.
-- There are not yet hard regression thresholds in CI.
+- The gate checks whether reviewed direct sources remain within the top five;
+  it does not yet set a minimum reciprocal-rank threshold or grade unexpected
+  results semantically.
 
 ## Next Implementation
 
-Current Project Path goal 2 now has a measured first correction. The next
-project step is goal 3: complete and review the broader GLP-1/body-weight
-evidence map. That work should expand scientific coverage and may later expand
-the gold benchmark through explicit review. It must not rewrite today's gold
-set merely to preserve a favorable metric.
+The cross-domain baseline found no direct-recall defect requiring a ranking
+change. The next update must therefore be chosen from the project's remaining
+product gates rather than modifying retrieval speculatively. Future retrieval
+work begins only when a new reviewed question, snapshot change, or user-facing
+failure breaks a domain gate or exposes a diagnostic gap. It must not rewrite
+today's gold set merely to preserve a favorable metric.

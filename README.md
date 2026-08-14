@@ -152,9 +152,12 @@ It checks expected papers, Evidence Record IDs, study types, and citations
 before reporting Recall@5, reciprocal rank, evidence-link coverage, and the
 observed top results. It does not call an LLM. The first measured correction
 keeps FTS5 candidate generation and deterministically reranks candidates by
-question overlap with their source-linked Evidence Record text. Mean Recall@5
-on the fixed four-question benchmark improved from `0.500` to `1.000`; the
-baseline, algorithm, exact result, and limitations are documented in
+question overlap with their source-linked Evidence Record text. The original
+four-question GLP-1 benchmark improved from mean Recall@5 `0.500` to `1.000`.
+Version 2 now regression-gates twelve reviewed questions across GLP-1, NSCLC,
+and MDD: macro domain Recall@5 is `1.000`, while the honestly retained macro
+domain reciprocal rank is `0.917`. The baseline, algorithm, exact per-domain
+result, and limitations are documented in
 [`docs/retrieval_benchmark_design.md`](docs/retrieval_benchmark_design.md).
 
 ## Architecture
@@ -223,7 +226,7 @@ The first three shared tasks are:
 1. Make the showcase-to-alpha journey coherent and truthful, including README
    links, snapshot freshness, and a guided evidence example.
 2. Build a golden-question benchmark and improve Ask ranking from measured
-   failures. (First measured correction complete.)
+   failures. (Cross-domain version 2 baseline and regression gate complete.)
 3. Present one complete GLP-1/body-weight evidence map with limitations,
    citations, population differences, and reviewed relationships.
 
