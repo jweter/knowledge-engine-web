@@ -11,11 +11,12 @@
 # The graph tables copied from core's database are corpus-agnostic --
 # core's own `ke graph-build` writes claims from every corpus into the
 # same graph_claims/graph_claim_relationships/etc tables, keyed by
-# claim id, not corpus. So evidence_records.jsonl is merged from every
-# corpus under data/corpora/ too (sorted by corpus directory name for a
-# deterministic merge order): a claim from any corpus that shows up on
-# /graph must have its evidence available on the claim/evidence detail
-# pages and Evidence Intelligence dashboard, not just GLP-1's.
+# claim id, not corpus. So evidence_records.jsonl and relationship_records.jsonl
+# are merged from every corpus under data/corpora/ too (sorted by corpus
+# directory name for a deterministic merge order). The merged relationship
+# bytes are also hashed into snapshot_metadata.json so relationship-only
+# changes become visible in snapshot provenance even before a live service
+# boundary exists.
 #
 # Usage: scripts/refresh-alpha-snapshot.sh /path/to/knowledge-engine-core
 
@@ -44,12 +45,17 @@ fi
 
 corpus_names=()
 evidence_sources=()
+relationship_sources=()
 for corpus_dir in "$corpora_root"/*/; do
   corpus_name="$(basename "$corpus_dir")"
   evidence_path="$corpus_dir/evidence_records.jsonl"
+  relationship_path="$corpus_dir/relationship_records.jsonl"
   if [ -f "$evidence_path" ]; then
     corpus_names+=("$corpus_name")
     evidence_sources+=("$evidence_path")
+  fi
+  if [ -f "$relationship_path" ]; then
+    relationship_sources+=("$relationship_path")
   fi
 done
 
@@ -77,12 +83,30 @@ fi
 python3 "$script_dir/build_alpha_snapshot.py" "$database_source" "$web_root/data/knowledge_engine.sqlite3"
 cat "${evidence_sources[@]}" > "$web_root/data/evidence_records.jsonl"
 
+relationship_output="$web_root/data/relationship_records.jsonl"
+if [ "${#relationship_sources[@]}" -gt 0 ]; then
+  cat "${relationship_sources[@]}" > "$relationship_output"
+else
+  rm -f "$relationship_output"
+fi
+
 corpus_id="$(IFS=,; echo "${corpus_names[*]}")"
-python3 "$script_dir/build_snapshot_metadata.py" \
-  "$core_path" "$corpus_id" \
-  "$web_root/data/knowledge_engine.sqlite3" \
-  "$web_root/data/evidence_records.jsonl" \
+metadata_args=(
+  "$core_path"
+  "$corpus_id"
+  "$web_root/data/knowledge_engine.sqlite3"
+  "$web_root/data/evidence_records.jsonl"
   "$web_root/data/snapshot_metadata.json"
+)
+if [ -f "$relationship_output" ]; then
+  metadata_args+=("--relationships" "$relationship_output")
+fi
+python3 "$script_dir/build_snapshot_metadata.py" "${metadata_args[@]}"
 
 echo "Snapshot refreshed in $web_root/data/ from $core_path (corpora: $corpus_id)."
+if [ -f "$relationship_output" ]; then
+  echo "Relationship provenance included from ${#relationship_sources[@]} corpus file(s)."
+else
+  echo "No relationship_records.jsonl inputs were present; metadata records that explicitly."
+fi
 echo "This is a point-in-time copy -- commit and push ./data/ to update the deployed alpha."
