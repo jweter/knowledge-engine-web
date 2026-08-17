@@ -15,7 +15,7 @@ fastapi = "^0.141.1"
 # complete advisory range known at the time of this launch-gate update.
 starlette = "^1.6.0"
 jinja2 = "^3.1.4"
-uvicorn = "^0.34.0"
+uvicorn = ">=0.34,<0.53"
 pydantic-settings = "^2.3.0"
 sqlalchemy = "^2.0.31"
 # AI-O13: git dependency, not a path dependency -- these are separate
