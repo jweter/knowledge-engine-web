@@ -66,6 +66,32 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <details class="discovery-method-details">
+    <summary>Search method and provenance</summary>
+    <dl>
+      <dt>Recorded query</dt>
+      <dd>{{ result.query_text }}</dd>
+      <dt>Search run ID</dt>
+      <dd><code>{{ result.search_run_id }}</code></dd>
+      <dt>Providers requested</dt>
+      <dd>{% for row in provider_rows %}{{ row.provider }}{% if not loop.last %}, {% endif %}{% endfor %}</dd>
+      <dt>Publication-year filter</dt>
+      <dd>None. This Web discovery entry point does not currently request a year bound.</dd>
+      <dt>Citation expansion</dt>
+      <dd>Not run by this discovery entry point.</dd>
+      <dt>Contradiction-oriented search</dt>
+      <dd>Not run by this discovery entry point.</dd>
+      <dt>Run timestamp</dt>
+      <dd>Preserved in Core's durable search ledger; not yet exposed by this Web-facing contract.</dd>
+    </dl>
+    <p class="disclaimer">
+      These are search-provenance facts, not evidence-quality scores. Provider
+      availability, result count, or provider rank does not make a scientific
+      claim stronger or weaker.
+    </p>
+  </details>
+
   {% if result.completeness != "complete" %}
   <p class="empty-state">
     This is a degraded search run. One or more providers did not complete, so
