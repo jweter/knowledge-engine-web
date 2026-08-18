@@ -163,7 +163,7 @@ def test_discover_exposes_search_method_provenance_without_claiming_unrun_steps(
     assert "pubmed, crossref, openalex, semantic_scholar, arxiv" in body
     assert "This Web discovery entry point does not currently request a year bound." in body
     assert body.count("Not run by this discovery entry point.") == 2
-    assert "Preserved in Core&#39;s durable search ledger" in body
+    assert "Preserved in Core's durable search ledger" in body
     assert "search-provenance facts, not evidence-quality scores" in body
 
 
