@@ -36,7 +36,7 @@
   material is labeled.
 </p>
 
-<h2>Snapshot provenance</h2>
+<h2 id="snapshot">Snapshot provenance</h2>
 {% if snapshot.metadata %}
 <p>
   Generated {{ snapshot.metadata.generated_at }} from corpus
@@ -44,6 +44,25 @@
   {{ snapshot.metadata.claims_count }} claims,
   {{ snapshot.metadata.relationships_count }} relationships, and
   {{ snapshot.metadata.citations_count }} citations.
+</p>
+<dl>
+  <dt>Core revision</dt>
+  <dd>
+    {% if snapshot.metadata.core_commit %}<code>{{ snapshot.metadata.core_commit }}</code>
+    {% else %}Unavailable in this snapshot.{% endif %}
+  </dd>
+  <dt>Evidence Records SHA-256</dt>
+  <dd><code>{{ snapshot.metadata.evidence_records_sha256 }}</code></dd>
+  <dt>Relationship Records SHA-256</dt>
+  <dd>
+    {% if snapshot.metadata.relationship_records_sha256 %}
+    <code>{{ snapshot.metadata.relationship_records_sha256 }}</code>
+    {% else %}{{ snapshot.metadata.relationship_records_note }}{% endif %}
+  </dd>
+</dl>
+<p>
+  These identifiers describe the exact point-in-time inputs published with this
+  read-only alpha. They are provenance markers, not scientific quality scores.
 </p>
 {% else %}<p class="empty-state">{{ snapshot.unavailable_reason }}</p>{% endif %}
 
