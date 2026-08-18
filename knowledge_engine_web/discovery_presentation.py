@@ -10,38 +10,52 @@ contradiction or evidence strength.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, TypeAlias
+from typing import Protocol
 
-ObservedValue: TypeAlias = str | int | bool
+type ObservedValue = str | int | bool
 
 
 class ProviderAssertionSource(Protocol):
-    provider: str
-    provider_id: str
-    value: ObservedValue
+    @property
+    def provider(self) -> str: ...
+    @property
+    def provider_id(self) -> str: ...
+    @property
+    def value(self) -> ObservedValue: ...
 
 
 class ProviderDisagreementSource(Protocol):
-    field: str
-    assertions: tuple[ProviderAssertionSource, ...]
+    @property
+    def field(self) -> str: ...
+    @property
+    def assertions(self) -> tuple[ProviderAssertionSource, ...]: ...
 
 
 class CandidateDisagreementsSource(Protocol):
-    canonical_id: str
-    disagreements: tuple[ProviderDisagreementSource, ...]
+    @property
+    def canonical_id(self) -> str: ...
+    @property
+    def disagreements(self) -> tuple[ProviderDisagreementSource, ...]: ...
 
 
 class CandidateSource(Protocol):
-    canonical_id: str
-    title: str
-    doi: str | None
-    publication_year: int | None
-    providers: tuple[str, ...]
+    @property
+    def canonical_id(self) -> str: ...
+    @property
+    def title(self) -> str: ...
+    @property
+    def doi(self) -> str | None: ...
+    @property
+    def publication_year(self) -> int | None: ...
+    @property
+    def providers(self) -> tuple[str, ...]: ...
 
 
 class DiscoveryResultSource(Protocol):
-    candidates: tuple[CandidateSource, ...]
-    provider_disagreements: tuple[CandidateDisagreementsSource, ...] | None
+    @property
+    def candidates(self) -> tuple[CandidateSource, ...]: ...
+    @property
+    def provider_disagreements(self) -> tuple[CandidateDisagreementsSource, ...] | None: ...
 
 
 @dataclass(frozen=True)
