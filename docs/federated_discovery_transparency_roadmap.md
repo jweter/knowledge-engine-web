@@ -245,12 +245,36 @@ Exit criteria:
 
 Render canonical work identity with optional provider aliases/badges.
 
+**Status: implemented and reachable.** `discovery_presentation.py`'s
+`build_discovery_presentation()` (deterministic candidate-card model plus
+per-candidate disagreement state -- `"reported"`, `"none_reported"`, or
+`"unavailable"` when the upstream snapshot predates the disagreement
+contract) already existed but, like WEB-FRD-1 before it, was implemented and
+unit-tested with no caller in `main.py` or `discover.html` -- the same "built
+but unreachable" gap this project family has repeatedly found elsewhere. The
+`/discover` route now calls it and `discover.html` renders each candidate's
+disagreement state: a "no provider metadata disagreement reported" badge, a
+"provider metadata disagreement" badge with an expandable
+field-by-field/provider-by-provider breakdown, or (for pre-WEB-FRD-3
+snapshots) an explicit note that agreement data is unavailable rather than
+silently showing nothing. The breakdown's own copy explicitly distinguishes
+provider-metadata disagreement from scientific contradiction, matching this
+document's Product principle. Required bumping `knowledge-engine-ai`'s pinned
+commit (see `docs/web_launch_gate_security.md`'s 2026-08-18 entry) to one
+that actually carries `FederatedCandidateSummary.canonical_id` and
+`FederatedDiscoveryResult.provider_disagreements` -- a backward-compatible
+dependency advance, not a contract break.
+
 Exit criteria:
 
 - DOI/PMID/arXiv/provider identifiers are displayed only where useful;
+  **met** -- unchanged from the pre-existing card layout, which already
+  showed DOI/year/observing-providers only when present
 - multiple provider observations do not duplicate the same paper card;
+  **met** -- one card per Core-deduplicated canonical candidate, unchanged
 - provider disagreement can be inspected without confusing it with scientific
-  contradiction.
+  contradiction. **met** -- the new expandable breakdown and explicit
+  disclaimer copy
 
 ### WEB-FRD-4 -- Publication-status warnings
 

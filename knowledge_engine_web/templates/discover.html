@@ -101,9 +101,15 @@
 </section>
 
 <h2>Results for &ldquo;{{ query }}&rdquo;</h2>
-{% if result.candidates %}
+{% if candidate_cards %}
+{% if not disagreement_data_available %}
+<p class="disclaimer">
+  This search run predates provider-disagreement reporting, so per-candidate
+  metadata-agreement status below is not available for it.
+</p>
+{% endif %}
 <ol class="ask-results">
-  {% for candidate in result.candidates %}
+  {% for candidate in candidate_cards %}
   <li class="ask-result-card">
     <p class="trust-label">Discovery candidate</p>
     <h3>{{ candidate.title }}</h3>
@@ -112,6 +118,33 @@
       {% if candidate.publication_year %} &middot; {{ candidate.publication_year }}{% endif %}
       &middot; observed by {{ candidate.providers | join(", ") }}
     </p>
+    {% if candidate.disagreement_state == "reported" %}
+    <p>
+      <span class="discovery-status is-degraded">provider metadata disagreement</span>
+    </p>
+    <details class="discovery-method-details">
+      <summary>What providers disagree about</summary>
+      <dl>
+        {% for disagreement in candidate.disagreements %}
+        <dt>{{ disagreement.field }}</dt>
+        <dd>
+          {% for assertion in disagreement.assertions %}
+          <span class="disclaimer">{{ assertion.provider }}: {{ assertion.value }}</span>{% if not loop.last %}; {% endif %}
+          {% endfor %}
+        </dd>
+        {% endfor %}
+      </dl>
+      <p class="disclaimer">
+        This is a disagreement between provider-reported metadata (e.g.
+        publication year or venue), not a scientific contradiction between
+        study results. No provider is treated as authoritative.
+      </p>
+    </details>
+    {% elif candidate.disagreement_state == "none_reported" %}
+    <p>
+      <span class="discovery-status is-ok">no provider metadata disagreement reported</span>
+    </p>
+    {% endif %}
   </li>
   {% endfor %}
 </ol>

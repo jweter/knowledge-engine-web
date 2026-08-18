@@ -36,6 +36,7 @@ from knowledge_engine_web.discovery_orchestration import (
     evaluate_discovery_capability,
     run_guarded_discovery,
 )
+from knowledge_engine_web.discovery_presentation import build_discovery_presentation
 from knowledge_engine_web.evidence_intelligence import (
     compute_claim_confidence,
     compute_evidence_consensus,
@@ -737,6 +738,8 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
         except DiscoveryOrchestrationError as exc:
             error = str(exc)
 
+    presentation = build_discovery_presentation(result) if result is not None else None
+
     return templates.TemplateResponse(
         request=request,
         name="discover.html",
@@ -747,6 +750,10 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
             "provider_rows": [_provider_status_view(status) for status in result.provider_statuses]
             if result is not None
             else None,
+            "candidate_cards": presentation.candidates if presentation is not None else None,
+            "disagreement_data_available": presentation.disagreement_data_available
+            if presentation is not None
+            else False,
             "error": error,
         },
     )
