@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Discover{% endblock %}
+{% block content %}
+<h1>Live discovery</h1>
+<p class="disclaimer">
+  Searches real scholarly provider APIs (PubMed, Crossref, OpenAlex, Semantic
+  Scholar) through <code>core</code>'s recorded, deduplicated federated search
+  run -- separate from <a href="/ask">Ask</a>, which only searches the
+  already-imported local corpus. Every provider's status below is Core's own
+  recorded outcome; it is never inferred from how many results came back, and
+  a provider that returned zero results is shown as searched, not failed.
+</p>
+
+<form method="get" action="/discover" class="ask-form" id="discover-form">
+  <label for="q">Query</label>
+  <input
+    type="text"
+    id="q"
+    name="q"
+    value="{{ query }}"
+    placeholder="GLP-1 receptor agonist weight loss"
+    autofocus
+  />
+  {% if not discovery_available %}
+  <p class="empty-state">Discovery is unavailable on this deployment.</p>
+  {% endif %}
+  <button type="submit" id="discover-submit">Search</button>
+  <p class="ask-running-status" id="discover-running-status" role="status" aria-live="polite" hidden>
+    Searching live provider APIs. This may take up to a minute.
+  </p>
+</form>
+
+{% if error %}
+<p class="empty-state">{{ error }}</p>
+{% endif %}
+
+{% if result %}
+<section class="ask-result-card">
+  <p class="trust-label">Discovery coverage</p>
+  <p>
+    <strong>Overall run:</strong>
+    {% if result.completeness == "complete" %}complete
+    {% elif result.completeness == "partial" %}degraded / partial
+    {% else %}failed{% endif %}
+    <br />
+    <strong>Search run:</strong> <code>{{ result.search_run_id }}</code>
+  </p>
+  <table class="discovery-provider-table">
+    <thead>
+      <tr>
+        <th>Provider</th>
+        <th>Status</th>
+        <th>Results</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in provider_rows %}
+      <tr>
+        <td>{{ row.provider }}</td>
+        <td>
+          <span class="discovery-status {{ row.css_class }}">{{ row.label }}</span>
+          {% if row.reason %}<span class="disclaimer">({{ row.reason }})</span>{% endif %}
+        </td>
+        <td>{{ row.result_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if result.completeness != "complete" %}
+  <p class="empty-state">
+    This is a degraded search run. One or more providers did not complete, so
+    absence of a result below does not mean the literature does not contain it.
+  </p>
+  {% endif %}
+</section>
+
+<h2>Results for &ldquo;{{ query }}&rdquo;</h2>
+{% if result.candidates %}
+<ol class="ask-results">
+  {% for candidate in result.candidates %}
+  <li class="ask-result-card">
+    <p class="trust-label">Discovery candidate</p>
+    <h3>{{ candidate.title }}</h3>
+    <p class="disclaimer">
+      {% if candidate.doi %}DOI: {{ candidate.doi }}{% endif %}
+      {% if candidate.publication_year %} &middot; {{ candidate.publication_year }}{% endif %}
+      &middot; observed by {{ candidate.providers | join(", ") }}
+    </p>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="empty-state">No candidates found by any searched provider.</p>
+{% endif %}
+{% endif %}
+<script>
+  (() => {
+    const form = document.getElementById("discover-form");
+    const submit = document.getElementById("discover-submit");
+    const status = document.getElementById("discover-running-status");
+    if (!form || !submit || !status) return;
+    form.addEventListener("submit", () => {
+      submit.disabled = true;
+      submit.setAttribute("aria-busy", "true");
+      submit.textContent = "Searching";
+      status.hidden = false;
+    });
+  })();
+</script>
+{% endblock %}
