@@ -27,7 +27,7 @@ sqlalchemy = "^2.0.31"
 # this adds (core's full stack, torch included, once `ke` needs to run
 # as a subprocess). AI-O16 bounds that runtime but does not make it part
 # of the current Render image or provision hosted inference.
-knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "5e20e9e55015ad784c495bb73001156500609371" }
+knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "62387aabba4b8621bea5621dcc7c88f40e91c6bb" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"

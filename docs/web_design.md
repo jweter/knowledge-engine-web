@@ -340,6 +340,33 @@ Web-to-AI-to-Core path passed its independent workflow, citation, and
 contradiction gates, and Web now withholds generated drafts whenever that gate
 does not pass. This verification does not enable the Render alpha.
 
+## Implemented: WEB-FRD-1 provider coverage (`/discover`)
+
+WEB-FRD-1 is complete. `docs/federated_discovery_transparency_roadmap.md`
+gated this on Core exposing a stable search-run contract, which
+`knowledge-engine-core`'s `ke federated-discover` command (FRD-1/FRD-2/FRD-3)
+and `knowledge-engine-ai`'s `ke_client.federated_discover()` wrapper now do.
+
+`/discover` is a new, separate, opt-in page -- not a change to `/ask`'s
+existing retrieval or its cost/latency profile. It calls out to real
+scholarly-provider HTTPS APIs (PubMed, Crossref, OpenAlex, Semantic Scholar)
+through Core's recorded, deduplicated federated search run, and renders each
+provider's own recorded outcome. `knowledge_engine_web.discovery_orchestration`
+mirrors `ai_orchestration.py`'s capability-gating and guarded-execution
+pattern, but on its own `AIRequestGuard` instance and its own
+timeout/concurrency/rate-limit settings (`KE_WEB_DISCOVERY_*`), so this
+feature cannot starve, or be starved by, the Research Copilot path.
+
+Per WEB-FRD-1's exit criteria: the route/template never infer a provider's
+status from `result_count` -- a provider that searched and found nothing is
+labeled "searched, no matches," not "unavailable," and the label always comes
+from Core's own recorded `outcome`. A degraded/partial run is visible in both
+the accessible text ("degraded / partial", an explicit warning paragraph) and
+the visual treatment (a distinct color class per outcome family). A test
+fixture in `tests/test_discover_route.py` covers success (including the
+zero-result case), rate-limited, unavailable, and disabled outcomes together
+in one assertion.
+
 ## Architecture
 
 As originally scoped for the first slice (`config.py`, `graph_reader.py`,

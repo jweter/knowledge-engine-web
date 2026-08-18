@@ -219,6 +219,16 @@ Exit criteria:
 - UI never infers status from result count;
 - partial/degraded state is visible in both accessible text and visual treatment.
 
+**Status: complete.** Core's search-run contract landed via
+`ke federated-discover` (FRD-1/FRD-2/FRD-3) and `knowledge-engine-ai`'s
+`ke_client.federated_discover()`. Implemented as a new `/discover` page
+(`knowledge_engine_web/discovery_orchestration.py`, `templates/discover.html`)
+-- separate and opt-in from `/ask`, not a change to Ask's cost/latency
+profile. See `docs/web_design.md`'s "WEB-FRD-1 provider coverage" section for
+the full account. This is one Research Session type's coverage view, not yet
+wired into a saved/durable Research Session record (that link is future work
+alongside WEB-FRD-2 through WEB-FRD-6, all still not started).
+
 ### WEB-FRD-2 -- Search provenance details
 
 Add expandable search-method details and revision timestamps.

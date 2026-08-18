@@ -35,3 +35,15 @@ services:
         value: "3"
       - key: KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS
         value: "600"
+      # WEB-FRD-1: process-local safety defaults for the separate, opt-in
+      # live-provider discovery path (`/discover`). Ledger writes stay on
+      # ephemeral container storage -- unlike Research Sessions, one
+      # discovery run has no continuity requirement across a redeploy.
+      - key: KE_WEB_DISCOVERY_REQUEST_TIMEOUT_SECONDS
+        value: "60"
+      - key: KE_WEB_DISCOVERY_MAX_CONCURRENT_REQUESTS
+        value: "1"
+      - key: KE_WEB_DISCOVERY_RATE_LIMIT_REQUESTS
+        value: "5"
+      - key: KE_WEB_DISCOVERY_RATE_LIMIT_WINDOW_SECONDS
+        value: "600"

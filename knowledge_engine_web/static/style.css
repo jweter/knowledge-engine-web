@@ -8,6 +8,9 @@
   --accent-contrast: #ffffff;
   --link: #1f6f78;
   --code-bg: #f0f3f4;
+  --status-ok: #1f7a3f;
+  --status-degraded: #a15a00;
+  --status-skipped: #6b7580;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +24,9 @@
     --accent-contrast: #0b1114;
     --link: #5fb8bf;
     --code-bg: #1b232a;
+    --status-ok: #6fcf8f;
+    --status-degraded: #e0a458;
+    --status-skipped: #97a3ad;
   }
 }
 
@@ -321,6 +327,35 @@ th {
 
 .ask-evidence-metrics strong {
   font-size: 1.2rem;
+}
+
+.discovery-provider-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+}
+
+.discovery-provider-table th,
+.discovery-provider-table td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.discovery-status {
+  font-weight: 600;
+}
+
+.discovery-status.is-ok {
+  color: var(--status-ok);
+}
+
+.discovery-status.is-degraded {
+  color: var(--status-degraded);
+}
+
+.discovery-status.is-skipped {
+  color: var(--status-skipped);
 }
 
 .concept-preview-frame {

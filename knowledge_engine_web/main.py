@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from knowledge_engine_ai.ke_client import FederatedProviderStatus
 from sqlalchemy import Engine, create_engine
 
 from knowledge_engine_web.ai_guardrails import AIAdmissionError
@@ -30,6 +31,11 @@ from knowledge_engine_web.ai_orchestration import (
 from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.dashboard import build_evidence_intelligence_dashboard
+from knowledge_engine_web.discovery_orchestration import (
+    DiscoveryOrchestrationError,
+    evaluate_discovery_capability,
+    run_guarded_discovery,
+)
 from knowledge_engine_web.evidence_intelligence import (
     compute_claim_confidence,
     compute_evidence_consensus,
@@ -689,6 +695,93 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
             "copilot_error": copilot_error,
         },
     )
+
+
+@app.get("/discover", response_class=HTMLResponse)
+def discover(request: Request, q: str = "") -> HTMLResponse:
+    """Search live scholarly providers via `core`'s federated discovery run.
+
+    Separate and opt-in from Ask's own retrieval, which only ever searches
+    the already-imported local corpus. This page instead calls out to
+    real provider HTTPS APIs (PubMed, Crossref, OpenAlex, Semantic Scholar)
+    through `core`'s `ke federated-discover` command, and shows exactly what
+    was searched, what succeeded, and what degraded or failed -- never
+    inferring provider status from result count (WEB-FRD-1).
+    """
+
+    settings = Settings()
+    capability = evaluate_discovery_capability(settings)
+    query = q.strip()
+    if not query:
+        return templates.TemplateResponse(
+            request=request,
+            name="discover.html",
+            context={
+                "query": "",
+                "discovery_available": capability.available,
+                "result": None,
+                "error": None,
+            },
+        )
+
+    result = None
+    error: str | None = None
+    if not capability.available:
+        error = capability.visitor_message
+    else:
+        try:
+            client_key = request.client.host if request.client is not None else "unknown"
+            result = run_guarded_discovery(settings, query, client_key=client_key)
+        except AIAdmissionError as exc:
+            error = exc.visitor_message
+        except DiscoveryOrchestrationError as exc:
+            error = str(exc)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="discover.html",
+        context={
+            "query": query,
+            "discovery_available": capability.available,
+            "result": result,
+            "provider_rows": [_provider_status_view(status) for status in result.provider_statuses]
+            if result is not None
+            else None,
+            "error": error,
+        },
+    )
+
+
+_PROVIDER_OUTCOME_LABELS: dict[str, tuple[str, str]] = {
+    "success": ("searched", "is-ok"),
+    "empty": ("searched, no matches", "is-ok"),
+    "rate_limited": ("rate limited", "is-degraded"),
+    "unavailable": ("unavailable", "is-degraded"),
+    "failed": ("failed", "is-degraded"),
+    "skipped": ("not searched", "is-skipped"),
+    "disabled": ("disabled", "is-skipped"),
+}
+
+
+def _provider_status_view(status: FederatedProviderStatus) -> dict[str, object]:
+    """Map one raw `FederatedProviderStatus` onto a fixed, deterministic label.
+
+    Never infers status from `result_count` (WEB-FRD-1) -- the label comes
+    only from Core's own recorded `outcome`, including the `success` case
+    with zero results ("searched, no matches" is not the same claim as
+    "unavailable").
+    """
+
+    label, css_class = _PROVIDER_OUTCOME_LABELS.get(
+        status.outcome, (status.outcome or "unknown", "is-skipped")
+    )
+    return {
+        "provider": status.provider,
+        "label": label,
+        "css_class": css_class,
+        "reason": status.reason,
+        "result_count": status.result_count,
+    }
 
 
 def _evidence_entries_for_paper(
