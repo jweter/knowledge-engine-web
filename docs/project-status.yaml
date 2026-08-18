@@ -1,0 +1,65 @@
+schema_version: 1
+project: knowledge-engine-web
+updated_at: "2026-08-18T21:57:00Z"
+status_source: "Verified repository state plus docs/web_design.md and docs/federated_discovery_transparency_roadmap.md; this file is a continuity cache and never overrides higher-authority evidence."
+
+product:
+  primary_surface: "Read-only FastAPI web front end over knowledge-engine-core's SQLite database"
+  role_in_family: "consumer of knowledge-engine-core (direct SQLite reflection) and knowledge-engine-ai (ke_client.py subprocess boundary)"
+  opt_in_ai_features:
+    - route: "/ask"
+      capability: "Research Copilot synthesis via knowledge-engine-ai's run_research_question"
+      guard: "own AIRequestGuard instance, KE_WEB_AI_* settings"
+    - route: "/discover"
+      capability: "Live federated discovery via knowledge-engine-ai's federated_discover() -> Core's ke federated-discover"
+      guard: "own AIRequestGuard instance, KE_WEB_DISCOVERY_* settings"
+
+current_milestone:
+  name: "WEB-FRD (federated discovery transparency) sequence"
+  roadmap_file: "docs/federated_discovery_transparency_roadmap.md"
+  state: "active"
+  sub_milestone_status:
+    WEB-FRD-1_provider_coverage: "complete -- /discover page renders provider status from Core's own recorded outcome, never inferred from result count"
+    WEB-FRD-2_search_provenance_details: "appears implemented (discover.html's 'Search method and provenance' details section covers provider list, search run ID, filters, citation-expansion/contradiction-search disclosure) but the roadmap doc's WEB-FRD-2 section has never been given a Status paragraph -- worth confirming against the exit criteria explicitly and annotating."
+    WEB-FRD-3_work_identity_provider_observations: "the presentation model (knowledge_engine_web/discovery_presentation.py, build_discovery_presentation) is implemented and unit-tested, but is NOT yet called from main.py or rendered in discover.html -- the same 'built but unreachable' gap this project family has repeatedly found elsewhere. This is the next concrete continuation point."
+    WEB-FRD-4_publication_status_warnings: "not started"
+    WEB-FRD-5_research_freshness_history: "not started"
+    WEB-FRD-6_inspectable_research_path: "not started"
+
+automation_contract:
+  schedule_role: "repository participant in an hourly portfolio-development loop (owner-managed; not created by this session)"
+  new_roadmap_pr_budget_per_run: 1
+  query_live_github_state_every_run: true
+  newly_opened_pr_requires_fresh_ci_before_merge: true
+  draft_prs: "never"
+  merge_method: "squash"
+  required_pr_workflows:
+    - name: "Quality"
+      file: ".github/workflows/quality.yml"
+      job: "checks"
+      note: "ruff format --check, ruff check, mypy, pytest"
+    - name: "Docker build"
+      file: ".github/workflows/quality.yml"
+      job: "docker"
+  advisory_review_unavailable_is_not_failure: true
+
+verified_repository_state:
+  checked_at: "2026-08-18T21:57:00Z"
+  note: "Live PR/check/issue state is intentionally not cached as authoritative counts here. Scheduled runs must query GitHub directly before acting."
+  open_prs: 0
+  ci_workflows:
+    - ".github/workflows/quality.yml"
+
+next_continuation:
+  priority: "P5-highest-value-authorized-roadmap"
+  action: "Wire discovery_presentation.build_discovery_presentation() into the /discover route (main.py) and discover.html template, completing WEB-FRD-3. Then confirm and annotate WEB-FRD-2's actual status against its exit criteria."
+  selection_rule: "Before beginning roadmap work, query live PR state. Handle failed, green, blocked, conflicted, or pending existing work according to docs/agent-development-policy.md and knowledge-engine-core's shared policy document."
+
+human_decision_required: null
+
+maintenance_contract:
+  verify_every_scheduled_run: true
+  update_when_project_reality_changes: true
+  update_in_same_pr_as_relevant_change: true
+  stale_status_is_a_defect: true
+  timestamp_age_alone_requires_noop_pr: false
