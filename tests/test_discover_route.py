@@ -24,12 +24,18 @@ def _unavailable_capability() -> DiscoveryCapability:
     )
 
 
-def _discovery_result(*, completeness: str = "partial") -> SimpleNamespace:
+def _discovery_result(
+    *,
+    completeness: str = "partial",
+    provider_disagreements: tuple[SimpleNamespace, ...] | None = (),
+) -> SimpleNamespace:
     """One fixture covering every provider outcome WEB-FRD-1 must render.
 
     success with zero results, rate_limited, unavailable, disabled, and
     skipped ("not relevant" in the roadmap doc's language) all appear, so a
     single test proves the UI's status label never depends on `result_count`.
+    `provider_disagreements` defaults to an empty (available, no conflicts)
+    report; pass `None` to simulate a snapshot that predates WEB-FRD-3.
     """
 
     return SimpleNamespace(
@@ -67,12 +73,14 @@ def _discovery_result(*, completeness: str = "partial") -> SimpleNamespace:
         ),
         candidates=(
             SimpleNamespace(
+                canonical_id="pubmed:12345",
                 title="A Trial of Semaglutide for Body Weight Reduction",
                 doi="10.1000/example",
                 publication_year=2026,
                 providers=("pubmed",),
             ),
         ),
+        provider_disagreements=provider_disagreements,
     )
 
 
@@ -221,6 +229,89 @@ def test_discover_shows_admission_error_when_rate_limited(
 
     assert response.status_code == 200
     assert "Discovery has received too many requests." in response.text
+
+
+def test_discover_shows_no_disagreement_badge_when_report_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(provider_disagreements=()),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "no provider metadata disagreement reported" in body
+    assert "What providers disagree about" not in body
+
+
+def test_discover_shows_disagreement_details_without_calling_it_a_contradiction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    disagreement_report = (
+        SimpleNamespace(
+            canonical_id="pubmed:12345",
+            disagreements=(
+                SimpleNamespace(
+                    field="publication_year",
+                    assertions=(
+                        SimpleNamespace(provider="pubmed", provider_id="12345", value=2025),
+                        SimpleNamespace(
+                            provider="crossref", provider_id="10.1000/example", value=2026
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(
+            provider_disagreements=disagreement_report
+        ),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "provider metadata disagreement" in body
+    assert "What providers disagree about" in body
+    assert "publication_year" in body
+    assert "pubmed: 2025" in body
+    assert "crossref: 2026" in body
+    assert "not a scientific contradiction between" in body
+
+
+def test_discover_notes_when_disagreement_data_predates_this_search_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(provider_disagreements=None),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "predates provider-disagreement reporting" in body
+    assert "no provider metadata disagreement reported" not in body
+    assert "provider metadata disagreement" not in body
 
 
 def test_discover_shows_orchestration_error_without_leaking_details(

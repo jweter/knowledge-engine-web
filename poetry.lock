@@ -659,8 +659,8 @@ typer = "^0.27.1"
 [package.source]
 type = "git"
 url = "https://github.com/jweter/knowledge-engine-ai.git"
-reference = "62387aabba4b8621bea5621dcc7c88f40e91c6bb"
-resolved_reference = "62387aabba4b8621bea5621dcc7c88f40e91c6bb"
+reference = "9a214c3288107d0426000184a9fea364b529b01b"
+resolved_reference = "9a214c3288107d0426000184a9fea364b529b01b"
 
 [[package]]
 name = "librt"
@@ -1894,4 +1894,4 @@ standard = ["httptools (>=0.8.0)", "python-dotenv (>=0.13)", "pyyaml (>=5.1)", "
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "81bbcd7bf2bfb327ef932cbc82c5016dd52163165d1fa96b659177c39c636881"
+content-hash = "7efac9f39f386029ae4a53a61b4a06490938a174aa13cc5acf421e37fa2a26b8"

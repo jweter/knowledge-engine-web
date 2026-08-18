@@ -58,3 +58,20 @@ while retaining deterministic retrieval when the AI/core runtime is absent.
 That milestone must first define how the deployed container obtains the `ke`
 runtime and corpus metadata; this dependency-hardening change does not smuggle
 that larger runtime into the image.
+
+## 2026-08-18: AI pin advanced for WEB-FRD-3
+
+`knowledge-engine-ai` is now pinned to commit
+`9a214c3288107d0426000184a9fea364b529b01b` (was `62387aabba4b8621bea5621dcc7c88f40e91c6bb`),
+following this document's own "intentional dependency change" procedure:
+advance the immutable revision, regenerate `poetry.lock`, run the quality
+gate, review the diff. The previous pin predates AI's
+`FederatedCandidateSummary.canonical_id` and
+`FederatedDiscoveryResult.provider_disagreements` fields (added by AI's
+`59f75f0`/`26ac10e`, merged via PR #45); wiring
+`knowledge_engine_web.discovery_presentation.build_discovery_presentation()`
+into the live `/discover` route (WEB-FRD-3) requires both, and mypy's
+structural-typing check against `DiscoveryResultSource` failed against the
+old pin until this bump. No `knowledge-engine-ai` public API was removed or
+renamed between the two revisions -- this is a backward-compatible superset,
+not a breaking bump.
