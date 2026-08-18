@@ -141,6 +141,32 @@ def test_discover_renders_every_provider_outcome_without_inferring_from_result_c
     assert "A Trial of Semaglutide for Body Weight Reduction" in body
 
 
+def test_discover_exposes_search_method_provenance_without_claiming_unrun_steps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Search method and provenance" in body
+    assert "GLP-1 receptor agonist weight loss" in body
+    assert "run-abc-123" in body
+    assert "pubmed, crossref, openalex, semantic_scholar, arxiv" in body
+    assert "This Web discovery entry point does not currently request a year bound." in body
+    assert body.count("Not run by this discovery entry point.") == 2
+    assert "Preserved in Core's durable search ledger" in body
+    assert "search-provenance facts, not evidence-quality scores" in body
+
+
 def test_discover_shows_degraded_state_in_text_and_visual_treatment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
