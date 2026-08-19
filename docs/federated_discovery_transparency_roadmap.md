@@ -394,6 +394,24 @@ gate is blocked. No `knowledge-engine-ai` or Core change was needed -- purely
 additive Web-only template/route work over data that already flowed through
 the existing `/ask` -> Research Copilot integration boundary.
 
+**2026-08-19 follow-up: the verification artifact itself is now inspectable,
+not only its pass/fail summary.** `knowledge-engine-ai`'s AI-O6 Skeptic check
+(`verify_synthesis`) already returned exactly which `[evidence_record_id]`
+citations were hallucinated, which stated numbers were ungrounded, and which
+qualifying/contradicting records the narrative never cited on
+`VerificationResult.hallucinated_citations`/`.ungrounded_numbers`/
+`.missed_qualifiers` -- all three already reached `ask.html` via
+`copilot_result.verification`, but the template collapsed them to one word
+("passed" / "flagged for review"), discarding the specific findings. This is
+the same "built but unreachable" gap this project has repeatedly found and
+fixed for WEB-FRD-1, WEB-FRD-3, and this milestone's own session-trace slice.
+`ask.html` now renders a "Verification findings" list -- visible by default,
+matching this milestone's own "failed close-gate criteria are visible rather
+than replaced by generic errors" precedent -- whenever verification ran and
+is not clean, naming the specific citation IDs, numeric tokens, or evidence
+record IDs each check flagged. No `knowledge-engine-ai` or Core change was
+needed; the fields have existed since AI-O6.
+
 Exit criteria:
 
 - final answer remains simple by default; **met** -- the trace lives inside a
@@ -403,13 +421,17 @@ Exit criteria:
   **met for the `/ask` session path** -- the trace section lists every
   recorded step with its tool/model and the deduplicated evidence-record IDs
   the whole run touched; per-claim citation linkage was already shown via
-  "Resolved citations" (`session_report.sourced_claims`) and is unchanged.
+  "Resolved citations" (`session_report.sourced_claims`); a flagged narrative
+  now also names the specific citations/numbers/records the Skeptic check
+  found, not only that verification failed.
   This does not cover `/discover`'s federated-discovery search context, which
   already has its own provenance panel from WEB-FRD-2/WEB-FRD-3.
 - failed close-gate criteria are visible rather than replaced by generic
   errors. **met** -- `copilot_result.close_result.validation.unresolved_required_criteria`
   (e.g. `citation_integrity`, `contradiction_review`) now renders explicitly
-  whenever non-empty, instead of only the aggregate `blocked` status.
+  whenever non-empty, instead of only the aggregate `blocked` status, and a
+  non-clean verification result now renders its specific findings the same
+  way.
 
 ## Improvements beyond the external reference
 
