@@ -1462,7 +1462,12 @@ def _copilot_result() -> SimpleNamespace:
             validation=SimpleNamespace(unresolved_required_criteria=()),
         ),
         workflow=SimpleNamespace(steps=(SimpleNamespace(succeeded=True),)),
-        verification=SimpleNamespace(is_clean=True),
+        verification=SimpleNamespace(
+            is_clean=True,
+            hallucinated_citations=(),
+            ungrounded_numbers=(),
+            missed_qualifiers=(),
+        ),
         session_report=SimpleNamespace(
             sourced_claims=(
                 SimpleNamespace(
@@ -1700,6 +1705,69 @@ def test_ask_withholds_a_narrative_when_the_close_gate_blocks(
     assert "Unresolved close-gate criteria" in response.text
     assert "<code>citation_integrity</code>" in response.text
     assert "<code>contradiction_review</code>" in response.text
+
+
+def test_ask_shows_specific_verification_findings_when_flagged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    result = _copilot_result()
+    result.verification = SimpleNamespace(
+        is_clean=False,
+        hallucinated_citations=("ev-99",),
+        ungrounded_numbers=("42",),
+        missed_qualifiers=("ev-2",),
+    )
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: result,
+    )
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "Verification:</strong>" in response.text
+    assert "flagged for review" in response.text
+    assert "Verification findings:" in response.text
+    assert "Cited but not found in this session's retrieved evidence:" in response.text
+    assert "<code>ev-99</code>" in response.text
+    assert "Numbers stated in the narrative but not found" in response.text
+    assert "<code>42</code>" in response.text
+    assert (
+        "Qualifying or contradicting evidence records the narrative never cited:" in response.text
+    )
+    assert "<code>ev-2</code>" in response.text
+
+
+def test_ask_omits_verification_findings_when_clean(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: _copilot_result(),
+    )
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "Verification:</strong>" in response.text
+    assert "passed" in response.text
+    assert "Verification findings:" not in response.text
 
 
 def test_ask_trace_section_shows_a_failed_step_and_its_notes(
