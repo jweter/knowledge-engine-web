@@ -6,19 +6,27 @@ Reads the same `paper_search` FTS5 virtual table `core`'s
 `graph_reader.py`'s "read `core`'s database directly, never import
 `knowledge_engine`" decision (`docs/web_design.md`). The FTS5 query
 logic (`build_natural_language_fts_query`, the `bm25`/`snippet` SQL) is
-copied verbatim from `core`'s `SearchService`. When Evidence Records are
-configured, FTS5 remains candidate generation and a deterministic second pass
-prefers candidates whose stored evidence text aligns with the question. The
-reranker never uses Evidence Quality, confidence, consensus, or an LLM.
+copied verbatim from `core`'s `SearchService`. FTS5 remains candidate
+generation; a deterministic second pass then re-ranks by how well each
+candidate's text covers the question's *distinctive* terms, weighted by
+each term's corpus-wide rarity (a smoothed IDF) so that words shared by
+nearly every paper in a topically narrow corpus (e.g. "GLP-1",
+"obesity" in a GLP-1 corpus) cannot drown out a question's actually
+differentiating words (e.g. "height"). This applies whether or not
+Evidence Records are configured; when they are, the same rarity
+weighting is applied to Evidence Record field coverage instead of raw
+title/abstract text. The reranker never uses Evidence Quality,
+confidence, consensus, or an LLM.
 """
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from sqlalchemy import Engine, inspect, text
+from sqlalchemy import Connection, Engine, inspect, text
 
 from knowledge_engine_web.evidence_reader import (
     EvidenceRecordDetail,
@@ -101,6 +109,15 @@ def answer_retrieval(
     only stopwords), or a database with no `paper_search` table yet
     (predates `core`'s FTS index, or a fixture database in tests) --
     never raises for any of those real, expected states.
+
+    FTS5's `bm25()` alone is not enough to differentiate questions in a
+    topically narrow corpus: a term present in nearly every paper's title
+    (e.g. "GLP-1" in a GLP-1-only corpus) can outweigh a question's one
+    actually distinguishing word (e.g. "height"), so unrelated questions
+    end up returning the same top papers. The second-pass rerank below
+    weights each question token by its corpus-wide rarity (a smoothed
+    IDF) before scoring coverage, so rare/distinguishing words count for
+    more than words nearly every paper shares.
     """
 
     normalized_question = question.strip()
@@ -120,6 +137,7 @@ def answer_retrieval(
         index_evidence_records_by_doi(evidence_path) if evidence_path is not None else {}
     )
     candidate_limit = max(limit, _EVIDENCE_CANDIDATE_LIMIT) if evidence_by_doi else limit
+    question_tokens = _retrieval_tokens(normalized_question)
 
     with engine.connect() as connection:
         result_rows = connection.execute(
@@ -140,6 +158,7 @@ def answer_retrieval(
                 """),
             {"query": fts_query, "limit": candidate_limit},
         ).all()
+        token_weights = _token_idf_weights(connection, question_tokens)
 
     candidates = [
         SearchResult(
@@ -154,17 +173,19 @@ def answer_retrieval(
         )
         for row in result_rows
     ]
-    if not evidence_by_doi:
-        return candidates[:limit]
 
-    question_tokens = _retrieval_tokens(normalized_question)
     ranked: list[tuple[float, int, SearchResult]] = []
     for lexical_rank, candidate in enumerate(candidates):
-        records = evidence_by_doi.get(normalize_doi(candidate.doi or ""), ())
-        alignment = max(
-            (_evidence_alignment(question_tokens, record) for record in records),
-            default=0.0,
-        )
+        if evidence_by_doi:
+            records = evidence_by_doi.get(normalize_doi(candidate.doi or ""), ())
+            alignment = max(
+                (_evidence_alignment(question_tokens, token_weights, record) for record in records),
+                default=0.0,
+            )
+        else:
+            alignment = _text_alignment(
+                question_tokens, token_weights, f"{candidate.title} {candidate.abstract or ''}"
+            )
         ranked.append(
             (
                 alignment,
@@ -186,8 +207,58 @@ def _retrieval_tokens(value: object) -> set[str]:
     }
 
 
-def _evidence_alignment(question_tokens: set[str], evidence: EvidenceRecordDetail) -> float:
-    """Return weighted question-token coverage for one stored Evidence Record."""
+def _token_idf_weights(connection: Connection, tokens: set[str]) -> dict[str, float]:
+    """Return a smoothed inverse-document-frequency weight per token.
+
+    A token nearly every paper in the corpus contains (e.g. "obesity" in
+    a corpus that is entirely about obesity) gets a weight near zero; a
+    token few papers contain (e.g. "height") gets a large weight. This is
+    the standard smoothed-IDF form `log((N + 1) / (df + 1)) + 1`, which
+    stays positive and finite even when a token matches every paper or no
+    paper at all.
+    """
+
+    if not tokens:
+        return {}
+    total_papers = connection.execute(text("SELECT count(*) FROM paper_search")).scalar_one()
+    weights: dict[str, float] = {}
+    for token in tokens:
+        document_frequency = connection.execute(
+            text("SELECT count(*) FROM paper_search WHERE paper_search MATCH :token"),
+            {"token": token},
+        ).scalar_one()
+        weights[token] = math.log((total_papers + 1) / (document_frequency + 1)) + 1
+    return weights
+
+
+def _weighted_token_coverage(
+    question_tokens: set[str], token_weights: dict[str, float], text_tokens: set[str]
+) -> float:
+    """Return the fraction of the question's rarity-weighted token mass a text covers."""
+
+    if not question_tokens:
+        return 0.0
+    total_weight = sum(token_weights.get(token, 1.0) for token in question_tokens)
+    if total_weight <= 0:
+        return 0.0
+    matched_weight = sum(token_weights.get(token, 1.0) for token in question_tokens & text_tokens)
+    return matched_weight / total_weight
+
+
+def _text_alignment(
+    question_tokens: set[str], token_weights: dict[str, float], value: str
+) -> float:
+    """Return rarity-weighted question-token coverage for raw title/abstract text."""
+
+    return _weighted_token_coverage(question_tokens, token_weights, _retrieval_tokens(value))
+
+
+def _evidence_alignment(
+    question_tokens: set[str],
+    token_weights: dict[str, float],
+    evidence: EvidenceRecordDetail,
+) -> float:
+    """Return rarity-weighted question-token coverage for one stored Evidence Record."""
 
     if not question_tokens:
         return 0.0
@@ -209,8 +280,7 @@ def _evidence_alignment(question_tokens: set[str], evidence: EvidenceRecordDetai
     }
     weighted_coverage = sum(
         _EVIDENCE_FIELD_WEIGHTS[field]
-        * len(question_tokens & _retrieval_tokens(value))
-        / len(question_tokens)
+        * _weighted_token_coverage(question_tokens, token_weights, _retrieval_tokens(value))
         for field, value in fields.items()
     )
     return weighted_coverage / sum(_EVIDENCE_FIELD_WEIGHTS.values())
