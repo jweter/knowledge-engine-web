@@ -375,11 +375,41 @@ Exit criteria:
 Expose the sequence of discovery/evidence/analysis/verification artifacts behind
 an answer.
 
+**Status: implemented for the `/ask` Research Copilot session path.**
+`knowledge-engine-ai`'s `run_research_question` already assembled a full
+`SessionTrace` (`build_session_trace`, AI-O9) -- every deterministic/LLM step
+that actually ran, in order, with its tool/model, recorded duration, notes,
+and the evidence-record IDs it touched -- and a `SessionCloseResult` naming
+exactly which required Research ISA criteria are unresolved
+(`close_result.validation.unresolved_required_criteria`). Both were already
+returned on `ResearchQuestionResult` and passed to `ask.html` as
+`copilot_result`, but neither field was read by the template: only the
+close-gate's aggregate status enum (`completed`/`blocked`) was shown, and the
+trace was discarded entirely -- the same "built but unreachable" gap this
+project has repeatedly found and fixed for WEB-FRD-1 and WEB-FRD-3. This
+session added a "Research path (session trace)" `<details>` section (closed
+by default, same pattern as `/discover`'s "Search method and provenance") and
+an explicit "Unresolved close-gate criteria" list rendered whenever the close
+gate is blocked. No `knowledge-engine-ai` or Core change was needed -- purely
+additive Web-only template/route work over data that already flowed through
+the existing `/ask` -> Research Copilot integration boundary.
+
 Exit criteria:
 
-- final answer remains simple by default;
+- final answer remains simple by default; **met** -- the trace lives inside a
+  closed-by-default `<details>` element below the narrative/status summary,
+  not inline in the default answer view
 - expert view can trace any substantive claim to evidence and search context;
-- failed close-gate criteria are visible rather than replaced by generic errors.
+  **met for the `/ask` session path** -- the trace section lists every
+  recorded step with its tool/model and the deduplicated evidence-record IDs
+  the whole run touched; per-claim citation linkage was already shown via
+  "Resolved citations" (`session_report.sourced_claims`) and is unchanged.
+  This does not cover `/discover`'s federated-discovery search context, which
+  already has its own provenance panel from WEB-FRD-2/WEB-FRD-3.
+- failed close-gate criteria are visible rather than replaced by generic
+  errors. **met** -- `copilot_result.close_result.validation.unresolved_required_criteria`
+  (e.g. `citation_integrity`, `contradiction_review`) now renders explicitly
+  whenever non-empty, instead of only the aggregate `blocked` status.
 
 ## Improvements beyond the external reference
 
