@@ -38,6 +38,17 @@ class CandidateDisagreementsSource(Protocol):
     def disagreements(self) -> tuple[ProviderDisagreementSource, ...]: ...
 
 
+class ObservationFlagSource(Protocol):
+    @property
+    def provider(self) -> str: ...
+    @property
+    def retracted(self) -> bool | None: ...
+    @property
+    def preprint(self) -> bool | None: ...
+    @property
+    def preprint_version(self) -> int | None: ...
+
+
 class CandidateSource(Protocol):
     @property
     def canonical_id(self) -> str: ...
@@ -49,6 +60,8 @@ class CandidateSource(Protocol):
     def publication_year(self) -> int | None: ...
     @property
     def providers(self) -> tuple[str, ...]: ...
+    @property
+    def observation_flags(self) -> tuple[ObservationFlagSource, ...]: ...
 
 
 class DiscoveryResultSource(Protocol):
@@ -76,6 +89,47 @@ class ProviderDisagreementView:
 
 
 @dataclass(frozen=True)
+class ProviderObservationFlagView:
+    """One provider's retraction/preprint observation, preserved exactly.
+
+    ``None`` means the provider did not report the flag -- distinct from the
+    provider explicitly reporting ``False``. AI does not merge, vote on, or
+    pick an authoritative provider observation, and neither does this view.
+    """
+
+    provider: str
+    retracted: bool | None
+    preprint: bool | None
+    preprint_version: int | None
+
+
+@dataclass(frozen=True)
+class PublicationStatusView:
+    """WEB-FRD-4 rollup: a candidate's retraction/preprint status.
+
+    ``retraction_state`` and ``preprint_state`` are each one of:
+
+    - ``"retracted"`` / ``"preprint"`` -- at least one provider explicitly
+      reported the flag as ``True``.
+    - ``"clear"`` -- at least one provider explicitly reported the flag as
+      ``False`` and none reported ``True``. This is a provider self-report,
+      not an independent editorial check.
+    - ``"not_checked"`` -- no provider reported this flag at all. Distinct
+      from ``"clear"``: absence of a report is not evidence of absence of a
+      retraction or preprint relationship.
+
+    ``observations`` preserves every provider's raw flags, unmerged, for
+    inspection -- the rollup drives visual treatment, it does not replace the
+    underlying per-provider facts.
+    """
+
+    retraction_state: str
+    preprint_state: str
+    preprint_versions: tuple[int, ...]
+    observations: tuple[ProviderObservationFlagView, ...]
+
+
+@dataclass(frozen=True)
 class DiscoveryCandidateView:
     """One Core-deduplicated work card ready for deterministic rendering."""
 
@@ -86,6 +140,7 @@ class DiscoveryCandidateView:
     providers: tuple[str, ...]
     disagreement_state: str
     disagreements: tuple[ProviderDisagreementView, ...]
+    publication_status: PublicationStatusView
 
 
 @dataclass(frozen=True)
@@ -94,6 +149,55 @@ class DiscoveryPresentation:
 
     candidates: tuple[DiscoveryCandidateView, ...]
     disagreement_data_available: bool
+
+
+def _build_publication_status(
+    flags: tuple[ObservationFlagSource, ...],
+) -> PublicationStatusView:
+    """Roll up per-provider retraction/preprint flags without voting on them.
+
+    ``None`` values (provider did not report the flag) are excluded from the
+    "did anyone report True/False" scan so a candidate with zero reporting
+    providers correctly lands on ``"not_checked"`` rather than being
+    miscounted as ``"clear"``.
+    """
+
+    retracted_reports = [flag.retracted for flag in flags if flag.retracted is not None]
+    if any(retracted_reports):
+        retraction_state = "retracted"
+    elif retracted_reports:
+        retraction_state = "clear"
+    else:
+        retraction_state = "not_checked"
+
+    preprint_reports = [flag.preprint for flag in flags if flag.preprint is not None]
+    if any(preprint_reports):
+        preprint_state = "preprint"
+    elif preprint_reports:
+        preprint_state = "clear"
+    else:
+        preprint_state = "not_checked"
+
+    preprint_versions = tuple(
+        flag.preprint_version for flag in flags if flag.preprint_version is not None
+    )
+
+    observations = tuple(
+        ProviderObservationFlagView(
+            provider=flag.provider,
+            retracted=flag.retracted,
+            preprint=flag.preprint,
+            preprint_version=flag.preprint_version,
+        )
+        for flag in flags
+    )
+
+    return PublicationStatusView(
+        retraction_state=retraction_state,
+        preprint_state=preprint_state,
+        preprint_versions=preprint_versions,
+        observations=observations,
+    )
 
 
 def build_discovery_presentation(result: DiscoveryResultSource) -> DiscoveryPresentation:
@@ -144,6 +248,7 @@ def build_discovery_presentation(result: DiscoveryResultSource) -> DiscoveryPres
                 providers=tuple(sorted(set(candidate.providers))),
                 disagreement_state=state,
                 disagreements=disagreements,
+                publication_status=_build_publication_status(candidate.observation_flags),
             )
         )
 
@@ -158,5 +263,7 @@ __all__ = [
     "DiscoveryPresentation",
     "ProviderAssertionView",
     "ProviderDisagreementView",
+    "ProviderObservationFlagView",
+    "PublicationStatusView",
     "build_discovery_presentation",
 ]

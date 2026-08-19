@@ -11,6 +11,8 @@
   --status-ok: #1f7a3f;
   --status-degraded: #a15a00;
   --status-skipped: #6b7580;
+  --status-critical: #b3261e;
+  --status-critical-bg: #fdecea;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,6 +29,8 @@
     --status-ok: #6fcf8f;
     --status-degraded: #e0a458;
     --status-skipped: #97a3ad;
+    --status-critical: #f28b82;
+    --status-critical-bg: #3a1f1d;
   }
 }
 
@@ -356,6 +360,15 @@ th {
 
 .discovery-status.is-skipped {
   color: var(--status-skipped);
+}
+
+.publication-status-banner.is-critical {
+  color: var(--status-critical);
+  background: var(--status-critical-bg);
+  border: 2px solid var(--status-critical);
+  border-radius: 6px;
+  padding: 0.6rem 0.9rem;
+  font-weight: 600;
 }
 
 .concept-preview-frame {

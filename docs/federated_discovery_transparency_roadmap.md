@@ -312,11 +312,45 @@ Exit criteria:
 Render preprint, correction, retraction, expression-of-concern, and withdrawal
 state from Core data.
 
+**Status: implemented for the retraction/preprint slice Core and AI currently
+expose.** This was blocked on `knowledge-engine-ai` parsing Core's
+per-provider `ProviderObservation.retracted`/`.preprint`/`.preprint_version`
+fields into `FederatedCandidateSummary.observation_flags` (AI PR #49, merged
+to AI's `main`). This session bumped Web's pinned `knowledge-engine-ai`
+revision to that commit (`f4715d32a62748ec1ff395ee57402d192362c1a5`, was
+`9a214c3288107d0426000184a9fea364b529b01b`) -- a backward-compatible
+dependency advance, same procedure as WEB-FRD-3's pin bump (see
+`docs/web_launch_gate_security.md`'s dated entries) -- and added
+`discovery_presentation.PublicationStatusView`: a per-candidate rollup with
+`retraction_state`/`preprint_state` each one of `"retracted"`/`"preprint"`,
+`"clear"`, or `"not_checked"`, computed without merging or voting across
+providers (a candidate is `"retracted"` if *any* provider explicitly reports
+it; `"not_checked"` only when *no* provider reported the flag at all,
+distinct from a provider explicitly reporting `False`). `discover.html` now
+renders a `role="alert"` banner (text-labeled "Retracted", not
+color-only) whenever any provider reports retraction, a distinct
+"not checked" disclosure otherwise, a preprint badge with version when
+reported, and an expandable per-provider observation breakdown so no single
+provider's assertion is silently treated as authoritative. Correction,
+expression-of-concern, and withdrawal states remain out of scope: Core's
+`ProviderObservation` does not yet carry those fields, so rendering them
+would require a Core (and then AI) change first, not a Web-only slice.
+
 Exit criteria:
 
-- retraction cannot be visually missed;
-- unknown/not-checked remains distinct from clear;
-- landing-page resolution failure is not labeled a retraction or invalid paper.
+- retraction cannot be visually missed; **met** -- a bordered, colored,
+  explicitly-labeled ("Retracted") alert banner, not a color-only signal
+- unknown/not-checked remains distinct from clear; **met** --
+  `retraction_state`/`preprint_state` is `"not_checked"` only when zero
+  providers reported the flag, `"clear"` only when at least one provider
+  explicitly reported `False` and none reported `True`; a dedicated test
+  (`test_publication_status_distinguishes_clear_from_not_checked`) proves
+  these are distinguishable
+- landing-page resolution failure is not labeled a retraction or invalid
+  paper. **met, and not currently reachable** -- Web has no landing-page
+  resolution feature at all (verified: no `landing_page`/URL-resolution code
+  path exists in `knowledge_engine_web/`), so nothing in this repository
+  can conflate a fetch failure with Core's explicit `retracted` observation
 
 ### WEB-FRD-5 -- Research freshness history
 

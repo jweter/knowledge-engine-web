@@ -1,6 +1,6 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-08-19T00:30:00Z"
+updated_at: "2026-08-19T05:30:00Z"
 status_source: "Verified repository state plus docs/web_design.md and docs/federated_discovery_transparency_roadmap.md; this file is a continuity cache and never overrides higher-authority evidence."
 
 product:
@@ -20,9 +20,9 @@ current_milestone:
   state: "active"
   sub_milestone_status:
     WEB-FRD-1_provider_coverage: "complete -- /discover page renders provider status from Core's own recorded outcome, never inferred from result count"
-    WEB-FRD-2_search_provenance_details: "confirmed and annotated this session (see docs/federated_discovery_transparency_roadmap.md's WEB-FRD-2 status). 4 of 5 exit criteria fully met; the remaining one (search-run revision/timestamp) is honestly disclosed as not yet exposed rather than fabricated -- blocked on knowledge-engine-ai's FederatedDiscoveryResult not parsing Core's already-present coverage.created_at field, which is out of this repo's own scope to fix."
-    WEB-FRD-3_work_identity_provider_observations: "complete and merged to main (verified via git log: 'Wire discovery_presentation into /discover, completing WEB-FRD-3') -- the prior 'this session, unmerged -- see PR' note was stale; no open PR exists for it now. /discover calls build_discovery_presentation() and discover.html renders per-candidate disagreement state."
-    WEB-FRD-4_publication_status_warnings: "not started"
+    WEB-FRD-2_search_provenance_details: "4 of 5 exit criteria met; the remaining one (search-run revision/timestamp) is honestly disclosed as not yet exposed rather than fabricated -- still blocked on knowledge-engine-ai's FederatedDiscoveryResult not parsing Core's already-present coverage.created_at field, which is out of this repo's own scope to fix. Unchanged this session."
+    WEB-FRD-3_work_identity_provider_observations: "complete and merged to main. /discover calls build_discovery_presentation() and discover.html renders per-candidate disagreement state."
+    WEB-FRD-4_publication_status_warnings: "implemented this session for the retraction/preprint slice Core+AI currently expose (see docs/federated_discovery_transparency_roadmap.md's WEB-FRD-4 status paragraph). Required bumping knowledge-engine-ai's pinned commit to f4715d32a62748ec1ff395ee57402d192362c1a5 (carries FederatedCandidateSummary.observation_flags, merged via AI PR #49) -- a backward-compatible dependency advance. Correction/expression-of-concern/withdrawal states remain out of scope: Core's ProviderObservation does not carry those fields yet."
     WEB-FRD-5_research_freshness_history: "not started"
     WEB-FRD-6_inspectable_research_path: "not started"
 
@@ -44,7 +44,7 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-08-18T21:57:00Z"
+  checked_at: "2026-08-19T05:30:00Z"
   note: "Live PR/check/issue state is intentionally not cached as authoritative counts here. Scheduled runs must query GitHub directly before acting."
   open_prs: 0
   ci_workflows:
@@ -52,7 +52,7 @@ verified_repository_state:
 
 next_continuation:
   priority: "P5-highest-value-authorized-roadmap"
-  action: "Review/merge the open docs-only WEB-FRD-2 confirmation PR once fresh CI is green. After that, WEB-FRD-4 (publication-status warnings) is the next not-started item -- see docs/federated_discovery_transparency_roadmap.md's WEB-FRD-4 exit criteria. Note: Core's federated-discovery candidates already carry per-provider retracted/preprint observations (ProviderObservation.retracted/.preprint), but knowledge-engine-ai's FederatedCandidateSummary does not surface them yet -- building WEB-FRD-4 for real (not just UI scaffolding) needs that knowledge-engine-ai change first, coordinated the same way WEB-FRD-3 needed a canonical_id/provider_disagreements pin bump. Separately, WEB-FRD-2's one remaining gap (search-run revision/timestamp) also needs a knowledge-engine-ai change (parsing coverage.created_at) before Web can close it."
+  action: "This session opened a PR implementing WEB-FRD-4 (retraction/preprint warnings) -- once it merges, WEB-FRD-5 (research freshness history) or WEB-FRD-6 (inspectable research path) are the next not-started WEB-FRD milestones; read docs/federated_discovery_transparency_roadmap.md's exit criteria for whichever is picked. Separately, WEB-FRD-2's one remaining gap (search-run revision/timestamp) still needs a knowledge-engine-ai change (parsing Core's coverage.created_at) before Web can close it -- out of this repo's own scope. WEB-FRD-4 itself is only partially closed: correction/expression-of-concern/withdrawal states need a Core schema change (new ProviderObservation fields) before an AI change and then a Web change could render them."
   selection_rule: "Before beginning roadmap work, query live PR state. Handle failed, green, blocked, conflicted, or pending existing work according to docs/agent-development-policy.md and knowledge-engine-core's shared policy document."
 
 human_decision_required: null

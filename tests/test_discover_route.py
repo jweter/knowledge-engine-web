@@ -28,6 +28,7 @@ def _discovery_result(
     *,
     completeness: str = "partial",
     provider_disagreements: tuple[SimpleNamespace, ...] | None = (),
+    observation_flags: tuple[SimpleNamespace, ...] = (),
 ) -> SimpleNamespace:
     """One fixture covering every provider outcome WEB-FRD-1 must render.
 
@@ -36,6 +37,8 @@ def _discovery_result(
     single test proves the UI's status label never depends on `result_count`.
     `provider_disagreements` defaults to an empty (available, no conflicts)
     report; pass `None` to simulate a snapshot that predates WEB-FRD-3.
+    `observation_flags` defaults to empty (no provider reported a
+    retraction/preprint flag for this candidate).
     """
 
     return SimpleNamespace(
@@ -78,6 +81,7 @@ def _discovery_result(
                 doi="10.1000/example",
                 publication_year=2026,
                 providers=("pubmed",),
+                observation_flags=observation_flags,
             ),
         ),
         provider_disagreements=provider_disagreements,
@@ -312,6 +316,85 @@ def test_discover_notes_when_disagreement_data_predates_this_search_run(
     assert "predates provider-disagreement reporting" in body
     assert "no provider metadata disagreement reported" not in body
     assert "provider metadata disagreement" not in body
+
+
+def test_discover_shows_not_checked_retraction_status_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Retraction status: not checked by any searched provider." in body
+    assert "publication-status-banner" not in body
+
+
+def test_discover_shows_a_prominent_retraction_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(
+            observation_flags=(
+                SimpleNamespace(
+                    provider="pubmed", retracted=False, preprint=None, preprint_version=None
+                ),
+                SimpleNamespace(
+                    provider="crossref", retracted=True, preprint=None, preprint_version=None
+                ),
+            )
+        ),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "publication-status-banner is-critical" in body
+    assert "Retracted:" in body
+    # The per-provider breakdown remains inspectable and unmerged: pubmed's
+    # explicit "not retracted" is preserved alongside crossref's "retracted".
+    assert "Publication-status observations by provider" in body
+    assert "pubmed" in body and "crossref" in body
+
+
+def test_discover_shows_preprint_badge_with_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(
+            observation_flags=(
+                SimpleNamespace(
+                    provider="arxiv", retracted=None, preprint=True, preprint_version=2
+                ),
+            )
+        ),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "preprint (v2)" in body
+    assert "publication-status-banner" not in body
 
 
 def test_discover_shows_orchestration_error_without_leaking_details(
