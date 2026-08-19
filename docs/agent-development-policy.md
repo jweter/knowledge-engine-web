@@ -72,8 +72,12 @@ opened or opened ready for review.
 ## 4. Development workflow specifics
 
 - Run the full local gate before opening a PR:
-  `ruff format --check .`, `ruff check .`, `mypy .`, `pytest` (Poetry-managed;
-  use the repository's configured virtualenv).
+  `poetry run python scripts/quality_preflight.py` runs `ruff format --check .`,
+  `ruff check .`, `mypy knowledge_engine_web tests`, `pytest`, `pip-audit`, and
+  `git diff --check` in the same order as CI's `checks` job and stops at the
+  first failure -- see `docs/quality_preflight.md`. This is this repository's
+  implementation of the cross-repository prevention rule in
+  `knowledge-engine-core` issue #371.
 - New features that reach `knowledge-engine-ai`/`knowledge-engine-core`
   through a subprocess call should be live-verified against the real `ke`
   binary and, where applicable, real external provider APIs before the PR is
