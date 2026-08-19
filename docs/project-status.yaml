@@ -1,6 +1,6 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-08-19T10:30:00Z"
+updated_at: "2026-08-19T15:00:00Z"
 status_source: "Verified repository state plus docs/web_design.md and docs/federated_discovery_transparency_roadmap.md; this file is a continuity cache and never overrides higher-authority evidence."
 
 product:
@@ -44,15 +44,18 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-08-19T10:30:00Z"
+  checked_at: "2026-08-19T15:00:00Z"
   note: "Live PR/check/issue state is intentionally not cached as authoritative counts here. Scheduled runs must query GitHub directly before acting."
   open_prs: 0
   ci_workflows:
     - ".github/workflows/quality.yml"
+  local_quality_preflight:
+    script: "scripts/quality_preflight.py"
+    note: "Added this session -- was the one repository in the family still missing this pattern (knowledge-engine-core has scripts/quality_preflight.py, knowledge-engine-ai has scripts/preflight.py). Mirrors this repository's own checks job order: ruff format --check, ruff check, mypy knowledge_engine_web tests, pytest, pip-audit, git diff --check."
 
 next_continuation:
   priority: "P5-highest-value-authorized-roadmap"
-  action: "This session opened a PR closing WEB-FRD-2 (search-run timestamp), the last of its 5 exit criteria, by bumping the knowledge-engine-ai pin to fd5964c0f9632d4622224b5d2608d32bc7b34989 (carries FederatedDiscoveryResult.search_run_created_at, merged via AI PR #51) and rendering it in discover.html. Once it merges, WEB-FRD-5 (research freshness history) or WEB-FRD-6 (inspectable research path) are the next not-started WEB-FRD milestones; read docs/federated_discovery_transparency_roadmap.md's exit criteria for whichever is picked. WEB-FRD-4 remains only partially closed: correction/expression-of-concern/withdrawal states need a Core schema change (new ProviderObservation fields) before an AI change and then a Web change could render them."
+  action: "WEB-FRD-2 is confirmed fully merged to main (knowledge-engine-web PR #67). This session closed a cross-repository process gap instead of starting a new WEB-FRD milestone: knowledge-engine-core issue #371 named a project-wide rule (\"a connector-authored branch should not be handed off as PR-ready until the exact repo-local formatter, linter, type checker, and tests have been run\") and knowledge-engine-core/knowledge-engine-ai had both already adopted a local scripts/*preflight*.py mirroring their own CI; this repository had not. Added scripts/quality_preflight.py (+ tests/test_quality_preflight.py, docs/quality_preflight.md) mirroring quality.yml's checks job order, and pointed docs/agent-development-policy.md's workflow section at it. Purely additive tooling/process; no application code, route, schema, or cross-repo contract changed. The next WEB-FRD roadmap slice is still WEB-FRD-5 (research freshness history) or WEB-FRD-6 (inspectable research path), both not started -- read docs/federated_discovery_transparency_roadmap.md's exit criteria for whichever is picked next. WEB-FRD-4 remains only partially closed: correction/expression-of-concern/withdrawal states need a Core schema change (new ProviderObservation fields) before an AI change and then a Web change could render them."
   selection_rule: "Before beginning roadmap work, query live PR state. Handle failed, green, blocked, conflicted, or pending existing work according to docs/agent-development-policy.md and knowledge-engine-core's shared policy document."
 
 human_decision_required: null
