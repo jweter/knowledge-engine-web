@@ -19,3 +19,13 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    ignore:
+      # docs/project-status.yaml / knowledge-engine-core issue #371's
+      # sibling knowledge-engine-web issue #57: the repository's declared
+      # Python line (pyproject.toml's `^3.12`, Ruff/mypy target) is 3.12.
+      # A Docker base-image bump to 3.13+ (PR #43 proposed 3.14-slim) is a
+      # deliberate, coordinated runtime migration -- see issue #57's
+      # "Future migration checklist" -- not a routine dependency update.
+      # Ignore it here instead of closing the same one-line PR repeatedly.
+      - dependency-name: "python"
+        versions: [">=3.13"]
