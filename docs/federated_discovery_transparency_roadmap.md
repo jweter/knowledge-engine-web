@@ -233,13 +233,44 @@ alongside WEB-FRD-2 through WEB-FRD-6, all still not started).
 
 Add expandable search-method details and revision timestamps.
 
+**Status: implemented in `discover.html`'s "Search method and provenance"
+details section, with one honestly-disclosed gap.** This was implemented
+alongside WEB-FRD-1 but, like several other milestones in this project
+family, never received a Status paragraph confirming it against its own
+exit criteria until now -- a stale-documentation defect this entry closes,
+per `docs/agent-development-policy.md` section 2 ("updating the stale
+documentation is part of the work, not deferred cleanup").
+
 Exit criteria:
 
-- provider list and statuses;
-- filters/time bounds;
-- search run ID/revision;
-- citation-expansion and contradiction-search flags;
-- no secrets, local paths, or internal configuration leakage.
+- provider list and statuses; **met** -- the provider table plus the
+  details section's "Providers requested" list, both from Core's own
+  recorded outcome
+- filters/time bounds; **met** -- the details section explicitly states
+  "None. This Web discovery entry point does not currently request a year
+  bound" rather than omitting the row, so absence of a filter is a stated
+  fact, not a silent gap
+- search run ID/revision; **partially met** -- the search run ID is shown
+  (both in the coverage summary and the details section), but no revision
+  timestamp is: the details section explicitly discloses "Preserved in
+  Core's durable search ledger; not yet exposed by this Web-facing
+  contract" rather than fabricating or omitting the row. Confirmed against
+  `knowledge-engine-core`: its `ke federated-discover --output` payload
+  already includes this timestamp (`coverage.created_at`), but
+  `knowledge-engine-ai`'s `ke_client.FederatedDiscoveryResult` -- the only
+  typed value this route receives -- does not parse or carry it yet, so Web
+  has no field to render. Closing this fully requires a
+  `knowledge-engine-ai` change (out of this repo's own scope) before a
+  corresponding Web change; tracked as this milestone's remaining follow-up
+  rather than silently left unstated
+- citation-expansion and contradiction-search flags; **met** -- both shown
+  explicitly as "Not run by this discovery entry point," accurate since
+  `run_discovery()` does not request either
+- no secrets, local paths, or internal configuration leakage. **met** --
+  verified against `discovery_orchestration.py`: `DiscoveryOrchestrationError`
+  messages are fixed visitor-facing strings, never a raw exception, path, or
+  ledger-root value; `main.py`'s `/discover` route passes only the typed
+  `FederatedDiscoveryResult` and `Settings`-free view fields to the template
 
 ### WEB-FRD-3 -- Work identity/provider observations
 
