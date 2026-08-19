@@ -397,9 +397,9 @@ def test_committed_benchmark_is_a_retrieval_regression_gate() -> None:
     assert evaluation.question_count == 12
     assert evaluation.domain_count == 3
     assert evaluation.mean_recall_at_k == 1.0
-    assert evaluation.mean_reciprocal_rank == pytest.approx(11 / 12)
+    assert evaluation.mean_reciprocal_rank == pytest.approx(23 / 24)
     assert evaluation.macro_domain_recall_at_k == 1.0
-    assert evaluation.macro_domain_reciprocal_rank == pytest.approx(11 / 12)
+    assert evaluation.macro_domain_reciprocal_rank == pytest.approx(23 / 24)
     assert evaluation.regression_gate_passed is True
     assert set(evaluation.gated_domain_ids) == {
         "glp1_weight_loss",
@@ -410,7 +410,7 @@ def test_committed_benchmark_is_a_retrieval_regression_gate() -> None:
     assert domain_mrr == {
         "glp1_weight_loss": 1.0,
         "oncology_nsclc_checkpoint_inhibitors": 0.875,
-        "mental_health_mdd_antidepressants": 0.875,
+        "mental_health_mdd_antidepressants": 1.0,
     }
     assert all(
         expected.rank is not None and expected.rank <= evaluation.top_k

@@ -35,7 +35,9 @@ def _insert_paper(
     metadata = MetaData()
     papers = Table("papers", metadata, autoload_with=engine)
     with engine.begin() as connection:
-        connection.execute(insert(papers).values(id=paper_id, title=title, doi=doi))
+        connection.execute(
+            insert(papers).values(id=paper_id, title=title, doi=doi, abstract=abstract or None)
+        )
         connection.execute(
             text(
                 "INSERT INTO paper_search(rowid, title, abstract, body_text, raw_text) "
@@ -260,3 +262,48 @@ def test_answer_retrieval_ignores_non_text_evidence_fields(tmp_path: Path) -> No
 
     assert results[0].doi == "10.1000/example"
     assert results[0].evidence_alignment_score == 0
+
+
+def test_answer_retrieval_favors_the_question_s_rare_term_over_generic_ones(
+    tmp_path: Path,
+) -> None:
+    """A paper whose title is stuffed with terms nearly every corpus paper shares
+    must not outrank a paper that actually addresses the question's one rare,
+    distinguishing term -- the exact "different questions return the same
+    papers" symptom reported against a topically narrow corpus."""
+
+    engine = build_engine(tmp_path)
+    create_papers_table(engine)
+    _create_fts_table(engine)
+    for filler_id in range(1, 7):
+        _insert_paper(
+            engine,
+            paper_id=filler_id,
+            title="Semaglutide and obesity outcomes in adults",
+            doi=f"10.1000/filler-{filler_id}",
+        )
+    _insert_paper(
+        engine,
+        paper_id=7,
+        title="Semaglutide, obesity, and adults: an overview",
+        doi="10.1000/generic",
+    )
+    _insert_paper(
+        engine,
+        paper_id=8,
+        title="A cohort study of participants",
+        doi="10.1000/specific",
+        abstract=(
+            "Semaglutide treatment was associated with improved handgrip "
+            "strength in adults with obesity."
+        ),
+    )
+
+    results = answer_retrieval(
+        engine, "does semaglutide improve handgrip strength in adults with obesity", limit=8
+    )
+
+    assert results[0].doi == "10.1000/specific"
+    specific = next(r for r in results if r.doi == "10.1000/specific")
+    generic = next(r for r in results if r.doi == "10.1000/generic")
+    assert specific.evidence_alignment_score > generic.evidence_alignment_score
