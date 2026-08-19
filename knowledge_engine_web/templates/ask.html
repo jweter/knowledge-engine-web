@@ -70,6 +70,32 @@
     {% elif copilot_result.verification.is_clean %}passed
     {% else %}flagged for review{% endif %}
   </p>
+  {% if copilot_result.verification and not copilot_result.verification.is_clean %}
+  <p class="empty-state">
+    <strong>Verification findings:</strong>
+    <ul>
+      {% if copilot_result.verification.hallucinated_citations %}
+      <li>
+        Cited but not found in this session's retrieved evidence:
+        {% for evidence_record_id in copilot_result.verification.hallucinated_citations %}<code>{{ evidence_record_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+      </li>
+      {% endif %}
+      {% if copilot_result.verification.ungrounded_numbers %}
+      <li>
+        Numbers stated in the narrative but not found in any cited record's claim,
+        result summary, or supplied Evidence Intelligence score:
+        {% for number in copilot_result.verification.ungrounded_numbers %}<code>{{ number }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+      </li>
+      {% endif %}
+      {% if copilot_result.verification.missed_qualifiers %}
+      <li>
+        Qualifying or contradicting evidence records the narrative never cited:
+        {% for evidence_record_id in copilot_result.verification.missed_qualifiers %}<code>{{ evidence_record_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+      </li>
+      {% endif %}
+    </ul>
+  </p>
+  {% endif %}
   {% if failed_steps %}
   <p class="empty-state">
     The durable session recorded an incomplete retrieval workflow. No narrative
