@@ -29,6 +29,7 @@ def _discovery_result(
     completeness: str = "partial",
     provider_disagreements: tuple[SimpleNamespace, ...] | None = (),
     observation_flags: tuple[SimpleNamespace, ...] = (),
+    search_run_created_at: str | None = "2026-08-15T11:22:00+00:00",
 ) -> SimpleNamespace:
     """One fixture covering every provider outcome WEB-FRD-1 must render.
 
@@ -38,13 +39,16 @@ def _discovery_result(
     `provider_disagreements` defaults to an empty (available, no conflicts)
     report; pass `None` to simulate a snapshot that predates WEB-FRD-3.
     `observation_flags` defaults to empty (no provider reported a
-    retraction/preprint flag for this candidate).
+    retraction/preprint flag for this candidate). `search_run_created_at`
+    defaults to a recorded timestamp (WEB-FRD-2); pass `None` to simulate an
+    older cached result or a snapshot predating Core's `coverage.created_at`.
     """
 
     return SimpleNamespace(
         search_run_id="run-abc-123",
         query_text="GLP-1 receptor agonist weight loss",
         completeness=completeness,
+        search_run_created_at=search_run_created_at,
         provider_statuses=(
             SimpleNamespace(
                 provider="pubmed", outcome="success", attempted=True, result_count=5, reason=None
@@ -175,8 +179,36 @@ def test_discover_exposes_search_method_provenance_without_claiming_unrun_steps(
     assert "pubmed, crossref, openalex, semantic_scholar, arxiv" in body
     assert "This Web discovery entry point does not currently request a year bound." in body
     assert body.count("Not run by this discovery entry point.") == 2
-    assert "Preserved in Core's durable search ledger" in body
+    assert "2026-08-15T11:22:00+00:00" in body
     assert "search-provenance facts, not evidence-quality scores" in body
+
+
+def test_discover_shows_not_recorded_when_run_timestamp_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An older cached result or a pre-coverage-block snapshot must not crash.
+
+    `knowledge_engine_ai.ke_client.parse_federated_discovery_result` parses a
+    missing `coverage.created_at` to `None` rather than fabricating a value
+    (WEB-FRD-2); the Web-facing row must say so plainly instead of omitting
+    the row or inventing a timestamp.
+    """
+
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(search_run_created_at=None),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Not recorded for this search run" in body
+    assert "2026-08-15T11:22:00+00:00" not in body
 
 
 def test_discover_shows_degraded_state_in_text_and_visual_treatment(

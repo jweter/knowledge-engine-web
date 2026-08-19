@@ -83,7 +83,14 @@
       <dt>Contradiction-oriented search</dt>
       <dd>Not run by this discovery entry point.</dd>
       <dt>Run timestamp</dt>
-      <dd>Preserved in Core's durable search ledger; not yet exposed by this Web-facing contract.</dd>
+      <dd>
+        {% if result.search_run_created_at %}
+        <code>{{ result.search_run_created_at }}</code>
+        {% else %}
+        Not recorded for this search run (an older cached result, or a
+        snapshot from before Core began recording this timestamp).
+        {% endif %}
+      </dd>
     </dl>
     <p class="disclaimer">
       These are search-provenance facts, not evidence-quality scores. Provider

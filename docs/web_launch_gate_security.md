@@ -92,3 +92,19 @@ between the two revisions -- this is a backward-compatible superset, not a
 breaking bump. `poetry lock` was regenerated and the full quality gate
 (`ruff format --check .`, `ruff check .`, `mypy .`, `pytest`) was run clean
 against the new pin.
+
+## 2026-08-19: AI pin advanced for WEB-FRD-2
+
+`knowledge-engine-ai` is now pinned to commit
+`fd5964c0f9632d4622224b5d2608d32bc7b34989` (was
+`f4715d32a62748ec1ff395ee57402d192362c1a5`), following the same procedure
+as the WEB-FRD-3/WEB-FRD-4 entries above. The previous pin predates AI's
+`FederatedDiscoveryResult.search_run_created_at` field (added by AI's
+`fd5964c`, merged via AI PR #51, which parses Core's already-present
+`coverage.created_at`); rendering the "Run timestamp" row in `discover.html`
+(closing WEB-FRD-2's last exit criterion) requires it. No
+`knowledge-engine-ai` public API was removed or renamed between the two
+revisions -- this is a backward-compatible superset (one new, purely
+additive dataclass field), not a breaking bump. `poetry lock` was
+regenerated and the full quality gate (`ruff format --check .`,
+`ruff check .`, `mypy .`, `pytest`) was run clean against the new pin.
