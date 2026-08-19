@@ -363,6 +363,35 @@ Exit criteria:
 Compare current and previous discovery runs for the same Research Session or
 tracked question.
 
+**Status: scoped and blocked on Core/AI capability that does not exist yet.**
+See `docs/roadmap/web_frd5_freshness_history_design.md` for the full design
+and evidence. Summary: Core's federated-search ledger
+(`federated_search_ledger.py`) already persists every run immutably and
+already has a `research_question_id` field threaded through
+`FederatedDiscoveryService.search()`, but (a) the `federated-discover` CLI
+command never exposes a `--research-question-id` flag to set it, and (b)
+the ledger supports only point lookup by exact `search_run_id` -- there is
+no command to list or filter runs, so even knowing two runs share a question
+would not let a caller find them. `knowledge-engine-ai`'s `ke_client` wraps
+only `federated_discover()` (a new run); it has no wrapper for the existing
+`federated-coverage-report` (fetch one past run by ID) at all, so Web cannot
+reach even a single historical run through the sanctioned `ke_client`
+boundary today, let alone a list of runs. `/discover` is also fully
+stateless Web-side (no saved/tracked question identity, no persistent-disk
+wiring for the ledger root) -- confirmed via `main.py`'s `/discover` route
+and `discovery_orchestration.py`, neither of which read or write any local
+store. The design document lists the exact Core CLI flag, exact new Core
+read command, and exact `ke_client` wrapper functions needed, in that
+dependency order, plus why a client-held "compare within this browser tab"
+shortcut was considered and rejected (it cannot satisfy "return after
+leaving and see what changed," this milestone's actual scenario, and this
+project has an established precedent -- WEB-FRD-4's correction/
+expression-of-concern/withdrawal gap -- of declining exactly this kind of
+look-alike shortcut rather than approximating capability Core/AI do not yet
+provide). No Web code changed for this milestone this session; only the
+design document was added, consistent with `docs/agent-development-policy.md`
+section 6's truthfulness rule against forcing a fabricated implementation.
+
 Exit criteria:
 
 - newly discovered works are visible;

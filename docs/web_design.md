@@ -369,6 +369,32 @@ panel from WEB-FRD-2/WEB-FRD-3 below. See
 `docs/federated_discovery_transparency_roadmap.md`'s WEB-FRD-6 section for
 the full exit-criteria account.
 
+## Scoped, not implemented: WEB-FRD-5 research freshness history
+
+WEB-FRD-5 ("compare current and previous discovery runs for the same
+tracked question") was scoped, not implemented. It genuinely depends on
+Core and AI capability that does not exist yet, not a Web-only wiring gap:
+
+- Core's `federated-discover` CLI never exposes the `research_question_id`
+  parameter that `FederatedDiscoveryService.search()` and the ledger already
+  accept, and the ledger (`FederatedSearchLedger`) supports point lookup by
+  exact `search_run_id` only -- there is no command to list or filter runs
+  by question at all.
+- `knowledge-engine-ai`'s `ke_client` has no wrapper for even the existing
+  `ke federated-coverage-report` (fetch one past run by ID), so Web cannot
+  reach a single historical run through the sanctioned `ke_client` boundary
+  today, let alone a list of runs for one question.
+- `/discover` is fully stateless Web-side today (no tracked-question
+  identity, no persistent-disk wiring for the ledger root).
+
+See `docs/roadmap/web_frd5_freshness_history_design.md` for the full
+evidence, the three-layer data-model split (Core owns run facts and the
+question-correlation ID; Core also needs to own the list-by-question read
+capability; Web owns the "tracked question" product identity and the diff
+rendering), the UI sketch, and why a client-held "compare within this
+browser tab" shortcut was considered and explicitly rejected rather than
+built as a look-alike. No Web code changed for this milestone.
+
 ## Implemented: WEB-FRD-1 provider coverage (`/discover`)
 
 WEB-FRD-1 is complete. `docs/federated_discovery_transparency_roadmap.md`
