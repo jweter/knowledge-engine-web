@@ -75,3 +75,20 @@ structural-typing check against `DiscoveryResultSource` failed against the
 old pin until this bump. No `knowledge-engine-ai` public API was removed or
 renamed between the two revisions -- this is a backward-compatible superset,
 not a breaking bump.
+
+## 2026-08-19: AI pin advanced for WEB-FRD-4
+
+`knowledge-engine-ai` is now pinned to commit
+`f4715d32a62748ec1ff395ee57402d192362c1a5` (was
+`9a214c3288107d0426000184a9fea364b529b01b`), following the same procedure as
+the WEB-FRD-3 entry above. The previous pin predates AI's
+`FederatedProviderObservationFlags` /
+`FederatedCandidateSummary.observation_flags` fields (added by AI's
+`f4715d3`, merged via AI PR #49); rendering per-provider retraction/preprint
+observations (WEB-FRD-4) requires them, and mypy's structural-typing check
+against the extended `CandidateSource` protocol failed against the old pin
+until this bump. No `knowledge-engine-ai` public API was removed or renamed
+between the two revisions -- this is a backward-compatible superset, not a
+breaking bump. `poetry lock` was regenerated and the full quality gate
+(`ruff format --check .`, `ruff check .`, `mypy .`, `pytest`) was run clean
+against the new pin.
