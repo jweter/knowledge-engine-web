@@ -76,6 +76,12 @@
     should be treated as a complete answer.
   </p>
   {% endif %}
+  {% if copilot_result.close_result.validation and copilot_result.close_result.validation.unresolved_required_criteria %}
+  <p class="empty-state">
+    <strong>Unresolved close-gate criteria:</strong>
+    {% for criterion_id in copilot_result.close_result.validation.unresolved_required_criteria %}<code>{{ criterion_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+  {% endif %}
   {% if copilot_result.synthesis_error %}
   <p class="empty-state">The local model did not produce a narrative. The session recorded the failure.</p>
   {% elif copilot_result.narrative_releaseable %}
@@ -99,6 +105,37 @@
     </li>
     {% endfor %}
   </ul>
+  {% endif %}
+  {% if copilot_result.trace and copilot_result.trace.events %}
+  <details class="discovery-method-details">
+    <summary>Research path (session trace)</summary>
+    <p class="disclaimer">
+      Every deterministic step this durable session actually ran, in order,
+      exactly as recorded on the session's own event log -- not a summary or
+      an inferred description.
+    </p>
+    <ol class="ask-trace-events">
+      {% for event in copilot_result.trace.events %}
+      <li>
+        <strong>{{ event.workflow_node }}</strong> --
+        {% if event.succeeded %}succeeded{% else %}FAILED{% endif %}
+        {% if event.model_name or event.tool_name %} via <code>{{ event.model_name or event.tool_name }}</code>{% endif %}
+        {% if event.duration_ms is not none %} ({{ event.duration_ms }}ms){% endif %}
+        {% if event.notes %}<br /><span class="disclaimer">{{ event.notes }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <dl>
+      <dt>Total recorded duration</dt>
+      <dd>
+        {% if copilot_result.trace.total_duration_ms is not none %}{{ copilot_result.trace.total_duration_ms }}ms (known-duration steps only){% else %}not recorded{% endif %}
+      </dd>
+      <dt>Evidence records traced to this run</dt>
+      <dd>
+        {% if copilot_result.trace.evidence_record_ids %}{% for evidence_record_id in copilot_result.trace.evidence_record_ids %}<code>{{ evidence_record_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}{% else %}none recorded on any event{% endif %}
+      </dd>
+    </dl>
+  </details>
   {% endif %}
   {% elif not copilot_error %}
   <p class="empty-state">No Research Copilot result was returned.</p>

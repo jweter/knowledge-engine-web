@@ -1457,7 +1457,10 @@ def _copilot_result() -> SimpleNamespace:
         narrative="Semaglutide reduces body weight [ev-1].",
         narrative_releaseable=True,
         synthesis_error=None,
-        close_result=SimpleNamespace(status=SimpleNamespace(value="completed")),
+        close_result=SimpleNamespace(
+            status=SimpleNamespace(value="completed"),
+            validation=SimpleNamespace(unresolved_required_criteria=()),
+        ),
         workflow=SimpleNamespace(steps=(SimpleNamespace(succeeded=True),)),
         verification=SimpleNamespace(is_clean=True),
         session_report=SimpleNamespace(
@@ -1468,6 +1471,33 @@ def _copilot_result() -> SimpleNamespace:
                     paper_doi="10.1000/example",
                 ),
             )
+        ),
+        trace=SimpleNamespace(
+            events=(
+                SimpleNamespace(
+                    workflow_node="retrieval",
+                    executor_type="deterministic_tool",
+                    tool_name="ke evidence-report",
+                    model_name=None,
+                    succeeded=True,
+                    duration_ms=420,
+                    notes=None,
+                    source_ids=("ev-1",),
+                ),
+                SimpleNamespace(
+                    workflow_node="synthesis",
+                    executor_type="local_llm",
+                    tool_name=None,
+                    model_name="llama3",
+                    succeeded=True,
+                    duration_ms=1800,
+                    notes=None,
+                    source_ids=(),
+                ),
+            ),
+            failed_events=(),
+            total_duration_ms=2220,
+            evidence_record_ids=("ev-1",),
         ),
     )
 
@@ -1599,6 +1629,13 @@ def test_ask_synthesize_renders_the_research_copilot_result(
     assert "Workflow:</strong> completed" in response.text
     assert "Verification:</strong>" in response.text
     assert "A Trial of Semaglutide. (2026)." in response.text
+    assert "Unresolved close-gate criteria" not in response.text
+    assert "Research path (session trace)" in response.text
+    assert "<strong>retrieval</strong>" in response.text
+    assert "<strong>synthesis</strong>" in response.text
+    assert "via <code>llama3</code>" in response.text
+    assert "2220ms (known-duration steps only)" in response.text
+    assert "Evidence records traced to this run" in response.text
 
 
 def test_ask_copilot_result_marks_an_incomplete_workflow(
@@ -1636,7 +1673,12 @@ def test_ask_withholds_a_narrative_when_the_close_gate_blocks(
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
     result = _copilot_result()
     result.narrative_releaseable = False
-    result.close_result = SimpleNamespace(status=SimpleNamespace(value="blocked"))
+    result.close_result = SimpleNamespace(
+        status=SimpleNamespace(value="blocked"),
+        validation=SimpleNamespace(
+            unresolved_required_criteria=("citation_integrity", "contradiction_review")
+        ),
+    )
     result.verification = SimpleNamespace(is_clean=False)
     monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
     monkeypatch.setattr(
@@ -1655,6 +1697,50 @@ def test_ask_withholds_a_narrative_when_the_close_gate_blocks(
     assert "Semaglutide reduces body weight [ev-1]." not in response.text
     assert "Resolved citations" not in response.text
     assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
+    assert "Unresolved close-gate criteria" in response.text
+    assert "<code>citation_integrity</code>" in response.text
+    assert "<code>contradiction_review</code>" in response.text
+
+
+def test_ask_trace_section_shows_a_failed_step_and_its_notes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    result = _copilot_result()
+    failed_event = SimpleNamespace(
+        workflow_node="contradiction_search",
+        executor_type="deterministic_tool",
+        tool_name="ke evidence-report",
+        model_name=None,
+        succeeded=False,
+        duration_ms=None,
+        notes="ke evidence-report exited non-zero.",
+        source_ids=(),
+    )
+    result.trace = SimpleNamespace(
+        events=(*result.trace.events, failed_event),
+        failed_events=(failed_event,),
+        total_duration_ms=2220,
+        evidence_record_ids=("ev-1",),
+    )
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: result,
+    )
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "<strong>contradiction_search</strong>" in response.text
+    assert "FAILED" in response.text
+    assert "ke evidence-report exited non-zero." in response.text
 
 
 def test_ask_synthesize_reports_a_sanitized_copilot_error_inline(

@@ -340,6 +340,35 @@ Web-to-AI-to-Core path passed its independent workflow, citation, and
 contradiction gates, and Web now withholds generated drafts whenever that gate
 does not pass. This verification does not enable the Render alpha.
 
+## Implemented: WEB-FRD-6 inspectable research path (`/ask`)
+
+WEB-FRD-6 is implemented for the `/ask` Research Copilot session path.
+`knowledge-engine-ai`'s `run_research_question` already returns a
+`ResearchQuestionResult` carrying a full `SessionTrace` (AI-O9's
+`build_session_trace`: every deterministic/LLM step that ran, in order, its
+tool or model, recorded duration, notes, and the evidence-record IDs it
+touched) and a `SessionCloseResult` whose `validation` names exactly which
+required Research ISA criteria are unresolved. Both fields already reached
+`ask.html`'s template context but were unused -- only the aggregate close-gate
+status enum (`completed`/`blocked`) was shown, and the trace was discarded
+entirely, the same "built but unreachable" gap already found and fixed for
+WEB-FRD-1 and WEB-FRD-3 below.
+
+`ask.html` now renders a "Research path (session trace)" `<details>` section
+(closed by default, same collapsed-by-default pattern as `/discover`'s
+"Search method and provenance") listing every recorded step with its
+success/failure state, tool or model, duration, and notes, plus the
+deduplicated evidence-record IDs the whole run touched. Whenever the close
+gate is blocked, the specific unresolved required criteria (e.g.
+`citation_integrity`, `contradiction_review`) now render explicitly instead
+of only the status label. This is purely additive Web-only template/route
+work -- no `knowledge-engine-ai` or Core change was needed, and the default
+(non-expanded) answer view is unchanged. It does not cover `/discover`'s
+federated-discovery search context, which already has its own provenance
+panel from WEB-FRD-2/WEB-FRD-3 below. See
+`docs/federated_discovery_transparency_roadmap.md`'s WEB-FRD-6 section for
+the full exit-criteria account.
+
 ## Implemented: WEB-FRD-1 provider coverage (`/discover`)
 
 WEB-FRD-1 is complete. `docs/federated_discovery_transparency_roadmap.md`
