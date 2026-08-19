@@ -233,13 +233,25 @@ alongside WEB-FRD-2 through WEB-FRD-6, all still not started).
 
 Add expandable search-method details and revision timestamps.
 
-**Status: implemented in `discover.html`'s "Search method and provenance"
-details section, with one honestly-disclosed gap.** This was implemented
-alongside WEB-FRD-1 but, like several other milestones in this project
-family, never received a Status paragraph confirming it against its own
-exit criteria until now -- a stale-documentation defect this entry closes,
-per `docs/agent-development-policy.md` section 2 ("updating the stale
-documentation is part of the work, not deferred cleanup").
+**Status: complete.** All five exit criteria are now met. The milestone's
+one remaining gap -- the "Run timestamp" row -- was blocked on
+`knowledge-engine-ai`'s `FederatedDiscoveryResult` not parsing Core's
+already-present `coverage.created_at` field. `knowledge-engine-ai` PR #51
+("Parse Core's coverage.created_at into FederatedDiscoveryResult
+(WEB-FRD-2)") added `FederatedDiscoveryResult.search_run_created_at: str |
+None`, merged to `knowledge-engine-ai`'s `main` at commit
+`fd5964c0f9632d4622224b5d2608d32bc7b34989`. This session bumped Web's
+pinned `knowledge-engine-ai` revision to that commit (was
+`f4715d32a62748ec1ff395ee57402d192362c1a5`) -- a backward-compatible
+dependency advance, the same two-step "AI merges first, then Web consumes
+it" procedure already used for WEB-FRD-3/WEB-FRD-4 (see
+`docs/web_launch_gate_security.md`'s dated entries) -- and rendered the
+field directly in `discover.html`'s "Run timestamp" row: the recorded ISO
+8601 timestamp when `result.search_run_created_at` is present, or an
+explicit "Not recorded for this search run" disclosure when it is `None`
+(an older cached result, or a snapshot from before Core began recording
+this timestamp) rather than fabricating a value or silently omitting the
+row.
 
 Exit criteria:
 
@@ -250,19 +262,13 @@ Exit criteria:
   "None. This Web discovery entry point does not currently request a year
   bound" rather than omitting the row, so absence of a filter is a stated
   fact, not a silent gap
-- search run ID/revision; **partially met** -- the search run ID is shown
-  (both in the coverage summary and the details section), but no revision
-  timestamp is: the details section explicitly discloses "Preserved in
-  Core's durable search ledger; not yet exposed by this Web-facing
-  contract" rather than fabricating or omitting the row. Confirmed against
-  `knowledge-engine-core`: its `ke federated-discover --output` payload
-  already includes this timestamp (`coverage.created_at`), but
-  `knowledge-engine-ai`'s `ke_client.FederatedDiscoveryResult` -- the only
-  typed value this route receives -- does not parse or carry it yet, so Web
-  has no field to render. Closing this fully requires a
-  `knowledge-engine-ai` change (out of this repo's own scope) before a
-  corresponding Web change; tracked as this milestone's remaining follow-up
-  rather than silently left unstated
+- search run ID/revision; **met** -- the search run ID is shown (both in
+  the coverage summary and the details section), and the run timestamp is
+  now shown in the details section's "Run timestamp" row: the recorded
+  value from Core's `coverage.created_at` (via `knowledge-engine-ai`'s
+  `search_run_created_at`) when present, and an explicit "not recorded"
+  disclosure -- never a fabricated or silently omitted value -- when the
+  snapshot predates the field or is missing it
 - citation-expansion and contradiction-search flags; **met** -- both shown
   explicitly as "Not run by this discovery entry point," accurate since
   `run_discovery()` does not request either
