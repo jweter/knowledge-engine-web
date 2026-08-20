@@ -502,3 +502,27 @@ for the current per-criterion accounting). Correction/expression-of-concern/
 withdrawal states remain out of scope, unrelated to this slice: Core's
 `ProviderObservation` still does not carry those fields (a separate,
 still-blocked Core schema change, the same one WEB-FRD-4 already named).
+
+## 11. PR #75 review follow-up: an unusable snapshot could masquerade as a valid empty baseline
+
+A P1 review comment on PR #75 (this section's own PR) identified a real gap
+in section 10's "a run persisted before this change loads with an honest
+empty candidate list, never a fabrication" framing: that honest empty
+`candidates` tuple is indistinguishable, on its own, from a run that
+genuinely had zero candidates. `main.py`'s composition step only checked
+`previous_snapshot is not None` before trusting it as a complete baseline --
+so a run recorded before Core PR #394's candidate-snapshot persistence
+existed (nonzero aggregate `candidate_count`, empty `candidates` tuple) was
+wrongly treated as a valid zero-candidate baseline, making every current
+candidate render as newly discovered.
+
+Fixed by adding `discovery_freshness.candidate_snapshot_is_usable()`, which
+checks the snapshot's own internal consistency (`len(candidates) > 0` or
+`coverage.candidate_count == 0`) before `main.py` trusts it. An inconsistent
+snapshot now falls back to the run-level-only comparison exactly as a failed
+or missing lookup already did -- no new fallback mechanism, reusing the one
+this section already documents. Regression test:
+`tests/test_discover_route.py::test_discover_degrades_to_run_level_freshness_when_prior_snapshot_predates_persistence`,
+confirmed to fail against the pre-fix code and pass after. Full
+`quality_preflight.py` passed (333 tests -- 332 from section 10 plus this
+one).

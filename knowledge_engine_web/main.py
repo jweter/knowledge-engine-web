@@ -35,6 +35,7 @@ from knowledge_engine_web.dashboard import build_evidence_intelligence_dashboard
 from knowledge_engine_web.discovery_freshness import (
     build_candidate_freshness,
     build_discovery_freshness,
+    candidate_snapshot_is_usable,
 )
 from knowledge_engine_web.discovery_orchestration import (
     DiscoveryOrchestrationError,
@@ -768,10 +769,15 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
 
         # Candidate-level slice (WEB-FRD-5 item 7): only attempted once a
         # prior run for this tracked question is actually known to exist.
-        # Equally best-effort -- a failed or empty snapshot leaves
-        # `freshness` at its run-level-only state rather than failing the
-        # page, matching the run-level lookup's own degrade-gracefully
-        # contract above.
+        # Equally best-effort -- a failed, missing, or unusable snapshot
+        # leaves `freshness` at its run-level-only state rather than failing
+        # the page, matching the run-level lookup's own degrade-gracefully
+        # contract above. "Unusable" (`candidate_snapshot_is_usable`) covers
+        # a run that predates Core's candidate-snapshot persistence: the
+        # point lookup succeeds but returns an honest empty `candidates`
+        # tuple even though that run's own aggregate `candidate_count` was
+        # nonzero. Treating that as a valid zero-candidate baseline would
+        # misreport every current candidate as newly discovered.
         if (
             freshness is not None
             and not freshness.is_first_recorded_search
@@ -784,7 +790,7 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
                 )
             except DiscoveryOrchestrationError:
                 previous_snapshot = None
-            if previous_snapshot is not None:
+            if previous_snapshot is not None and candidate_snapshot_is_usable(previous_snapshot):
                 candidate_level = build_candidate_freshness(
                     presentation.candidates, previous_snapshot.candidates
                 )

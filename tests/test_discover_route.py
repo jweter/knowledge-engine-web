@@ -535,8 +535,25 @@ def _prior_run_history(*, candidate_count: int = 0) -> SimpleNamespace:
     )
 
 
-def _candidate_snapshot(*, candidates: tuple[SimpleNamespace, ...]) -> SimpleNamespace:
-    return SimpleNamespace(search_run_id="run-prior", coverage=None, candidates=candidates)
+def _candidate_snapshot(
+    *, candidates: tuple[SimpleNamespace, ...], candidate_count: int | None = None
+) -> SimpleNamespace:
+    """A `FederatedCoverageReportResult`-shaped fixture.
+
+    ``candidate_count`` defaults to matching ``len(candidates)`` -- a
+    self-consistent snapshot, as Core reports for any run persisted after
+    candidate-snapshot persistence (Core PR #394) landed. Pass an explicit,
+    higher value to simulate a run that predates that change: the point
+    lookup still reports its real historical aggregate count on ``coverage``
+    but an honest empty ``candidates`` tuple.
+    """
+
+    resolved_count = len(candidates) if candidate_count is None else candidate_count
+    return SimpleNamespace(
+        search_run_id="run-prior",
+        coverage=SimpleNamespace(candidate_count=resolved_count),
+        candidates=candidates,
+    )
 
 
 def test_discover_shows_newly_discovered_candidates_when_snapshot_is_available(
@@ -568,6 +585,52 @@ def test_discover_shows_newly_discovered_candidates_when_snapshot_is_available(
     assert "Newly discovered works" in body
     assert "A Trial of Semaglutide for Body Weight Reduction" in body
     assert "cannot yet show which specific works are newly" not in body
+
+
+def test_discover_degrades_to_run_level_freshness_when_prior_snapshot_predates_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A prior run recorded before Core PR #394 must not fake a zero-candidate baseline.
+
+    Regression test for the PR #75 review finding: such a run's point lookup
+    succeeds and returns an empty ``candidates`` tuple, but that run's own
+    aggregate ``candidate_count`` was nonzero -- the snapshot has no real
+    per-candidate data, not "this run found zero candidates". Treating the
+    empty tuple as a valid baseline would misreport the current run's only
+    candidate as newly discovered; the correct behavior is to fall back to
+    the run-level-only comparison instead.
+    """
+
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(completeness="complete"),
+    )
+    monkeypatch.setattr(
+        main,
+        "run_discovery_history",
+        lambda settings, research_question_id: _prior_run_history(candidate_count=3),
+    )
+    monkeypatch.setattr(
+        main,
+        "run_discovery_candidate_snapshot",
+        # Predates candidate-snapshot persistence: an honest empty
+        # `candidates` tuple alongside the run's real, nonzero
+        # `candidate_count`.
+        lambda settings, search_run_id: _candidate_snapshot(candidates=(), candidate_count=3),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Since your last search" in body
+    assert "cannot yet show which specific works are newly" in body
+    assert "Newly discovered works" not in body
+    assert "A Trial of Semaglutide for Body Weight Reduction" in body
 
 
 def test_discover_shows_newly_retracted_candidates_with_was_now_framing(

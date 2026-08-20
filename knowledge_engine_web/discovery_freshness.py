@@ -31,6 +31,16 @@ than failing the whole "Since your last search" section. This is the same
 discipline this project has already applied elsewhere: render exactly what
 is durably known, and say plainly what is not yet available, rather than
 approximating it.
+
+That same honest-empty-list contract means a point lookup cannot be trusted
+purely because it returned successfully: a run that predates candidate-
+snapshot persistence still reports its real, nonzero aggregate
+`candidate_count` alongside an empty `candidates` tuple, which is
+indistinguishable from a genuinely candidate-free run unless the two are
+cross-checked. `candidate_snapshot_is_usable` below performs that check;
+callers (`main.py`'s `/discover` route) must use it to decide whether the
+candidate-level layer is actually available, the same way they already
+treat a failed lookup as "stay at the run-level-only state".
 """
 
 from __future__ import annotations
@@ -104,6 +114,15 @@ class CurrentCandidateSource(Protocol):
     def providers(self) -> tuple[str, ...]: ...
     @property
     def publication_status(self) -> PublicationStatusView: ...
+
+
+class PastRunCandidateSnapshotSource(Protocol):
+    """One past run's point-lookup result, as `ke_client.FederatedCoverageReportResult`."""
+
+    @property
+    def coverage(self) -> SearchCoverageReportSource: ...
+    @property
+    def candidates(self) -> tuple[PastCandidateSource, ...]: ...
 
 
 class PastCandidateSource(Protocol):
@@ -232,6 +251,30 @@ def build_discovery_freshness(
     )
 
 
+def candidate_snapshot_is_usable(snapshot: PastRunCandidateSnapshotSource) -> bool:
+    """True when `snapshot`'s candidate list can be trusted as a complete baseline.
+
+    A point lookup that predates Core's candidate-snapshot persistence (Core
+    PR #394) still reports its run's real, historical aggregate
+    `coverage.candidate_count`, but an honest empty `candidates` tuple --
+    there is no per-candidate data to return, not "this run found zero
+    candidates". Without this check, that empty tuple is indistinguishable
+    from a genuinely candidate-free prior run: every current candidate would
+    be misreported as newly discovered against a baseline that was never
+    actually observed.
+
+    A snapshot is only usable when its own `candidates` tuple is consistent
+    with its own `coverage.candidate_count` -- either some candidates were
+    actually returned, or the run legitimately had none. Any other
+    combination (nonzero `candidate_count`, empty `candidates`) means the
+    snapshot could not be trusted, and the caller must fall back to the
+    run-level-only comparison `docs/roadmap/web_frd5_freshness_history_design.md`
+    already documents for a failed or unavailable candidate-level lookup.
+    """
+
+    return len(snapshot.candidates) > 0 or snapshot.coverage.candidate_count == 0
+
+
 def build_candidate_freshness(
     current_candidates: tuple[CurrentCandidateSource, ...],
     previous_candidates: tuple[PastCandidateSource, ...],
@@ -296,4 +339,5 @@ __all__ = [
     "RetractedCandidateFreshnessView",
     "build_candidate_freshness",
     "build_discovery_freshness",
+    "candidate_snapshot_is_usable",
 ]
