@@ -1,9 +1,13 @@
 # WEB-FRD-5: Research Freshness History -- Design and Dependency Scoping
 
-Status: design only, not yet implementable. See "Blocking dependencies" below.
+Status: dependencies 1-4 below merged in Core and AI; this repository has
+bumped its pinned `knowledge-engine-ai` revision and implemented items 5-6
+and a run-level (not candidate-level) slice of item 7. See "Section 9:
+2026-08-20 implementation update" at the end of this document for exactly
+what shipped, what remains genuinely blocked, and why. The rest of this
+document is preserved as originally written for its evidence trail.
 Scope: `docs/federated_discovery_transparency_roadmap.md`'s WEB-FRD-5
-("research freshness history"), currently `not started` in
-`docs/project-status.yaml`.
+("research freshness history").
 
 ## 1. What this milestone is actually asking for
 
@@ -338,3 +342,66 @@ It was rejected for this milestone:
    history yet" sentence next to it is not meaningful forward progress on
    this milestone -- it would be documentation dressed as a feature
    commit.
+
+## 9. 2026-08-20 implementation update
+
+Dependencies 1-4 (section 5) have all merged:
+
+1. Core's `federated-discover --research-question-id`/`--project-id` flags: merged.
+2. Core's `ke federated-discover-history <id>` command: merged.
+3. `knowledge-engine-ai`'s `ke_client.federated_discover_history()` wrapper: merged.
+4. `federated_discover()` forwarding `project_id`/`research_question_id`: merged.
+
+This repository bumped its pinned `knowledge-engine-ai` revision to consume
+them and implemented items 5-6 in full, plus a deliberately partial slice
+of item 7:
+
+- **Item 5 (tracked-question identity):** implemented as a pure,
+  deterministic function of normalized query text
+  (`knowledge_engine_web/research_question.py`), not a client-held random
+  token requiring a bookmark. This is a stronger version of what item 5
+  asked for: two people (or the same person on two different devices)
+  asking the same question in the same words are automatically recognized
+  as the same tracked question, with no account or saved state.
+- **Item 6 (persistent-disk ledger wiring):** implemented, mirroring
+  AI-O15's `session_storage_mode`/`session_persistent_root` split exactly
+  (`config.py`'s `discovery_ledger_storage_mode`/
+  `discovery_ledger_persistent_root`, `discovery_orchestration.py`'s
+  `_evaluate_ledger_storage`). `render.yaml` declares the persistent
+  contract at `/var/data`, matching AI-O15's own "declares the contract,
+  does not purchase the disk" posture -- an operator must still attach a
+  real Render disk before this survives a redeploy in production.
+- **Item 7 (diff rendering): implemented only at the run level, not the
+  candidate level.** This is the one place this implementation diverges
+  from the original sketch in section 4, and deliberately so. Section 4's
+  UI sketch shows *specific* new works and a *specific* candidate's
+  retraction flag flipping. That requires knowing what candidates a past
+  run actually returned. `ke_client.federated_discover_history()` -- the
+  wrapper that closed dependency 3 above -- was deliberately built to
+  return only each past run's `SearchCoverageReport` (candidate count,
+  provider outcomes, completeness, its own timestamp), not that run's
+  candidate list, because the underlying Core command
+  (`federated-coverage-report`) that could supply a single past run's full
+  candidates has no `--output` JSON option, and `knowledge-engine-ai`
+  explicitly declined to wrap console-text scraping. Confirmed by reading
+  that project's own `ke_client.py` and its introducing commit's message.
+
+  So what shipped (`discovery_freshness.py`, a "Since your last search"
+  section in `discover.html`) answers three of section 1's seven bullet
+  points honestly -- last search date, whether provider coverage changed,
+  whether the aggregate candidate count changed -- and explicitly declines
+  to answer the other four (specific newly discovered works, specific newly
+  available full text, specific newly discovered citation links, specific
+  corrections/retractions) rather than approximating them from data this
+  project does not have. The rendered section states this limitation to
+  the visitor in plain language.
+
+**What would unblock the remaining, candidate-level slice:** a Core
+capability that returns a specific past run's full candidate list (not just
+its aggregate coverage), reachable through `ke_client` without console-text
+scraping -- e.g. a `--output` JSON option on `federated-coverage-report`, or
+a Core-side persisted-snapshot read command mirroring how
+`federated-discover --output` already writes one at request time. This is a
+Core-repository ask; recorded here rather than filed as a separate Core
+roadmap document because it is a small, single addition to an existing
+command's contract, not a new milestone family of its own.

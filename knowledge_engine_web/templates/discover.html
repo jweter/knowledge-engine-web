@@ -105,6 +105,47 @@
     absence of a result below does not mean the literature does not contain it.
   </p>
   {% endif %}
+
+  {% if freshness %}
+  <details class="discovery-method-details" {% if not freshness.is_first_recorded_search %}open{% endif %}>
+    <summary>Since your last search</summary>
+    {% if freshness.is_first_recorded_search %}
+    <p>This is the first recorded search for this question.</p>
+    {% else %}
+    <dl>
+      <dt>Previous search</dt>
+      <dd>
+        <code>{{ freshness.previous_created_at }}</code>
+        ({{ freshness.prior_run_count }} prior recorded run{% if freshness.prior_run_count != 1 %}s{% endif %}
+        for this question)
+      </dd>
+      <dt>Candidate count</dt>
+      <dd>
+        {% if freshness.candidate_count_delta > 0 %}+{{ freshness.candidate_count_delta }} since last time
+        {% elif freshness.candidate_count_delta < 0 %}{{ freshness.candidate_count_delta }} since last time
+        {% else %}unchanged since last time{% endif %}
+      </dd>
+      <dt>Provider coverage</dt>
+      <dd>
+        {% if freshness.newly_completed_providers %}now reachable: {{ freshness.newly_completed_providers | join(", ") }}<br />{% endif %}
+        {% if freshness.newly_failed_providers %}no longer reachable: {{ freshness.newly_failed_providers | join(", ") }}<br />{% endif %}
+        {% if not freshness.newly_completed_providers and not freshness.newly_failed_providers %}unchanged since last time{% endif %}
+      </dd>
+      <dt>Overall run</dt>
+      <dd>was {{ freshness.previous_completeness }}, now {{ result.completeness }}</dd>
+    </dl>
+    {% endif %}
+    {% if not freshness.per_candidate_history_available %}
+    <p class="disclaimer">
+      This deployment cannot yet show which specific works are newly
+      discovered or newly flagged as retracted between searches -- only the
+      aggregate candidate count and provider coverage above. Per-candidate
+      freshness history needs a search capability Core/AI do not expose yet
+      (see <code>docs/roadmap/web_frd5_freshness_history_design.md</code>).
+    </p>
+    {% endif %}
+  </details>
+  {% endif %}
 </section>
 
 <h2>Results for &ldquo;{{ query }}&rdquo;</h2>

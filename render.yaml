@@ -36,9 +36,7 @@ services:
       - key: KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS
         value: "600"
       # WEB-FRD-1: process-local safety defaults for the separate, opt-in
-      # live-provider discovery path (`/discover`). Ledger writes stay on
-      # ephemeral container storage -- unlike Research Sessions, one
-      # discovery run has no continuity requirement across a redeploy.
+      # live-provider discovery path (`/discover`).
       - key: KE_WEB_DISCOVERY_REQUEST_TIMEOUT_SECONDS
         value: "60"
       - key: KE_WEB_DISCOVERY_MAX_CONCURRENT_REQUESTS
@@ -47,3 +45,17 @@ services:
         value: "5"
       - key: KE_WEB_DISCOVERY_RATE_LIMIT_WINDOW_SECONDS
         value: "600"
+      # WEB-FRD-5 item 6: declares the same persistent-disk contract AI-O15
+      # established for Research Sessions, now for the federated-discovery
+      # ledger -- "since your last search" is otherwise silently false after
+      # every redeploy. Like AI-O15, this does not provision or purchase a
+      # Render disk; without an operator-attached disk at /var/data, the
+      # ledger stays on ephemeral container storage and discovery capability
+      # fails closed per docs/ai_o15_deployed_session_persistence.md's same
+      # procedure.
+      - key: KE_WEB_DISCOVERY_LEDGER_STORAGE_MODE
+        value: persistent
+      - key: KE_WEB_DISCOVERY_LEDGER_PERSISTENT_ROOT
+        value: /var/data
+      - key: KE_WEB_FEDERATED_DISCOVERY_LEDGER_ROOT
+        value: /var/data/federated_discovery_runs

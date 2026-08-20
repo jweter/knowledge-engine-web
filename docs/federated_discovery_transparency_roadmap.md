@@ -363,41 +363,68 @@ Exit criteria:
 Compare current and previous discovery runs for the same Research Session or
 tracked question.
 
-**Status: scoped and blocked on Core/AI capability that does not exist yet.**
-See `docs/roadmap/web_frd5_freshness_history_design.md` for the full design
-and evidence. Summary: Core's federated-search ledger
-(`federated_search_ledger.py`) already persists every run immutably and
-already has a `research_question_id` field threaded through
-`FederatedDiscoveryService.search()`, but (a) the `federated-discover` CLI
-command never exposes a `--research-question-id` flag to set it, and (b)
-the ledger supports only point lookup by exact `search_run_id` -- there is
-no command to list or filter runs, so even knowing two runs share a question
-would not let a caller find them. `knowledge-engine-ai`'s `ke_client` wraps
-only `federated_discover()` (a new run); it has no wrapper for the existing
-`federated-coverage-report` (fetch one past run by ID) at all, so Web cannot
-reach even a single historical run through the sanctioned `ke_client`
-boundary today, let alone a list of runs. `/discover` is also fully
-stateless Web-side (no saved/tracked question identity, no persistent-disk
-wiring for the ledger root) -- confirmed via `main.py`'s `/discover` route
-and `discovery_orchestration.py`, neither of which read or write any local
-store. The design document lists the exact Core CLI flag, exact new Core
-read command, and exact `ke_client` wrapper functions needed, in that
-dependency order, plus why a client-held "compare within this browser tab"
-shortcut was considered and rejected (it cannot satisfy "return after
-leaving and see what changed," this milestone's actual scenario, and this
-project has an established precedent -- WEB-FRD-4's correction/
-expression-of-concern/withdrawal gap -- of declining exactly this kind of
-look-alike shortcut rather than approximating capability Core/AI do not yet
-provide). No Web code changed for this milestone this session; only the
-design document was added, consistent with `docs/agent-development-policy.md`
-section 6's truthfulness rule against forcing a fabricated implementation.
+**Status: items 1-6 implemented; item 7 (and two of four exit criteria)
+remain honestly blocked on Core/AI capability that does not exist yet.**
+See `docs/roadmap/web_frd5_freshness_history_design.md` (updated) for the
+full evidence trail. Core's FRD-6 follow-up (`--research-question-id`/
+`--project-id` on `federated-discover`, plus a new
+`federated-discover-history <id>` command over `FederatedSearchLedger`) and
+`knowledge-engine-ai`'s matching `ke_client.federated_discover_history()`
+wrapper (with `federated_discover()` now forwarding both IDs) have both
+merged; this repository bumped its pinned `knowledge-engine-ai` revision to
+consume them, the same two-step sequencing already used for WEB-FRD-2/3/4.
+
+What shipped this session:
+
+- **Item 5 (tracked-question identity):** `knowledge_engine_web/research_question.py`'s
+  `derive_research_question_id()` is a pure, deterministic function of the
+  normalized query text (case-folded, whitespace-collapsed) -- asking "the
+  same question" later, from any browser or device, reproduces the same ID
+  with no account, cookie, or bookmarked URL required. `/discover` now
+  passes this ID to both `federated_discover()` (tagging the run) and the
+  new history lookup below.
+- **Item 6 (persistent ledger wiring):** `discovery_ledger_storage_mode`/
+  `discovery_ledger_persistent_root` settings mirror AI-O15's
+  `session_storage_mode`/`session_persistent_root` split exactly (same
+  canonical-containment, symlink-escape-rejecting capability check); the
+  Render blueprint declares `persistent` mode at `/var/data`, same
+  "declares the contract, does not purchase the disk" posture as AI-O15.
+- **Item 7 (diff rendering), partially:** `discovery_freshness.py`'s
+  `build_discovery_freshness()` compares the just-completed run against its
+  own prior history (`ke_client.federated_discover_history()`) and
+  `discover.html` renders a "Since your last search" section -- but see
+  below for what this *cannot* honestly show yet.
+
+**Why two exit criteria stay unmet, deliberately:** `federated-discover-history`
+returns each past run's aggregate `SearchCoverageReport` (candidate count,
+provider outcomes, completeness, timestamp) -- not that run's candidate
+list. `knowledge-engine-ai`'s own PR that added the wrapper explicitly
+declined to also wrap `federated-coverage-report` for point lookups,
+because that Core command has no `--output` JSON option and wrapping it
+would mean scraping console text. Without a past run's actual candidate
+list, this repository cannot honestly say *which* works are newly
+discovered or *which* candidate is newly flagged retracted between two
+runs -- only that the aggregate candidate count changed by some delta and
+that provider coverage changed. Rendering a "newly discovered work" card
+built from data this repository does not have would be exactly the kind of
+look-alike this project has already declined once (WEB-FRD-4's correction/
+withdrawal states) rather than approximating capability Core/AI have not
+yet built. `discover.html`'s freshness section states this limitation
+explicitly rather than silently omitting it or overclaiming.
 
 Exit criteria:
 
-- newly discovered works are visible;
-- new corrections/retractions are highlighted;
-- provider-coverage changes are shown;
-- old synthesis is versioned rather than silently rewritten.
+- newly discovered works are visible; **not met -- blocked on Core exposing
+  per-candidate historical data (see above); tracked in
+  `docs/roadmap/web_frd5_freshness_history_design.md`**
+- new corrections/retractions are highlighted; **not met, same blocker**
+- provider-coverage changes are shown; **met** -- `discover.html`'s
+  freshness section shows which providers newly completed or newly stopped
+  completing since the previous run for the same tracked question
+- old synthesis is versioned rather than silently rewritten; **not
+  applicable to `/discover`** -- discovery has no synthesis step (this
+  criterion was written for a `/ask`-style narrated answer; `/discover` is
+  retrieval-only, so there is no synthesis to version here)
 
 ### WEB-FRD-6 -- Inspectable research path
 
