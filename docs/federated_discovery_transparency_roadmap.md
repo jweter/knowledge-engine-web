@@ -338,9 +338,20 @@ color-only) whenever any provider reports retraction, a distinct
 "not checked" disclosure otherwise, a preprint badge with version when
 reported, and an expandable per-provider observation breakdown so no single
 provider's assertion is silently treated as authoritative. Correction,
-expression-of-concern, and withdrawal states remain out of scope: Core's
-`ProviderObservation` does not yet carry those fields, so rendering them
-would require a Core (and then AI) change first, not a Web-only slice.
+expression-of-concern, and withdrawal states were out of scope here: Core's
+`ProviderObservation` did not yet carry those fields, so rendering them
+required a Core (and then AI) change first, not a Web-only slice.
+
+**Unblocked 2026-08-20.** Core added the three optional fields, Core PR #396
+(commit `4866ebd`) wired Crossref's `update-to` relation to populate them with
+real data, and `knowledge-engine-ai` PR #57 (commit `58c21b1`) added the
+matching `ke_client` parsing. Rendering them is now a Web-only slice: bump the
+pinned `knowledge-engine-ai` revision past `58c21b1` and extend
+`build_publication_status()` and the banner. The four flags are independent and
+non-exclusive -- a work may be corrected and later retracted -- so they must not
+be collapsed into a single status enum or a priority ladder that hides the
+others, and an unreported flag stays unknown rather than being rendered as an
+affirmative "clear".
 
 Exit criteria:
 
@@ -432,10 +443,10 @@ Exit criteria:
   -- a candidate whose `PublicationStatusView.retraction_state` flips to
   `"retracted"` between the previous run's snapshot and the current run is
   shown with an explicit "was clear/not checked, now retracted" banner.
-  Correction/expression-of-concern/withdrawal states remain out of scope
-  for the same reason WEB-FRD-4 left them out: Core's `ProviderObservation`
-  does not carry those fields yet -- a separate, still-blocked Core change,
-  not part of this milestone's dependency chain
+  Correction/expression-of-concern/withdrawal states were out of scope
+  for the same reason WEB-FRD-4 left them out; that Core-side block cleared on
+  2026-08-20 (see the WEB-FRD-4 section above), but rendering them belongs to
+  WEB-FRD-4's remaining slice rather than to this milestone's dependency chain
 - provider-coverage changes are shown; **met** -- `discover.html`'s
   freshness section shows which providers newly completed or newly stopped
   completing since the previous run for the same tracked question
