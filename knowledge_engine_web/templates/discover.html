@@ -1,6 +1,81 @@
 {% extends "base.html" %}
 {% block title %}Knowledge Engine -- Discover{% endblock %}
 {% block content %}
+{% macro candidate_card(candidate) %}
+  <p class="trust-label">Discovery candidate</p>
+  <h3>{{ candidate.title }}</h3>
+  <p class="disclaimer">
+    {% if candidate.doi %}DOI: {{ candidate.doi }}{% endif %}
+    {% if candidate.publication_year %} &middot; {{ candidate.publication_year }}{% endif %}
+    &middot; observed by {{ candidate.providers | join(", ") }}
+  </p>
+  {% if candidate.publication_status.retraction_state == "retracted" %}
+  <p class="publication-status-banner is-critical" role="alert">
+    <strong>&#9888; Retracted:</strong> at least one provider reports this
+    work as retracted. Do not treat it as reliable evidence without
+    checking the retraction notice yourself.
+  </p>
+  {% elif candidate.publication_status.retraction_state == "not_checked" %}
+  <p class="disclaimer">Retraction status: not checked by any searched provider.</p>
+  {% else %}
+  <p class="disclaimer">Retraction status: no provider reports this work as retracted.</p>
+  {% endif %}
+  {% if candidate.publication_status.preprint_state == "preprint" %}
+  <p>
+    <span class="discovery-status is-degraded"
+      >preprint{% if candidate.publication_status.preprint_versions %} (v{{ candidate.publication_status.preprint_versions[0] }}){% endif %}</span
+    >
+  </p>
+  {% endif %}
+  {% if candidate.publication_status.observations %}
+  <details class="discovery-method-details">
+    <summary>Publication-status observations by provider</summary>
+    <dl>
+      {% for obs in candidate.publication_status.observations %}
+      <dt>{{ obs.provider }}</dt>
+      <dd>
+        retracted:
+        {% if obs.retracted is none %}not reported{% else %}{{ obs.retracted }}{% endif %}
+        &middot; preprint:
+        {% if obs.preprint is none %}not reported{% elif obs.preprint %}yes{% if obs.preprint_version %} (v{{ obs.preprint_version }}){% endif %}{% else %}no{% endif %}
+      </dd>
+      {% endfor %}
+    </dl>
+    <p class="disclaimer">
+      Each row is one provider's own self-reported status, preserved
+      unmerged. No provider is treated as authoritative, and a provider
+      that did not report a flag is shown as "not reported," never guessed.
+    </p>
+  </details>
+  {% endif %}
+  {% if candidate.disagreement_state == "reported" %}
+  <p>
+    <span class="discovery-status is-degraded">provider metadata disagreement</span>
+  </p>
+  <details class="discovery-method-details">
+    <summary>What providers disagree about</summary>
+    <dl>
+      {% for disagreement in candidate.disagreements %}
+      <dt>{{ disagreement.field }}</dt>
+      <dd>
+        {% for assertion in disagreement.assertions %}
+        <span class="disclaimer">{{ assertion.provider }}: {{ assertion.value }}</span>{% if not loop.last %}; {% endif %}
+        {% endfor %}
+      </dd>
+      {% endfor %}
+    </dl>
+    <p class="disclaimer">
+      This is a disagreement between provider-reported metadata (e.g.
+      publication year or venue), not a scientific contradiction between
+      study results. No provider is treated as authoritative.
+    </p>
+  </details>
+  {% elif candidate.disagreement_state == "none_reported" %}
+  <p>
+    <span class="discovery-status is-ok">no provider metadata disagreement reported</span>
+  </p>
+  {% endif %}
+{% endmacro %}
 <h1>Live discovery</h1>
 <p class="disclaimer">
   Searches real scholarly provider APIs (PubMed, Crossref, OpenAlex, Semantic
@@ -134,15 +209,58 @@
       <dt>Overall run</dt>
       <dd>was {{ freshness.previous_completeness }}, now {{ result.completeness }}</dd>
     </dl>
+
+    {% if freshness.per_candidate_history_available %}
+    {% if freshness.candidate_level.newly_discovered %}
+    <h3>Newly discovered works</h3>
+    <p class="disclaimer">
+      Found by this search but absent from the previous recorded run for
+      this question ({{ freshness.candidate_level.newly_discovered | length }}
+      work{% if freshness.candidate_level.newly_discovered | length != 1 %}s{% endif %}).
+    </p>
+    <ol class="ask-results">
+      {% for candidate in freshness.candidate_level.newly_discovered %}
+      <li class="ask-result-card">{{ candidate_card(candidate) }}</li>
+      {% endfor %}
+    </ol>
     {% endif %}
-    {% if not freshness.per_candidate_history_available %}
+    {% if freshness.candidate_level.newly_retracted %}
+    <h3>Newly flagged as retracted</h3>
+    <p class="disclaimer">
+      Reported by at least one provider as retracted this time, but not in
+      the previous recorded run for this question
+      ({{ freshness.candidate_level.newly_retracted | length }}
+      candidate{% if freshness.candidate_level.newly_retracted | length != 1 %}s{% endif %}).
+    </p>
+    <ol class="ask-results">
+      {% for retraction in freshness.candidate_level.newly_retracted %}
+      <li class="ask-result-card">
+        <p class="publication-status-banner is-critical" role="alert">
+          Was
+          {% if retraction.previous_retraction_state == "clear" %}reported clear of retraction{% else %}not checked for retraction{% endif %}
+          in the previous run, now reported retracted.
+        </p>
+        {{ candidate_card(retraction.candidate) }}
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+    {% if not freshness.candidate_level.newly_discovered and not freshness.candidate_level.newly_retracted %}
+    <p class="disclaimer">
+      No newly discovered works and no newly retracted candidates since the
+      previous recorded run for this question.
+    </p>
+    {% endif %}
+    {% else %}
     <p class="disclaimer">
       This deployment cannot yet show which specific works are newly
       discovered or newly flagged as retracted between searches -- only the
-      aggregate candidate count and provider coverage above. Per-candidate
-      freshness history needs a search capability Core/AI do not expose yet
+      aggregate candidate count and provider coverage above. This is a
+      best-effort lookup of the previous run's full candidate snapshot; it
+      was not available for this comparison
       (see <code>docs/roadmap/web_frd5_freshness_history_design.md</code>).
     </p>
+    {% endif %}
     {% endif %}
   </details>
   {% endif %}
@@ -158,81 +276,7 @@
 {% endif %}
 <ol class="ask-results">
   {% for candidate in candidate_cards %}
-  <li class="ask-result-card">
-    <p class="trust-label">Discovery candidate</p>
-    <h3>{{ candidate.title }}</h3>
-    <p class="disclaimer">
-      {% if candidate.doi %}DOI: {{ candidate.doi }}{% endif %}
-      {% if candidate.publication_year %} &middot; {{ candidate.publication_year }}{% endif %}
-      &middot; observed by {{ candidate.providers | join(", ") }}
-    </p>
-    {% if candidate.publication_status.retraction_state == "retracted" %}
-    <p class="publication-status-banner is-critical" role="alert">
-      <strong>&#9888; Retracted:</strong> at least one provider reports this
-      work as retracted. Do not treat it as reliable evidence without
-      checking the retraction notice yourself.
-    </p>
-    {% elif candidate.publication_status.retraction_state == "not_checked" %}
-    <p class="disclaimer">Retraction status: not checked by any searched provider.</p>
-    {% else %}
-    <p class="disclaimer">Retraction status: no provider reports this work as retracted.</p>
-    {% endif %}
-    {% if candidate.publication_status.preprint_state == "preprint" %}
-    <p>
-      <span class="discovery-status is-degraded"
-        >preprint{% if candidate.publication_status.preprint_versions %} (v{{ candidate.publication_status.preprint_versions[0] }}){% endif %}</span
-      >
-    </p>
-    {% endif %}
-    {% if candidate.publication_status.observations %}
-    <details class="discovery-method-details">
-      <summary>Publication-status observations by provider</summary>
-      <dl>
-        {% for obs in candidate.publication_status.observations %}
-        <dt>{{ obs.provider }}</dt>
-        <dd>
-          retracted:
-          {% if obs.retracted is none %}not reported{% else %}{{ obs.retracted }}{% endif %}
-          &middot; preprint:
-          {% if obs.preprint is none %}not reported{% elif obs.preprint %}yes{% if obs.preprint_version %} (v{{ obs.preprint_version }}){% endif %}{% else %}no{% endif %}
-        </dd>
-        {% endfor %}
-      </dl>
-      <p class="disclaimer">
-        Each row is one provider's own self-reported status, preserved
-        unmerged. No provider is treated as authoritative, and a provider
-        that did not report a flag is shown as "not reported," never guessed.
-      </p>
-    </details>
-    {% endif %}
-    {% if candidate.disagreement_state == "reported" %}
-    <p>
-      <span class="discovery-status is-degraded">provider metadata disagreement</span>
-    </p>
-    <details class="discovery-method-details">
-      <summary>What providers disagree about</summary>
-      <dl>
-        {% for disagreement in candidate.disagreements %}
-        <dt>{{ disagreement.field }}</dt>
-        <dd>
-          {% for assertion in disagreement.assertions %}
-          <span class="disclaimer">{{ assertion.provider }}: {{ assertion.value }}</span>{% if not loop.last %}; {% endif %}
-          {% endfor %}
-        </dd>
-        {% endfor %}
-      </dl>
-      <p class="disclaimer">
-        This is a disagreement between provider-reported metadata (e.g.
-        publication year or venue), not a scientific contradiction between
-        study results. No provider is treated as authoritative.
-      </p>
-    </details>
-    {% elif candidate.disagreement_state == "none_reported" %}
-    <p>
-      <span class="discovery-status is-ok">no provider metadata disagreement reported</span>
-    </p>
-    {% endif %}
-  </li>
+  <li class="ask-result-card">{{ candidate_card(candidate) }}</li>
   {% endfor %}
 </ol>
 {% else %}

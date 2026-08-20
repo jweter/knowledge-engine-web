@@ -1,11 +1,13 @@
 # WEB-FRD-5: Research Freshness History -- Design and Dependency Scoping
 
-Status: dependencies 1-4 below merged in Core and AI; this repository has
-bumped its pinned `knowledge-engine-ai` revision and implemented items 5-6
-and a run-level (not candidate-level) slice of item 7. See "Section 9:
-2026-08-20 implementation update" at the end of this document for exactly
-what shipped, what remains genuinely blocked, and why. The rest of this
-document is preserved as originally written for its evidence trail.
+Status: complete. All seven items in section 5's dependency list have
+merged (Core, then AI, then this repository twice -- once for the run-level
+slice, once more for the candidate-level slice), and this repository has
+implemented items 5-7 in full, including the candidate-level diff rendering
+section 4 originally sketched. See "Section 9: 2026-08-20 implementation
+update" at the end of this document for exactly what shipped and how it was
+verified. The rest of this document is preserved as originally written for
+its evidence trail.
 Scope: `docs/federated_discovery_transparency_roadmap.md`'s WEB-FRD-5
 ("research freshness history").
 
@@ -405,3 +407,122 @@ a Core-side persisted-snapshot read command mirroring how
 Core-repository ask; recorded here rather than filed as a separate Core
 roadmap document because it is a small, single addition to an existing
 command's contract, not a new milestone family of its own.
+
+## 10. 2026-08-20 follow-up: candidate-level slice unblocked and shipped
+
+The exact Core capability section 9 asked for landed later the same day:
+
+1. Core PR #394 ("Persist federated-discover candidate snapshots; add
+   coverage-report --output", commit `96d30ac`) added `--output` to
+   `federated-coverage-report` and started persisting each run's full
+   deduplicated candidate list on `SearchRunRecord.candidates`. Purely
+   additive: a run persisted before this change loads with an honest empty
+   candidate list, never a fabrication.
+2. `knowledge-engine-ai` PR #55 (commit `2cab16b`) added
+   `ke_client.federated_coverage_report()`, the point-lookup wrapper for
+   that new command, typed as `FederatedCoverageReportResult` pairing the
+   run's `SearchCoverageReport` with its `FederatedCandidateRecord` /
+   `FederatedCandidateObservation` snapshot.
+
+This repository bumped its pinned `knowledge-engine-ai` revision from
+`f65e340d4d280840a49f3c10a8693dd5aadcc340` to
+`2cab16b47bb9d3f42d777e989bf2637e8310fb4d` to consume it, and implemented
+the candidate-level slice of item 7 that section 9 explicitly deferred:
+
+- `discovery_orchestration.py` gained `run_discovery_candidate_snapshot()`,
+  wrapping `ke_client.federated_coverage_report()` with the same
+  capability-gating and error-sanitizing pattern as the existing
+  `run_discovery_history()`.
+- `discovery_presentation.py`'s per-provider retraction/preprint rollup
+  (`_build_publication_status`) was made public
+  (`build_publication_status()`) so `discovery_freshness.py` could reuse it
+  verbatim against a past run's `FederatedCandidateObservation` records --
+  the same duck-typed shape as the current run's `ObservationFlagSource`,
+  so no adapter layer was needed.
+- `discovery_freshness.py` gained `build_candidate_freshness()`: given the
+  current run's already-computed candidate cards and one past run's full
+  candidate snapshot, it reports candidates present now and absent from the
+  snapshot (`newly_discovered`) and candidates present in both whose
+  `retraction_state` flipped to `"retracted"` (`newly_retracted`, carrying
+  the previous state for a "was clear/not checked, now retracted" framing).
+  A brand-new candidate that happens to already be retracted is reported
+  only in `newly_discovered` -- there is no prior "was" state to compare it
+  against.
+- `main.py`'s `/discover` route composes this as a second, additive,
+  best-effort lookup on top of the existing run-level freshness view (only
+  attempted once a previous run is known to exist), using
+  `dataclasses.replace` to attach the result without touching
+  `build_discovery_freshness()`'s existing, already-tested run-level logic.
+  A failed or empty lookup leaves the view at its run-level-only state.
+- `discover.html` renders "Newly discovered works" and "Newly flagged as
+  retracted" sections, reusing the exact candidate-card markup
+  `/discover`'s main results list already uses (extracted into a local
+  Jinja macro, `candidate_card`, so both call sites stay byte-identical)
+  and WEB-FRD-4's existing retraction banner -- per section 4's original
+  instruction, no separate mini-format was invented.
+
+**Verification:** `poetry run python scripts/quality_preflight.py` passed
+in full (format, lint, mypy, 332 tests -- 318 pre-existing plus 14 new,
+pip-audit, diff hygiene). Per this repository's own development-policy
+discipline against fake-transport-only verification, the new capability was
+also live-verified against the real `ke` binary end to end: a
+`knowledge-engine-core` checkout at the commit containing PR #394 was
+installed, a `FederatedSearchLedger` was seeded directly via Core's own
+`ledger.record()` (no network provider call needed -- this command is a
+pure ledger read, the same justification AI PR #55's own commit message
+gives for its live verification) with two runs for one tracked question: an
+older run with one candidate reported clear of retraction, and a newer run
+with that same candidate now retracted plus one brand-new candidate. A
+local `knowledge-engine-web` server was then started with `KE_WEB_KE_EXECUTABLE`
+and `KE_WEB_FEDERATED_DISCOVERY_LEDGER_ROOT` pointed at that real binary and
+ledger (only the top-level `run_guarded_discovery` -- the one call that
+would otherwise require real external provider API access -- was stubbed to
+return the "current run" fixture matching the seeded newer run), and
+`curl`'d. The response HTML showed "Newly discovered works" naming the
+brand-new candidate and "Newly flagged as retracted" naming the flipped one
+with "Was reported clear of retraction ... now reported retracted," proving
+the real `ke federated-discover-history` and
+`ke federated-coverage-report --output` subprocess calls, Core's real JSON
+contract, `knowledge-engine-ai`'s real parsing, and this repository's diff
+and rendering logic all compose correctly end to end -- not just against
+fixtures.
+
+Docker's `docker` CI job (image build + container smoke test) was not run
+locally for this change -- no Docker daemon was available in this session's
+environment. `pyproject.toml`/`poetry.lock` changed (the pin bump), so this
+is exactly the case `docs/quality_preflight.md` recommends a local Docker
+build for; it was not possible here, so CI's `docker` job is the first
+actual verification of the built image for this change, consistent with
+this repository's "GitHub Actions remains the authoritative merge gate"
+policy.
+
+All four exit criteria are now resolved (three met, one not applicable --
+see `docs/federated_discovery_transparency_roadmap.md`'s WEB-FRD-5 section
+for the current per-criterion accounting). Correction/expression-of-concern/
+withdrawal states remain out of scope, unrelated to this slice: Core's
+`ProviderObservation` still does not carry those fields (a separate,
+still-blocked Core schema change, the same one WEB-FRD-4 already named).
+
+## 11. PR #75 review follow-up: an unusable snapshot could masquerade as a valid empty baseline
+
+A P1 review comment on PR #75 (this section's own PR) identified a real gap
+in section 10's "a run persisted before this change loads with an honest
+empty candidate list, never a fabrication" framing: that honest empty
+`candidates` tuple is indistinguishable, on its own, from a run that
+genuinely had zero candidates. `main.py`'s composition step only checked
+`previous_snapshot is not None` before trusting it as a complete baseline --
+so a run recorded before Core PR #394's candidate-snapshot persistence
+existed (nonzero aggregate `candidate_count`, empty `candidates` tuple) was
+wrongly treated as a valid zero-candidate baseline, making every current
+candidate render as newly discovered.
+
+Fixed by adding `discovery_freshness.candidate_snapshot_is_usable()`, which
+checks the snapshot's own internal consistency (`len(candidates) > 0` or
+`coverage.candidate_count == 0`) before `main.py` trusts it. An inconsistent
+snapshot now falls back to the run-level-only comparison exactly as a failed
+or missing lookup already did -- no new fallback mechanism, reusing the one
+this section already documents. Regression test:
+`tests/test_discover_route.py::test_discover_degrades_to_run_level_freshness_when_prior_snapshot_predates_persistence`,
+confirmed to fail against the pre-fix code and pass after. Full
+`quality_preflight.py` passed (333 tests -- 332 from section 10 plus this
+one).

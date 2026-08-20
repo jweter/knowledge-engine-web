@@ -363,61 +363,79 @@ Exit criteria:
 Compare current and previous discovery runs for the same Research Session or
 tracked question.
 
-**Status: items 1-6 implemented; item 7 (and two of four exit criteria)
-remain honestly blocked on Core/AI capability that does not exist yet.**
-See `docs/roadmap/web_frd5_freshness_history_design.md` (updated) for the
-full evidence trail. Core's FRD-6 follow-up (`--research-question-id`/
-`--project-id` on `federated-discover`, plus a new
-`federated-discover-history <id>` command over `FederatedSearchLedger`) and
-`knowledge-engine-ai`'s matching `ke_client.federated_discover_history()`
-wrapper (with `federated_discover()` now forwarding both IDs) have both
-merged; this repository bumped its pinned `knowledge-engine-ai` revision to
-consume them, the same two-step sequencing already used for WEB-FRD-2/3/4.
+**Status: complete. All seven design-doc items implemented, three of four
+exit criteria met, and the fourth is genuinely not applicable to
+`/discover`.** See `docs/roadmap/web_frd5_freshness_history_design.md`
+section 9 for the full evidence trail. Core's FRD-6 follow-up
+(`--research-question-id`/`--project-id` on `federated-discover`, a new
+`federated-discover-history <id>` command, and -- in a second follow-up --
+candidate-snapshot persistence plus a `federated-coverage-report --output`
+option) and `knowledge-engine-ai`'s matching `ke_client` wrappers
+(`federated_discover_history()`, then `federated_coverage_report()`, PR #55)
+have both merged; this repository bumped its pinned `knowledge-engine-ai`
+revision twice to consume them, the same two-step sequencing already used
+for WEB-FRD-2/3/4.
 
-What shipped this session:
+What shipped, item by item:
 
 - **Item 5 (tracked-question identity):** `knowledge_engine_web/research_question.py`'s
   `derive_research_question_id()` is a pure, deterministic function of the
   normalized query text (case-folded, whitespace-collapsed) -- asking "the
   same question" later, from any browser or device, reproduces the same ID
-  with no account, cookie, or bookmarked URL required. `/discover` now
-  passes this ID to both `federated_discover()` (tagging the run) and the
-  new history lookup below.
+  with no account, cookie, or bookmarked URL required. `/discover` passes
+  this ID to `federated_discover()` (tagging the run) and both history
+  lookups below.
 - **Item 6 (persistent ledger wiring):** `discovery_ledger_storage_mode`/
   `discovery_ledger_persistent_root` settings mirror AI-O15's
   `session_storage_mode`/`session_persistent_root` split exactly (same
   canonical-containment, symlink-escape-rejecting capability check); the
   Render blueprint declares `persistent` mode at `/var/data`, same
   "declares the contract, does not purchase the disk" posture as AI-O15.
-- **Item 7 (diff rendering), partially:** `discovery_freshness.py`'s
+- **Item 7 (diff rendering), now in full:** `discovery_freshness.py`'s
   `build_discovery_freshness()` compares the just-completed run against its
-  own prior history (`ke_client.federated_discover_history()`) and
-  `discover.html` renders a "Since your last search" section -- but see
-  below for what this *cannot* honestly show yet.
+  own prior history (`ke_client.federated_discover_history()`'s aggregate
+  `SearchCoverageReport` per past run) for the run-level facts (last search
+  date, candidate-count delta, provider-coverage delta). A second,
+  additive layer -- `build_candidate_freshness()`, backed by
+  `run_discovery_candidate_snapshot()` wrapping the newly available
+  `ke_client.federated_coverage_report()` -- fetches one specific past
+  run's *full* candidate list (not just its aggregate count) and diffs it
+  against the current run's own candidates by Core's `canonical_id`. This
+  closes the remaining gap: `discover.html`'s "Since your last search"
+  section now names the specific newly discovered works and the specific
+  candidates whose retraction status flipped ("was clear/not checked, now
+  retracted"), reusing WEB-FRD-3's candidate-card rendering and WEB-FRD-4's
+  `PublicationStatusView` rollup rather than inventing a new presentation.
+  This lookup is best-effort and additive: a failure or an empty snapshot
+  (e.g. a run persisted before Core's candidate-snapshot follow-up existed)
+  degrades to the run-level-only view with an explicit disclosure, never a
+  fabricated candidate-level result.
 
-**Why two exit criteria stay unmet, deliberately:** `federated-discover-history`
-returns each past run's aggregate `SearchCoverageReport` (candidate count,
-provider outcomes, completeness, timestamp) -- not that run's candidate
-list. `knowledge-engine-ai`'s own PR that added the wrapper explicitly
-declined to also wrap `federated-coverage-report` for point lookups,
-because that Core command has no `--output` JSON option and wrapping it
-would mean scraping console text. Without a past run's actual candidate
-list, this repository cannot honestly say *which* works are newly
-discovered or *which* candidate is newly flagged retracted between two
-runs -- only that the aggregate candidate count changed by some delta and
-that provider coverage changed. Rendering a "newly discovered work" card
-built from data this repository does not have would be exactly the kind of
-look-alike this project has already declined once (WEB-FRD-4's correction/
-withdrawal states) rather than approximating capability Core/AI have not
-yet built. `discover.html`'s freshness section states this limitation
-explicitly rather than silently omitting it or overclaiming.
+Live-verified against the real `ke` binary (not just fake-transport unit
+tests): a ledger was seeded directly via Core's own
+`FederatedSearchLedger.record()` with two runs for the same tracked
+question (an older run with one clear candidate, a newer run with that same
+candidate now retracted plus one brand-new candidate), then a full local
+server was driven through the real `ke federated-discover-history` and
+`ke federated-coverage-report --output` subprocess calls and the response
+HTML inspected directly -- confirming "Newly discovered works" named the
+new candidate and "Newly flagged as retracted" named the flipped one with
+the "was clear ... now retracted" framing.
 
 Exit criteria:
 
-- newly discovered works are visible; **not met -- blocked on Core exposing
-  per-candidate historical data (see above); tracked in
-  `docs/roadmap/web_frd5_freshness_history_design.md`**
-- new corrections/retractions are highlighted; **not met, same blocker**
+- newly discovered works are visible; **met** -- `build_candidate_freshness()`
+  reports candidates present in the current run and absent from the
+  previous run's full candidate snapshot, rendered as the same candidate
+  cards `/discover`'s main results list already uses
+- new corrections/retractions are highlighted; **met, for retractions**
+  -- a candidate whose `PublicationStatusView.retraction_state` flips to
+  `"retracted"` between the previous run's snapshot and the current run is
+  shown with an explicit "was clear/not checked, now retracted" banner.
+  Correction/expression-of-concern/withdrawal states remain out of scope
+  for the same reason WEB-FRD-4 left them out: Core's `ProviderObservation`
+  does not carry those fields yet -- a separate, still-blocked Core change,
+  not part of this milestone's dependency chain
 - provider-coverage changes are shown; **met** -- `discover.html`'s
   freshness section shows which providers newly completed or newly stopped
   completing since the previous run for the same tracked question

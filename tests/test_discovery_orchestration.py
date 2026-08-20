@@ -258,6 +258,59 @@ def test_run_discovery_history_rejects_an_unavailable_runtime(tmp_path: Path) ->
         discovery_orchestration.run_discovery_history(settings, "rq-web-abc")
 
 
+def test_run_discovery_candidate_snapshot_wires_current_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _ready_settings(tmp_path)
+    expected = SimpleNamespace(search_run_id="run-prior", coverage=None, candidates=())
+    captured: dict[str, object] = {}
+
+    def fake_federated_coverage_report(search_run_id: str, **kwargs: object) -> object:
+        captured["search_run_id"] = search_run_id
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(
+        discovery_orchestration,
+        "federated_coverage_report",
+        fake_federated_coverage_report,
+    )
+
+    result = discovery_orchestration.run_discovery_candidate_snapshot(settings, "run-prior")
+
+    assert result.search_run_id == "run-prior"
+    assert captured["search_run_id"] == "run-prior"
+    assert captured["ledger_root"] == Path(settings.federated_discovery_ledger_root)
+    assert captured["ke_executable"] == sys.executable
+
+
+def test_run_discovery_candidate_snapshot_sanitizes_runtime_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _ready_settings(tmp_path)
+
+    def fail(search_run_id: str, **kwargs: object) -> None:
+        raise KeCommandError(f"private path: {tmp_path}")
+
+    monkeypatch.setattr(discovery_orchestration, "federated_coverage_report", fail)
+
+    with pytest.raises(DiscoveryOrchestrationError) as raised:
+        discovery_orchestration.run_discovery_candidate_snapshot(settings, "run-prior")
+
+    assert str(tmp_path) not in str(raised.value)
+
+
+def test_run_discovery_candidate_snapshot_rejects_an_unavailable_runtime(tmp_path: Path) -> None:
+    settings = _ready_settings(tmp_path)
+    settings = Settings(
+        _env_file=None,
+        **(settings.model_dump() | {"ke_executable": "missing-ke-command-for-test"}),
+    )
+
+    with pytest.raises(DiscoveryOrchestrationError, match="unavailable"):
+        discovery_orchestration.run_discovery_candidate_snapshot(settings, "run-prior")
+
+
 def test_run_discovery_sanitizes_runtime_failures(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

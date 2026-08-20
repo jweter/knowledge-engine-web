@@ -151,10 +151,18 @@ class DiscoveryPresentation:
     disagreement_data_available: bool
 
 
-def _build_publication_status(
+def build_publication_status(
     flags: tuple[ObservationFlagSource, ...],
 ) -> PublicationStatusView:
     """Roll up per-provider retraction/preprint flags without voting on them.
+
+    Public (not module-private) because `discovery_freshness.py`'s
+    candidate-level diff (WEB-FRD-5 item 7) reuses this exact rollup to
+    compute a past run's retraction state from `ke_client.
+    federated_coverage_report()`'s per-provider observations -- the same
+    duck-typed `ObservationFlagSource` shape (`provider`/`retracted`/
+    `preprint`/`preprint_version`) that `FederatedCandidateObservation`
+    already satisfies, so no separate rollup implementation is needed.
 
     ``None`` values (provider did not report the flag) are excluded from the
     "did anyone report True/False" scan so a candidate with zero reporting
@@ -248,7 +256,7 @@ def build_discovery_presentation(result: DiscoveryResultSource) -> DiscoveryPres
                 providers=tuple(sorted(set(candidate.providers))),
                 disagreement_state=state,
                 disagreements=disagreements,
-                publication_status=_build_publication_status(candidate.observation_flags),
+                publication_status=build_publication_status(candidate.observation_flags),
             )
         )
 
@@ -261,9 +269,11 @@ def build_discovery_presentation(result: DiscoveryResultSource) -> DiscoveryPres
 __all__ = [
     "DiscoveryCandidateView",
     "DiscoveryPresentation",
+    "ObservationFlagSource",
     "ProviderAssertionView",
     "ProviderDisagreementView",
     "ProviderObservationFlagView",
     "PublicationStatusView",
     "build_discovery_presentation",
+    "build_publication_status",
 ]
