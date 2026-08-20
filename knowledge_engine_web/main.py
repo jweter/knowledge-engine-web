@@ -11,6 +11,7 @@ just arithmetic over already-stored, already-classified fields.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from pathlib import Path
 
@@ -31,10 +32,14 @@ from knowledge_engine_web.ai_orchestration import (
 from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.dashboard import build_evidence_intelligence_dashboard
-from knowledge_engine_web.discovery_freshness import build_discovery_freshness
+from knowledge_engine_web.discovery_freshness import (
+    build_candidate_freshness,
+    build_discovery_freshness,
+)
 from knowledge_engine_web.discovery_orchestration import (
     DiscoveryOrchestrationError,
     evaluate_discovery_capability,
+    run_discovery_candidate_snapshot,
     run_discovery_history,
     run_guarded_discovery,
 )
@@ -760,6 +765,34 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
             freshness = build_discovery_freshness(result, history)
         except DiscoveryOrchestrationError:
             freshness = None
+
+        # Candidate-level slice (WEB-FRD-5 item 7): only attempted once a
+        # prior run for this tracked question is actually known to exist.
+        # Equally best-effort -- a failed or empty snapshot leaves
+        # `freshness` at its run-level-only state rather than failing the
+        # page, matching the run-level lookup's own degrade-gracefully
+        # contract above.
+        if (
+            freshness is not None
+            and not freshness.is_first_recorded_search
+            and freshness.previous_search_run_id is not None
+            and presentation is not None
+        ):
+            try:
+                previous_snapshot = run_discovery_candidate_snapshot(
+                    settings, freshness.previous_search_run_id
+                )
+            except DiscoveryOrchestrationError:
+                previous_snapshot = None
+            if previous_snapshot is not None:
+                candidate_level = build_candidate_freshness(
+                    presentation.candidates, previous_snapshot.candidates
+                )
+                freshness = dataclasses.replace(
+                    freshness,
+                    per_candidate_history_available=True,
+                    candidate_level=candidate_level,
+                )
 
     return templates.TemplateResponse(
         request=request,

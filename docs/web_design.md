@@ -369,17 +369,21 @@ panel from WEB-FRD-2/WEB-FRD-3 below. See
 `docs/federated_discovery_transparency_roadmap.md`'s WEB-FRD-6 section for
 the full exit-criteria account.
 
-## Implemented (partially): WEB-FRD-5 research freshness history
+## Implemented: WEB-FRD-5 research freshness history
 
 WEB-FRD-5 ("compare current and previous discovery runs for the same
 tracked question") was scoped in an earlier session
 (`docs/roadmap/web_frd5_freshness_history_design.md`), then blocked on Core
-and AI capability that did not exist yet. That capability has since merged
-in both repositories (Core's `--research-question-id`/`--project-id` flags
-and `federated-discover-history` command; `knowledge-engine-ai`'s matching
-`ke_client.federated_discover_history()` wrapper), so this session bumped
-this project's pinned `knowledge-engine-ai` revision and resumed the
-design document's section 5 items 5-7:
+and AI capability that did not exist yet. That capability merged in two
+waves: first Core's `--research-question-id`/`--project-id` flags and
+`federated-discover-history` command with `knowledge-engine-ai`'s matching
+`ke_client.federated_discover_history()` wrapper (run-level facts only),
+then Core's candidate-snapshot persistence and `federated-coverage-report
+--output` option (PR #394) with `knowledge-engine-ai`'s matching
+`ke_client.federated_coverage_report()` point-lookup wrapper (PR #55,
+full candidate-level facts). This project's pinned `knowledge-engine-ai`
+revision was bumped both times, and the design document's section 5 items
+5-7 are now implemented in full:
 
 - **Tracked-question identity** (`knowledge_engine_web/research_question.py`):
   a deterministic function of the normalized query text, not a random
@@ -392,27 +396,33 @@ design document's section 5 items 5-7:
   already established for Research Sessions, now for the federated-discovery
   ledger, so "since your last search" does not silently go false on a
   Render redeploy the way an un-persisted ledger would.
-- **Diff rendering** (`discovery_freshness.py`, a new "Since your last
-  search" `<details>` section in `discover.html`): compares the
-  just-completed run's provider coverage and candidate count against the
-  most recent prior run for the same tracked question.
+- **Diff rendering, run level** (`discovery_freshness.py`'s
+  `build_discovery_freshness()`, a "Since your last search" `<details>`
+  section in `discover.html`): compares the just-completed run's provider
+  coverage and candidate count against the most recent prior run for the
+  same tracked question.
+- **Diff rendering, candidate level** (`discovery_freshness.py`'s
+  `build_candidate_freshness()`, backed by `discovery_orchestration.py`'s
+  `run_discovery_candidate_snapshot()`): fetches one specific past run's
+  full candidate snapshot and diffs it against the current run's own
+  candidates by `canonical_id`, so `discover.html` can name the *specific*
+  newly discovered works and the *specific* candidates whose retraction
+  status flipped ("was clear/not checked, now retracted") -- reusing
+  WEB-FRD-3's candidate-card markup and WEB-FRD-4's `PublicationStatusView`
+  rollup rather than a new presentation format. This lookup is best-effort
+  and additive: a failure or an empty snapshot degrades to the run-level
+  view with an explicit disclosure, never a fabricated result.
 
-**What is still honestly out of scope, and why:** `ke_client.federated_discover_history()`
-returns each past run's aggregate coverage facts (candidate count, provider
-outcomes, completeness, timestamp) -- not that run's candidate list, because
-`knowledge-engine-ai` deliberately did not add a `federated-coverage-report`
-point-lookup wrapper (that Core command has no `--output` JSON option, and
-wrapping its console text was rejected as unreliable scraping). Without a
-past run's actual candidates, this project cannot say *which* works are
-newly discovered or *which* specific candidate is newly retracted -- only
-that the aggregate count changed and that provider coverage changed.
-`discover.html`'s freshness section states this limitation to the visitor
-explicitly rather than approximating it, the same discipline already applied
-to WEB-FRD-4's correction/expression-of-concern/withdrawal gap. See
-`docs/roadmap/web_frd5_freshness_history_design.md`'s updated section 8 for
-what a future per-candidate history capability in Core/AI would need to look
-like, and `docs/federated_discovery_transparency_roadmap.md`'s WEB-FRD-5
-section for the full exit-criteria account.
+All four WEB-FRD-5 exit criteria are now resolved (three met, one not
+applicable to `/discover`, which has no synthesis step). Correction/
+expression-of-concern/withdrawal states remain out of scope, for the same
+reason as WEB-FRD-4: Core's `ProviderObservation` does not carry those
+fields yet, a separate and still-blocked Core schema change. See
+`docs/roadmap/web_frd5_freshness_history_design.md` sections 9-10 for the
+full account, including how the candidate-level slice was live-verified
+against the real `ke` binary, and
+`docs/federated_discovery_transparency_roadmap.md`'s WEB-FRD-5 section for
+the full exit-criteria account.
 
 ## Implemented: WEB-FRD-1 provider coverage (`/discover`)
 

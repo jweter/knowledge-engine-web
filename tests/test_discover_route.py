@@ -518,6 +518,180 @@ def test_discover_shows_freshness_deltas_against_a_prior_run(
     assert "cannot yet show which specific works are newly" in body
 
 
+def _prior_run_history(*, candidate_count: int = 0) -> SimpleNamespace:
+    return SimpleNamespace(
+        research_question_id="rq-web-abc",
+        run_count=2,
+        runs=(
+            SimpleNamespace(search_run_id="run-abc-123"),
+            SimpleNamespace(
+                search_run_id="run-prior",
+                created_at="2026-06-01T09:00:00+00:00",
+                completeness="partial",
+                candidate_count=candidate_count,
+                providers_completed=("pubmed",),
+            ),
+        ),
+    )
+
+
+def _candidate_snapshot(*, candidates: tuple[SimpleNamespace, ...]) -> SimpleNamespace:
+    return SimpleNamespace(search_run_id="run-prior", coverage=None, candidates=candidates)
+
+
+def test_discover_shows_newly_discovered_candidates_when_snapshot_is_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WEB-FRD-5 item 7: a specific new work, not just an aggregate count delta."""
+
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(completeness="complete"),
+    )
+    monkeypatch.setattr(
+        main, "run_discovery_history", lambda settings, research_question_id: _prior_run_history()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_discovery_candidate_snapshot",
+        lambda settings, search_run_id: _candidate_snapshot(candidates=()),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Newly discovered works" in body
+    assert "A Trial of Semaglutide for Body Weight Reduction" in body
+    assert "cannot yet show which specific works are newly" not in body
+
+
+def test_discover_shows_newly_retracted_candidates_with_was_now_framing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(
+            completeness="complete",
+            observation_flags=(
+                SimpleNamespace(
+                    provider="pubmed", retracted=True, preprint=None, preprint_version=None
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        main, "run_discovery_history", lambda settings, research_question_id: _prior_run_history()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_discovery_candidate_snapshot",
+        lambda settings, search_run_id: _candidate_snapshot(
+            candidates=(
+                SimpleNamespace(
+                    canonical_id="pubmed:12345",
+                    title="A Trial of Semaglutide for Body Weight Reduction",
+                    doi="10.1000/example",
+                    publication_year=2026,
+                    observations=(
+                        SimpleNamespace(
+                            provider="pubmed",
+                            retracted=False,
+                            preprint=None,
+                            preprint_version=None,
+                        ),
+                    ),
+                ),
+            )
+        ),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Newly flagged as retracted" in body
+    assert "reported clear of retraction" in body
+    assert "now reported retracted" in body
+    assert "Newly discovered works" not in body
+
+
+def test_discover_shows_an_honest_no_changes_message_when_nothing_changed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(completeness="complete"),
+    )
+    monkeypatch.setattr(
+        main, "run_discovery_history", lambda settings, research_question_id: _prior_run_history()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_discovery_candidate_snapshot",
+        lambda settings, search_run_id: _candidate_snapshot(
+            candidates=(
+                SimpleNamespace(
+                    canonical_id="pubmed:12345",
+                    title="A Trial of Semaglutide for Body Weight Reduction",
+                    doi="10.1000/example",
+                    publication_year=2026,
+                    observations=(),
+                ),
+            )
+        ),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "No newly discovered works and no newly retracted candidates" in body
+    assert "Newly discovered works" not in body
+    assert "Newly flagged as retracted" not in body
+
+
+def test_discover_degrades_to_run_level_freshness_when_candidate_snapshot_lookup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(completeness="complete"),
+    )
+    monkeypatch.setattr(
+        main, "run_discovery_history", lambda settings, research_question_id: _prior_run_history()
+    )
+
+    def fail_snapshot(settings: object, search_run_id: str) -> None:
+        raise DiscoveryOrchestrationError("Search history could not be read for this deployment.")
+
+    monkeypatch.setattr(main, "run_discovery_candidate_snapshot", fail_snapshot)
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Since your last search" in body
+    assert "cannot yet show which specific works are newly" in body
+    assert "A Trial of Semaglutide for Body Weight Reduction" in body
+
+
 def test_discover_omits_freshness_section_when_history_lookup_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

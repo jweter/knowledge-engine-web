@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from knowledge_engine_web.discovery_freshness import build_discovery_freshness
+from knowledge_engine_web.discovery_freshness import (
+    build_candidate_freshness,
+    build_discovery_freshness,
+)
+from knowledge_engine_web.discovery_presentation import PublicationStatusView
 
 
 def _status(provider: str, outcome: str) -> SimpleNamespace:
@@ -148,10 +152,12 @@ def test_unchanged_provider_coverage_reports_no_deltas_either_direction() -> Non
 
 
 def test_per_candidate_history_is_always_reported_unavailable() -> None:
-    """This module deliberately never claims candidate-level freshness.
+    """`build_discovery_freshness` alone never claims candidate-level freshness.
 
-    `ke federated-discover-history` only returns aggregate coverage facts
-    per run, not the candidate list -- see this module's own docstring.
+    That layer is a strictly additive composition the caller (`main.py`)
+    performs with `build_candidate_freshness` below, once a specific past
+    run's full candidate snapshot is actually available -- see this
+    module's own docstring.
     """
 
     current = _current()
@@ -160,3 +166,148 @@ def test_per_candidate_history_is_always_reported_unavailable() -> None:
     freshness = build_discovery_freshness(current, history)
 
     assert freshness.per_candidate_history_available is False
+    assert freshness.candidate_level is None
+
+
+def _observation(
+    provider: str,
+    *,
+    retracted: bool | None = None,
+    preprint: bool | None = None,
+    preprint_version: int | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        provider=provider,
+        retracted=retracted,
+        preprint=preprint,
+        preprint_version=preprint_version,
+    )
+
+
+def _current_candidate(
+    *,
+    canonical_id: str,
+    title: str = "A trial",
+    doi: str | None = "10.1000/example",
+    publication_year: int | None = 2026,
+    providers: tuple[str, ...] = ("pubmed",),
+    retraction_state: str = "not_checked",
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        canonical_id=canonical_id,
+        title=title,
+        doi=doi,
+        publication_year=publication_year,
+        providers=providers,
+        publication_status=PublicationStatusView(
+            retraction_state=retraction_state,
+            preprint_state="not_checked",
+            preprint_versions=(),
+            observations=(),
+        ),
+    )
+
+
+def _previous_candidate(
+    *, canonical_id: str, observations: tuple[SimpleNamespace, ...] = ()
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        canonical_id=canonical_id,
+        title="A trial",
+        doi="10.1000/example",
+        publication_year=2026,
+        observations=observations,
+    )
+
+
+def test_candidate_freshness_reports_a_candidate_absent_from_the_previous_run() -> None:
+    current = (_current_candidate(canonical_id="doi:new"),)
+    previous: tuple[SimpleNamespace, ...] = ()
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert len(freshness.newly_discovered) == 1
+    assert freshness.newly_discovered[0].canonical_id == "doi:new"
+    assert freshness.newly_retracted == ()
+
+
+def test_candidate_freshness_does_not_report_a_candidate_seen_in_both_runs_as_new() -> None:
+    current = (_current_candidate(canonical_id="doi:seen"),)
+    previous = (_previous_candidate(canonical_id="doi:seen"),)
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert freshness.newly_discovered == ()
+
+
+def test_candidate_freshness_reports_a_retraction_flip_from_clear() -> None:
+    current = (_current_candidate(canonical_id="doi:flip", retraction_state="retracted"),)
+    previous = (
+        _previous_candidate(
+            canonical_id="doi:flip",
+            observations=(_observation("pubmed", retracted=False),),
+        ),
+    )
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert len(freshness.newly_retracted) == 1
+    assert freshness.newly_retracted[0].candidate.canonical_id == "doi:flip"
+    assert freshness.newly_retracted[0].previous_retraction_state == "clear"
+    assert freshness.newly_discovered == ()
+
+
+def test_candidate_freshness_reports_a_retraction_flip_from_not_checked() -> None:
+    current = (_current_candidate(canonical_id="doi:flip", retraction_state="retracted"),)
+    previous = (_previous_candidate(canonical_id="doi:flip", observations=()),)
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert len(freshness.newly_retracted) == 1
+    assert freshness.newly_retracted[0].previous_retraction_state == "not_checked"
+
+
+def test_candidate_freshness_does_not_repeat_an_already_retracted_candidate() -> None:
+    current = (_current_candidate(canonical_id="doi:still", retraction_state="retracted"),)
+    previous = (
+        _previous_candidate(
+            canonical_id="doi:still",
+            observations=(_observation("pubmed", retracted=True),),
+        ),
+    )
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert freshness.newly_retracted == ()
+
+
+def test_candidate_freshness_does_not_double_count_a_newly_discovered_retracted_candidate() -> None:
+    """A brand-new candidate that happens to already be retracted has no
+
+    prior "was X" state to compare against, so it belongs only in
+    `newly_discovered`, not `newly_retracted`.
+    """
+
+    current = (
+        _current_candidate(canonical_id="doi:new-and-retracted", retraction_state="retracted"),
+    )
+    previous: tuple[SimpleNamespace, ...] = ()
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert len(freshness.newly_discovered) == 1
+    assert freshness.newly_retracted == ()
+
+
+def test_candidate_freshness_is_empty_when_nothing_changed() -> None:
+    current = (_current_candidate(canonical_id="doi:seen", retraction_state="clear"),)
+    previous = (
+        _previous_candidate(
+            canonical_id="doi:seen", observations=(_observation("pubmed", retracted=False),)
+        ),
+    )
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert freshness.newly_discovered == ()
+    assert freshness.newly_retracted == ()

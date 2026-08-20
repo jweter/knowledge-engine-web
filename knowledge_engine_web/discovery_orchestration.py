@@ -17,9 +17,11 @@ from pathlib import Path
 
 from knowledge_engine_ai.execution import ExecutionBudget
 from knowledge_engine_ai.ke_client import (
+    FederatedCoverageReportResult,
     FederatedDiscoverHistoryResult,
     FederatedDiscoveryResult,
     KeCommandError,
+    federated_coverage_report,
     federated_discover,
     federated_discover_history,
 )
@@ -167,6 +169,49 @@ def run_discovery_history(
         ) from exc
 
 
+def run_discovery_candidate_snapshot(
+    settings: Settings, search_run_id: str
+) -> FederatedCoverageReportResult:
+    """Fetch one specific past run's full candidate snapshot, by exact ID.
+
+    WEB-FRD-5 item 7 (candidate-level slice): the point-lookup counterpart to
+    `run_discovery_history` above. `ke_client.federated_discover_history()`
+    deliberately returns only aggregate `SearchCoverageReport` facts per run
+    (see `discovery_freshness.py`'s module docstring); this wrapper reaches
+    Core's newer `federated-coverage-report --output` capability (Core PR
+    #394, wrapped by `knowledge-engine-ai` PR #55's
+    `ke_client.federated_coverage_report()`) to get that same past run's full
+    deduplicated candidate list, so `discovery_freshness.py` can diff
+    specific candidates rather than only aggregate counts. Gated and
+    sanitized identically to `run_discovery_history`. A run persisted before
+    Core's candidate-snapshot follow-up existed returns an honest empty
+    ``candidates`` tuple (Core/AI's own contract), never a fabricated one.
+    """
+
+    capability = evaluate_discovery_capability(settings)
+    if not capability.available:
+        raise DiscoveryOrchestrationError(
+            capability.visitor_message or "Discovery is unavailable on this deployment."
+        )
+
+    executable = _resolve_executable(settings.ke_executable)
+    assert executable is not None
+
+    try:
+        return federated_coverage_report(
+            search_run_id,
+            ledger_root=Path(settings.federated_discovery_ledger_root),
+            ke_executable=executable,
+            execution_budget=ExecutionBudget.from_timeout(
+                settings.discovery_request_timeout_seconds
+            ),
+        )
+    except KeCommandError as exc:
+        raise DiscoveryOrchestrationError(
+            "Search history could not be read for this deployment."
+        ) from exc
+
+
 def _unavailable(reason_code: str) -> DiscoveryCapability:
     return DiscoveryCapability(
         available=False,
@@ -231,6 +276,7 @@ __all__ = [
     "DiscoveryOrchestrationError",
     "evaluate_discovery_capability",
     "run_discovery",
+    "run_discovery_candidate_snapshot",
     "run_discovery_history",
     "run_guarded_discovery",
 ]
