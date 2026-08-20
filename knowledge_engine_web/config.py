@@ -52,5 +52,14 @@ class Settings(BaseSettings):
     discovery_max_concurrent_requests: int = Field(default=1, gt=0)
     discovery_rate_limit_requests: int = Field(default=5, gt=0)
     discovery_rate_limit_window_seconds: float = Field(default=600.0, gt=0)
+    # WEB-FRD-5 (research freshness history), item 6: the federated-discovery
+    # ledger needs the same local/persistent split AI-O15 already established
+    # for Research Session storage, or "return later and see what changed"
+    # silently stops being true on every Render redeploy. Mirrors
+    # session_storage_mode/session_persistent_root exactly; a separate
+    # setting because the ledger and the session store are independent
+    # durable stores with independent operator opt-in.
+    discovery_ledger_storage_mode: Literal["local", "persistent"] = "local"
+    discovery_ledger_persistent_root: str | None = None
 
     model_config = SettingsConfigDict(env_prefix="KE_WEB_", env_file=".env", extra="ignore")

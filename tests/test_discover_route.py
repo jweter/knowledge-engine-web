@@ -445,3 +445,98 @@ def test_discover_shows_orchestration_error_without_leaking_details(
 
     assert response.status_code == 200
     assert "Discovery could not complete this request." in response.text
+
+
+def test_discover_shows_first_recorded_search_when_no_prior_history_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(),
+    )
+    monkeypatch.setattr(
+        main,
+        "run_discovery_history",
+        lambda settings, research_question_id: SimpleNamespace(
+            research_question_id=research_question_id,
+            run_count=1,
+            runs=(SimpleNamespace(search_run_id="run-abc-123"),),
+        ),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Since your last search" in body
+    assert "This is the first recorded search for this question." in body
+
+
+def test_discover_shows_freshness_deltas_against_a_prior_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(completeness="complete"),
+    )
+    monkeypatch.setattr(
+        main,
+        "run_discovery_history",
+        lambda settings, research_question_id: SimpleNamespace(
+            research_question_id=research_question_id,
+            run_count=2,
+            runs=(
+                SimpleNamespace(search_run_id="run-abc-123"),
+                SimpleNamespace(
+                    search_run_id="run-prior",
+                    created_at="2026-06-01T09:00:00+00:00",
+                    completeness="partial",
+                    candidate_count=0,
+                    providers_completed=("crossref",),
+                ),
+            ),
+        ),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "2026-06-01T09:00:00+00:00" in body
+    assert "+1 since last time" in body
+    assert "now reachable: pubmed" in body
+    assert "no longer reachable" not in body
+    assert "was partial, now complete" in body
+    assert "cannot yet show which specific works are newly" in body
+
+
+def test_discover_omits_freshness_section_when_history_lookup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(),
+    )
+
+    def fail_history(settings: object, research_question_id: str) -> None:
+        raise DiscoveryOrchestrationError("Search history could not be read for this deployment.")
+
+    monkeypatch.setattr(main, "run_discovery_history", fail_history)
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    assert "Since your last search" not in response.text
+    assert "A Trial of Semaglutide for Body Weight Reduction" in response.text

@@ -31,9 +31,11 @@ from knowledge_engine_web.ai_orchestration import (
 from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.dashboard import build_evidence_intelligence_dashboard
+from knowledge_engine_web.discovery_freshness import build_discovery_freshness
 from knowledge_engine_web.discovery_orchestration import (
     DiscoveryOrchestrationError,
     evaluate_discovery_capability,
+    run_discovery_history,
     run_guarded_discovery,
 )
 from knowledge_engine_web.discovery_presentation import build_discovery_presentation
@@ -73,6 +75,7 @@ from knowledge_engine_web.report_renderer import (
     render_unconfirmed_claims_report,
     render_whats_changed_report,
 )
+from knowledge_engine_web.research_question import derive_research_question_id
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 from knowledge_engine_web.snapshot_metadata import read_snapshot_metadata
 from knowledge_engine_web.whats_changed import build_whats_changed_summary
@@ -727,18 +730,36 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
 
     result = None
     error: str | None = None
+    research_question_id = derive_research_question_id(query)
     if not capability.available:
         error = capability.visitor_message
     else:
         try:
             client_key = request.client.host if request.client is not None else "unknown"
-            result = run_guarded_discovery(settings, query, client_key=client_key)
+            result = run_guarded_discovery(
+                settings,
+                query,
+                client_key=client_key,
+                research_question_id=research_question_id,
+            )
         except AIAdmissionError as exc:
             error = exc.visitor_message
         except DiscoveryOrchestrationError as exc:
             error = str(exc)
 
     presentation = build_discovery_presentation(result) if result is not None else None
+
+    # WEB-FRD-5 (research freshness history): a history-lookup failure must
+    # never take down an otherwise-successful discovery result. This is a
+    # strictly additive, best-effort read layered on top of the result
+    # above, not a required part of rendering it.
+    freshness = None
+    if result is not None:
+        try:
+            history = run_discovery_history(settings, research_question_id)
+            freshness = build_discovery_freshness(result, history)
+        except DiscoveryOrchestrationError:
+            freshness = None
 
     return templates.TemplateResponse(
         request=request,
@@ -754,6 +775,7 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
             "disagreement_data_available": presentation.disagreement_data_available
             if presentation is not None
             else False,
+            "freshness": freshness,
             "error": error,
         },
     )

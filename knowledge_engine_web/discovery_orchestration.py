@@ -17,9 +17,11 @@ from pathlib import Path
 
 from knowledge_engine_ai.execution import ExecutionBudget
 from knowledge_engine_ai.ke_client import (
+    FederatedDiscoverHistoryResult,
     FederatedDiscoveryResult,
     KeCommandError,
     federated_discover,
+    federated_discover_history,
 )
 
 from knowledge_engine_web.ai_guardrails import AIRequestGuard
@@ -53,13 +55,26 @@ def evaluate_discovery_capability(settings: Settings) -> DiscoveryCapability:
 
     if _resolve_executable(settings.ke_executable) is None:
         return _unavailable("core_cli_unavailable")
-    if not _ledger_root_is_usable(Path(settings.federated_discovery_ledger_root)):
-        return _unavailable("ledger_root_unavailable")
+    ledger_capability = _evaluate_ledger_storage(settings)
+    if not ledger_capability.available:
+        return ledger_capability
     return DiscoveryCapability(available=True)
 
 
-def run_discovery(settings: Settings, query: str) -> FederatedDiscoveryResult:
-    """Run one federated discovery search using configured local inputs."""
+def run_discovery(
+    settings: Settings,
+    query: str,
+    *,
+    research_question_id: str | None = None,
+) -> FederatedDiscoveryResult:
+    """Run one federated discovery search using configured local inputs.
+
+    ``research_question_id`` (WEB-FRD-5 item 5, `research_question.py`'s
+    deterministic tracked-question identity) is forwarded to Core so later
+    runs for the same question can be listed together via
+    `run_discovery_history` below. Omitting it preserves the exact prior
+    behavior of an untagged, one-off search.
+    """
 
     capability = evaluate_discovery_capability(settings)
     if not capability.available:
@@ -77,6 +92,7 @@ def run_discovery(settings: Settings, query: str) -> FederatedDiscoveryResult:
             limit=_DEFAULT_DISCOVERY_LIMIT,
             openalex_api_key=settings.federated_openalex_api_key,
             semantic_scholar_api_key=settings.federated_semantic_scholar_api_key,
+            research_question_id=research_question_id,
             ke_executable=executable,
             execution_budget=ExecutionBudget.from_timeout(
                 settings.discovery_request_timeout_seconds
@@ -96,6 +112,7 @@ def run_guarded_discovery(
     query: str,
     *,
     client_key: str,
+    research_question_id: str | None = None,
     guard: AIRequestGuard | None = None,
 ) -> FederatedDiscoveryResult:
     """Admit and run one bounded federated discovery request."""
@@ -107,7 +124,47 @@ def run_guarded_discovery(
         rate_limit_requests=settings.discovery_rate_limit_requests,
         rate_limit_window_seconds=settings.discovery_rate_limit_window_seconds,
     ):
-        return run_discovery(settings, query)
+        return run_discovery(settings, query, research_question_id=research_question_id)
+
+
+def run_discovery_history(
+    settings: Settings, research_question_id: str
+) -> FederatedDiscoverHistoryResult:
+    """Fetch every persisted run tagged with ``research_question_id``, newest first.
+
+    WEB-FRD-5 item 3/5: the read side of the tracked-question identity above.
+    Gated by the same static capability check `run_discovery` uses -- this
+    is a read over the same ledger, so the same "can we even reach Core's
+    CLI and ledger root" prerequisites apply. Raises
+    `DiscoveryOrchestrationError` on failure, sanitized the same way
+    `run_discovery` sanitizes `KeCommandError`; a caller that wants to
+    degrade gracefully (e.g. render "no history available" rather than
+    fail the whole page) should catch it, not let it propagate to a
+    visitor.
+    """
+
+    capability = evaluate_discovery_capability(settings)
+    if not capability.available:
+        raise DiscoveryOrchestrationError(
+            capability.visitor_message or "Discovery is unavailable on this deployment."
+        )
+
+    executable = _resolve_executable(settings.ke_executable)
+    assert executable is not None
+
+    try:
+        return federated_discover_history(
+            research_question_id,
+            ledger_root=Path(settings.federated_discovery_ledger_root),
+            ke_executable=executable,
+            execution_budget=ExecutionBudget.from_timeout(
+                settings.discovery_request_timeout_seconds
+            ),
+        )
+    except KeCommandError as exc:
+        raise DiscoveryOrchestrationError(
+            "Search history could not be read for this deployment."
+        ) from exc
 
 
 def _unavailable(reason_code: str) -> DiscoveryCapability:
@@ -129,10 +186,51 @@ def _ledger_root_is_usable(path: Path) -> bool:
     return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 
+def _evaluate_ledger_storage(settings: Settings) -> DiscoveryCapability:
+    """Mirror `ai_orchestration._evaluate_session_storage`'s local/persistent split.
+
+    WEB-FRD-5 item 6: without this, a Render redeploy silently wipes the
+    ledger and "since your last search" would be quietly false rather than
+    honestly reporting "no history yet" -- the exact failure mode AI-O15
+    already named and rejected for Research Sessions.
+    """
+
+    ledger_path = Path(settings.federated_discovery_ledger_root)
+    if settings.discovery_ledger_storage_mode == "local":
+        if not _ledger_root_is_usable(ledger_path):
+            return _unavailable("ledger_root_unavailable")
+        return DiscoveryCapability(available=True)
+
+    persistent_root_value = settings.discovery_ledger_persistent_root
+    if persistent_root_value is None or not persistent_root_value.strip():
+        return _unavailable("persistent_ledger_root_unavailable")
+
+    persistent_root = Path(persistent_root_value.strip())
+    if not persistent_root.is_absolute() or not ledger_path.is_absolute():
+        return _unavailable("persistent_ledger_path_invalid")
+    if not persistent_root.is_dir() or not os.access(persistent_root, os.W_OK):
+        return _unavailable("persistent_ledger_root_unavailable")
+
+    try:
+        resolved_root = persistent_root.resolve(strict=True)
+        resolved_ledger = ledger_path.resolve(strict=False)
+    except OSError:
+        return _unavailable("persistent_ledger_path_invalid")
+
+    if resolved_ledger == resolved_root or not resolved_ledger.is_relative_to(resolved_root):
+        return _unavailable("persistent_ledger_path_invalid")
+
+    if not _ledger_root_is_usable(ledger_path):
+        return _unavailable("ledger_root_unavailable")
+
+    return DiscoveryCapability(available=True)
+
+
 __all__ = [
     "DiscoveryCapability",
     "DiscoveryOrchestrationError",
     "evaluate_discovery_capability",
     "run_discovery",
+    "run_discovery_history",
     "run_guarded_discovery",
 ]
