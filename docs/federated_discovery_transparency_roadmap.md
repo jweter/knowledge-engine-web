@@ -353,6 +353,13 @@ be collapsed into a single status enum or a priority ladder that hides the
 others, and an unreported flag stays unknown rather than being rendered as an
 affirmative "clear".
 
+**Completed 2026-08-21.** Web now pins AI commit `58c21b1`, rolls up all
+three additional flags independently alongside retraction/preprint, renders
+simultaneous correction/expression-of-concern/withdrawal warnings without a
+priority ladder, and preserves every provider's raw `True`/`False`/unreported
+observation in the inspectable breakdown. Unknown remains distinct from an
+explicit provider-reported `False`.
+
 Exit criteria:
 
 - retraction cannot be visually missed; **met** -- a bordered, colored,

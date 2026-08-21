@@ -369,6 +369,17 @@ panel from WEB-FRD-2/WEB-FRD-3 below. See
 `docs/federated_discovery_transparency_roadmap.md`'s WEB-FRD-6 section for
 the full exit-criteria account.
 
+## Implemented: WEB-FRD-4 complete publication-status warnings
+
+Web pins `knowledge-engine-ai` at `58c21b1`, the first AI revision that
+preserves Core's `corrected`, `expression_of_concern`, and `withdrawn`
+provider observations. `PublicationStatusView` rolls those flags up
+independently alongside retraction and preprint: multiple warnings may appear
+for one work, no provider is selected as authoritative, and an unreported flag
+remains unknown rather than being presented as clear. The `/discover` card
+shows visible correction, expression-of-concern, and withdrawal banners and
+keeps each provider's raw observation inspectable.
+
 ## Implemented: WEB-FRD-5 research freshness history
 
 WEB-FRD-5 ("compare current and previous discovery runs for the same
@@ -414,10 +425,10 @@ revision was bumped both times, and the design document's section 5 items
   view with an explicit disclosure, never a fabricated result.
 
 All four WEB-FRD-5 exit criteria are now resolved (three met, one not
-applicable to `/discover`, which has no synthesis step). Correction/
-expression-of-concern/withdrawal states remain out of scope, for the same
-reason as WEB-FRD-4: Core's `ProviderObservation` does not carry those
-fields yet, a separate and still-blocked Core schema change. See
+applicable to `/discover`, which has no synthesis step). Candidate-level
+freshness highlights retraction transitions only; the main WEB-FRD-4
+candidate card now renders correction, expression-of-concern, and withdrawal
+observations as described above. See
 `docs/roadmap/web_frd5_freshness_history_design.md` sections 9-10 for the
 full account, including how the candidate-level slice was live-verified
 against the real `ke` binary, and
