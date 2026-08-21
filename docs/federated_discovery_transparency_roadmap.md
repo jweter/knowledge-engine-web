@@ -552,6 +552,30 @@ Downloaded Markdown/JSON reports should carry the same provider/search coverage
 limitations shown in the browser. Exporting an answer must not strip away the
 fact that the underlying search was degraded.
 
+**Status: implemented for `/discover`.** `/discover` had no downloadable
+export of any kind before this slice -- there was no existing gap to patch,
+so this added the export itself, built from the start to carry the same
+coverage facts the page already shows rather than a separate recomputation
+that could drift from them. `discovery_export.py`'s
+`build_discovery_export_view()` is built directly from the same
+`FederatedDiscoveryResult` and `DiscoveryPresentation` (`discovery_presentation.
+py`) the `/discover` route already computes for `discover.html`; the on-screen
+provider-status label and the exported label are the same fixed vocabulary
+(`discovery_presentation.provider_outcome_label()`), a single source both
+surfaces call so they cannot silently drift apart. Two new routes,
+`GET /discover/export.md` and `GET /discover/export.json`, render that shared
+view as a downloadable Markdown report and a JSON document respectively --
+both carry the overall run completeness (including the explicit "degraded
+search run" disclosure), the full per-provider coverage table with each
+provider's recorded reason, whether provider-disagreement data is available
+for this run, and every candidate's publication-status (retraction/preprint/
+correction/expression-of-concern/withdrawal) and metadata-disagreement state.
+`discover.html` links to both formats directly beneath the on-screen coverage
+table. Not yet extended to `/ask`'s Research Copilot answers -- `/ask` has no
+federated-discovery coverage data of its own to export (WEB-FRD-2/3/4's
+coverage panel is `/discover`-only); that remains a distinct future slice if
+`/ask` grows one.
+
 ### User-controlled source scope
 
 Advanced users may eventually choose a deliberately narrow source scope (for
