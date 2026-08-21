@@ -17,10 +17,13 @@ now honest to render:
   (knowledge-engine-ai PR #55, wrapping Core PR #394's
   `federated-coverage-report --output`). This closes WEB-FRD-5's remaining
   two exit criteria: "newly discovered works are visible" and "new
-  corrections/retractions are highlighted" (the retraction half only --
-  correction/expression-of-concern/withdrawal states remain out of scope for
-  the same reason WEB-FRD-4 left them out: Core's `ProviderObservation` does
-  not carry those fields yet, a separate and still-blocked Core change).
+  corrections/retractions are highlighted" -- for all four independent
+  publication-status flags WEB-FRD-4 now renders (retraction, correction,
+  expression of concern, withdrawal), not retraction alone. Core's
+  `ProviderObservation.corrected`/`.expression_of_concern`/`.withdrawn` and
+  `knowledge-engine-ai`'s matching parsing (both landed 2026-08-20/21, the
+  same dependency this module already pins) made this the last honest gap
+  in item 7; closing it here requires no further Core or AI change.
 
 Candidate-level diffing is best-effort and additive: a run persisted before
 Core's candidate-snapshot follow-up existed reports an honest empty
@@ -146,18 +149,26 @@ class PastCandidateSource(Protocol):
 
 
 @dataclass(frozen=True)
-class RetractedCandidateFreshnessView:
-    """One candidate whose retraction status newly flipped to "retracted".
+class FlaggedCandidateFreshnessView:
+    """One candidate whose publication-status flag newly flipped to its affirmative state.
 
-    ``previous_retraction_state`` is always ``"clear"`` or ``"not_checked"``
-    (never ``"retracted"`` -- that candidate would not be in this list) so a
-    template can render the "was X, now Y" framing
+    Shared by all four independent, non-exclusive flags WEB-FRD-4 renders
+    (retraction, correction, expression of concern, withdrawal) -- the "was
+    clear/not_checked, now flagged" shape is identical for each, so one view
+    type serves all four; which flag is meant is determined by which
+    `CandidateLevelFreshnessView` tuple an instance lives in, exactly as
+    `PublicationStatusView` already tracks the four states as four
+    independent fields rather than one collapsed status.
+
+    ``previous_state`` is always ``"clear"`` or ``"not_checked"`` (never the
+    flag's own affirmative value -- that candidate would not be in this
+    list) so a template can render the "was X, now Y" framing
     `docs/roadmap/web_frd5_freshness_history_design.md` section 4 calls for,
     never a bare color change.
     """
 
     candidate: CurrentCandidateSource
-    previous_retraction_state: str
+    previous_state: str
 
 
 @dataclass(frozen=True)
@@ -168,13 +179,16 @@ class CandidateLevelFreshnessView:
     run's full candidate snapshot are available (see
     `build_candidate_freshness` below). Candidates absent from the previous
     run's snapshot are reported only in ``newly_discovered`` -- a candidate
-    with no prior record has no "was" retraction state to report, so it is
-    never double-counted in ``newly_retracted`` even if it happens to already
-    carry a retraction flag on first sight.
+    with no prior record has no "was" state to report, so it is never
+    double-counted in one of the ``newly_*`` flag tuples even if it happens
+    to already carry that flag on first sight.
     """
 
     newly_discovered: tuple[CurrentCandidateSource, ...]
-    newly_retracted: tuple[RetractedCandidateFreshnessView, ...]
+    newly_retracted: tuple[FlaggedCandidateFreshnessView, ...]
+    newly_corrected: tuple[FlaggedCandidateFreshnessView, ...]
+    newly_expression_of_concern: tuple[FlaggedCandidateFreshnessView, ...]
+    newly_withdrawn: tuple[FlaggedCandidateFreshnessView, ...]
 
 
 @dataclass(frozen=True)
@@ -275,6 +289,20 @@ def candidate_snapshot_is_usable(snapshot: PastRunCandidateSnapshotSource) -> bo
     return len(snapshot.candidates) > 0 or snapshot.coverage.candidate_count == 0
 
 
+#: The four independent, non-exclusive `PublicationStatusView` flags this
+#: diff covers, each as (state field name, that field's affirmative value).
+#: Matches `discovery_presentation.build_publication_status`'s own four
+#: rollups exactly -- preprint is deliberately excluded: it is a version
+#: relationship, not a publication-integrity warning, and this project has
+#: no "newly became a preprint" product need the way it does for these four.
+_FLAG_SPECS: tuple[tuple[str, str], ...] = (
+    ("retraction_state", "retracted"),
+    ("correction_state", "corrected"),
+    ("expression_of_concern_state", "expression_of_concern"),
+    ("withdrawal_state", "withdrawn"),
+)
+
+
 def build_candidate_freshness(
     current_candidates: tuple[CurrentCandidateSource, ...],
     previous_candidates: tuple[PastCandidateSource, ...],
@@ -289,13 +317,17 @@ def build_candidate_freshness(
     `canonical_id` -- Web never re-derives work identity.
 
     A candidate present now but absent from the previous snapshot is
-    "newly discovered." A candidate present in both, not retracted in the
-    previous snapshot but retracted now, is "newly retracted" -- computed
-    from the same `build_publication_status` rollup WEB-FRD-4 already uses,
-    so a candidate the previous run's providers were simply silent about
-    (``"not_checked"``) counts as newly retracted exactly like one they
-    reported ``False`` for (``"clear"``); either way, the honest fact is
-    "we did not know about this retraction before, and we do now."
+    "newly discovered." A candidate present in both runs whose retraction,
+    correction, expression-of-concern, or withdrawal state newly flipped to
+    its affirmative value is reported in the matching ``newly_*`` tuple --
+    computed from the same `build_publication_status` rollup WEB-FRD-4
+    already uses, so a candidate the previous run's providers were simply
+    silent about (``"not_checked"``) counts as newly flagged exactly like
+    one they explicitly reported ``False`` for (``"clear"``); either way,
+    the honest fact is "we did not know about this before, and we do now."
+    The four flags are independent and non-exclusive (a candidate can land
+    in more than one ``newly_*`` tuple at once), matching
+    `PublicationStatusView`'s own refusal to collapse them into one status.
     """
 
     previous_by_id: dict[str, PastCandidateSource] = {
@@ -308,35 +340,39 @@ def build_candidate_freshness(
         if candidate.canonical_id not in previous_by_id
     )
 
-    newly_retracted: list[RetractedCandidateFreshnessView] = []
+    newly_flagged: dict[str, list[FlaggedCandidateFreshnessView]] = {
+        state_attr: [] for state_attr, _ in _FLAG_SPECS
+    }
     for candidate in current_candidates:
-        if candidate.publication_status.retraction_state != "retracted":
-            continue
         previous_candidate = previous_by_id.get(candidate.canonical_id)
         if previous_candidate is None:
             # Already reported in `newly_discovered` -- no prior "was" state
-            # exists to frame a "was X, now retracted" comparison against.
+            # exists to frame a "was X, now flagged" comparison against.
             continue
         previous_status = build_publication_status(previous_candidate.observations)
-        if previous_status.retraction_state == "retracted":
-            continue
-        newly_retracted.append(
-            RetractedCandidateFreshnessView(
-                candidate=candidate,
-                previous_retraction_state=previous_status.retraction_state,
+        for state_attr, affirmative_value in _FLAG_SPECS:
+            if getattr(candidate.publication_status, state_attr) != affirmative_value:
+                continue
+            previous_state = getattr(previous_status, state_attr)
+            if previous_state == affirmative_value:
+                continue
+            newly_flagged[state_attr].append(
+                FlaggedCandidateFreshnessView(candidate=candidate, previous_state=previous_state)
             )
-        )
 
     return CandidateLevelFreshnessView(
         newly_discovered=newly_discovered,
-        newly_retracted=tuple(newly_retracted),
+        newly_retracted=tuple(newly_flagged["retraction_state"]),
+        newly_corrected=tuple(newly_flagged["correction_state"]),
+        newly_expression_of_concern=tuple(newly_flagged["expression_of_concern_state"]),
+        newly_withdrawn=tuple(newly_flagged["withdrawal_state"]),
     )
 
 
 __all__ = [
     "CandidateLevelFreshnessView",
     "DiscoveryFreshnessView",
-    "RetractedCandidateFreshnessView",
+    "FlaggedCandidateFreshnessView",
     "build_candidate_freshness",
     "build_discovery_freshness",
     "candidate_snapshot_is_usable",

@@ -446,14 +446,20 @@ Exit criteria:
   reports candidates present in the current run and absent from the
   previous run's full candidate snapshot, rendered as the same candidate
   cards `/discover`'s main results list already uses
-- new corrections/retractions are highlighted; **met, for retractions**
-  -- a candidate whose `PublicationStatusView.retraction_state` flips to
-  `"retracted"` between the previous run's snapshot and the current run is
-  shown with an explicit "was clear/not checked, now retracted" banner.
-  Correction/expression-of-concern/withdrawal states were out of scope
-  for the same reason WEB-FRD-4 left them out; that Core-side block cleared on
-  2026-08-20 (see the WEB-FRD-4 section above), but rendering them belongs to
-  WEB-FRD-4's remaining slice rather than to this milestone's dependency chain
+- new corrections/retractions are highlighted; **met, for all four
+  publication-status flags** -- a candidate whose `PublicationStatusView`
+  `retraction_state`/`correction_state`/`expression_of_concern_state`/
+  `withdrawal_state` newly flips to its affirmative value between the
+  previous run's snapshot and the current run is shown with an explicit
+  "was clear/not checked, now flagged" banner, independently per flag (a
+  candidate can appear in more than one `newly_*` list at once, matching
+  `PublicationStatusView`'s own refusal to collapse the four into a single
+  status). Originally shipped for retraction only, with correction/
+  expression-of-concern/withdrawal deliberately deferred until WEB-FRD-4's
+  own remaining slice rendered those three flags at all (see the WEB-FRD-4
+  section above); WEB-FRD-4 completed that slice 2026-08-21, and this
+  milestone's candidate-level diff was extended the same day to cover all
+  four -- see `docs/roadmap/web_frd5_freshness_history_design.md` section 12
 - provider-coverage changes are shown; **met** -- `discover.html`'s
   freshness section shows which providers newly completed or newly stopped
   completing since the previous run for the same tracked question

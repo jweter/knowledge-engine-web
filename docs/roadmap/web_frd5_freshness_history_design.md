@@ -526,3 +526,64 @@ this section already documents. Regression test:
 confirmed to fail against the pre-fix code and pass after. Full
 `quality_preflight.py` passed (333 tests -- 332 from section 10 plus this
 one).
+
+## 12. 2026-08-21: candidate-level diff extended to all four publication-status flags
+
+Section 10 shipped `build_candidate_freshness()`'s "newly retracted" diff
+alone, deliberately deferring correction/expression-of-concern/withdrawal
+because -- at the time -- Core's `ProviderObservation` did not carry those
+fields for `federated-coverage-report --output` to persist, and even where
+Core did have them, `/discover`'s own per-candidate rendering
+(`discovery_presentation.PublicationStatusView`) had not yet been extended
+to roll them up (that was WEB-FRD-4's own remaining slice, tracked
+separately in `docs/federated_discovery_transparency_roadmap.md`).
+
+Both blockers cleared the same day this section was written: Core PR #396
+wired Crossref's `update-to` relation into the three fields, AI PR #57
+parsed them, and this repository's WEB-FRD-4 slice (completed 2026-08-21)
+rolled them into `PublicationStatusView` as three additional independent
+states (`correction_state`, `expression_of_concern_state`,
+`withdrawal_state`). `ke_client.federated_coverage_report()`'s
+`FederatedCandidateObservation` -- the same past-run snapshot type
+`build_candidate_freshness()` already consumed for retraction -- already
+carried `corrected`/`expression_of_concern`/`withdrawn` per provider
+(confirmed by reading `knowledge-engine-ai`'s `ke_client.py`, which this
+repository was already pinned to at commit `58c21b1`), so closing this gap
+required no further Core or AI change -- it was a Web-only extension of
+already-available data, exactly as this document's own item 7 always
+anticipated once WEB-FRD-4 unblocked.
+
+What changed:
+
+- `RetractedCandidateFreshnessView` was generalized to
+  `FlaggedCandidateFreshnessView` (`candidate` plus `previous_state`), one
+  view type shared by all four flags rather than one class per flag, since
+  the "was clear/not_checked, now flagged" shape is identical across them.
+- `CandidateLevelFreshnessView` gained `newly_corrected`,
+  `newly_expression_of_concern`, and `newly_withdrawn` alongside the
+  existing `newly_retracted`, computed by `build_candidate_freshness()` in
+  a single pass over the current run's candidates (one
+  `build_publication_status()` call per matching candidate, reused across
+  all four flag checks rather than recomputed per flag).
+- The four flags are diffed independently and are non-exclusive, matching
+  `PublicationStatusView`'s own discipline against collapsing them into one
+  status: a candidate simultaneously newly retracted and newly corrected
+  appears in both `newly_retracted` and `newly_corrected`.
+- `discover.html` gained a `newly_flagged_section()` macro (parameterized by
+  heading, banner severity class, and the "was X" / "now Y" copy) so the
+  four sections ("Newly flagged as retracted/corrected", "Newly flagged with
+  an expression of concern", "Newly flagged as withdrawn") share one
+  rendering path instead of four near-duplicate template blocks; the
+  correction banner uses WEB-FRD-4's `is-degraded` severity (matching its
+  per-candidate card treatment) while retraction/expression-of-concern/
+  withdrawal use `is-critical`.
+- The "nothing changed" and "candidate-level history unavailable"
+  disclosures were reworded from retraction-specific language to name all
+  four flags generically, so they stay honest about what this comparison
+  now actually covers.
+
+Verification: `poetry run python scripts/quality_preflight.py` passed in
+full (format, lint, mypy across 55 source files, 359 tests -- 333
+pre-existing plus 26 new/changed covering each flag's flip independently,
+the four-flags-at-once non-exclusivity case, and the route-level rendering
+of all three newly-covered flags together -- pip-audit, diff hygiene).
