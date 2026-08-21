@@ -12,6 +12,7 @@ just arithmetic over already-stored, already-classified fields.
 from __future__ import annotations
 
 import dataclasses
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -32,6 +33,12 @@ from knowledge_engine_web.ai_orchestration import (
 from knowledge_engine_web.alpha_auth import AlphaBasicAuthMiddleware
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.dashboard import build_evidence_intelligence_dashboard
+from knowledge_engine_web.discovery_export import (
+    DiscoveryExportView,
+    build_discovery_export_json,
+    build_discovery_export_view,
+    render_discovery_export_markdown,
+)
 from knowledge_engine_web.discovery_freshness import (
     build_candidate_freshness,
     build_discovery_freshness,
@@ -44,7 +51,10 @@ from knowledge_engine_web.discovery_orchestration import (
     run_discovery_history,
     run_guarded_discovery,
 )
-from knowledge_engine_web.discovery_presentation import build_discovery_presentation
+from knowledge_engine_web.discovery_presentation import (
+    build_discovery_presentation,
+    provider_outcome_label,
+)
 from knowledge_engine_web.evidence_intelligence import (
     compute_claim_confidence,
     compute_evidence_consensus,
@@ -820,14 +830,103 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
     )
 
 
-_PROVIDER_OUTCOME_LABELS: dict[str, tuple[str, str]] = {
-    "success": ("searched", "is-ok"),
-    "empty": ("searched, no matches", "is-ok"),
-    "rate_limited": ("rate limited", "is-degraded"),
-    "unavailable": ("unavailable", "is-degraded"),
-    "failed": ("failed", "is-degraded"),
-    "skipped": ("not searched", "is-skipped"),
-    "disabled": ("disabled", "is-skipped"),
+def _discover_export_view(
+    request: Request, q: str
+) -> tuple[DiscoveryExportView | None, tuple[int, str] | None]:
+    """Shared setup for both `/discover/export.md` and `/discover/export.json`.
+
+    Runs the exact same guarded discovery call and presentation build the
+    `/discover` page itself uses, then reshapes the result through
+    `discovery_export.build_discovery_export_view` -- so an export can never
+    carry different coverage/provider-limitation facts than what a visitor
+    would see by running the same query on the page. Returns either a view
+    to render, or an ``(http_status, detail)`` pair the caller turns into an
+    `HTTPException`, matching this route family's existing error-sanitizing
+    contract (never a raw exception, path, or provider-side error body).
+    """
+
+    query = q.strip()
+    if not query:
+        return None, (400, "A query is required to export discovery results.")
+
+    settings = Settings()
+    capability = evaluate_discovery_capability(settings)
+    if not capability.available:
+        message = capability.visitor_message or "Discovery is unavailable on this deployment."
+        return None, (503, message)
+
+    research_question_id = derive_research_question_id(query)
+    try:
+        client_key = request.client.host if request.client is not None else "unknown"
+        result = run_guarded_discovery(
+            settings,
+            query,
+            client_key=client_key,
+            research_question_id=research_question_id,
+        )
+    except AIAdmissionError as exc:
+        return None, (429, exc.visitor_message)
+    except DiscoveryOrchestrationError as exc:
+        return None, (502, str(exc))
+
+    presentation = build_discovery_presentation(result)
+    return build_discovery_export_view(query, result, presentation), None
+
+
+@app.get("/discover/export.md")
+def discover_export_markdown(request: Request, q: str = "") -> Response:
+    """Download one federated discovery run as Markdown.
+
+    Carries the same provider/search coverage limitations `/discover`
+    already shows on screen (WEB-FRD roadmap: "Coverage limitations should
+    travel with exports") -- built from the identical result and
+    presentation data, not a separate, possibly-stale recomputation.
+    Registered before `/discover/{report_slug}`-style dynamic routes would
+    matter here (there are none for `/discover`), but kept next to the page
+    route it mirrors for readability.
+    """
+
+    view, error = _discover_export_view(request, q)
+    if error is not None:
+        status_code, detail = error
+        raise HTTPException(status_code=status_code, detail=detail)
+    assert view is not None
+    return Response(
+        content=render_discovery_export_markdown(view),
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": f'attachment; filename="discovery-{view.search_run_id}.md"'
+        },
+    )
+
+
+@app.get("/discover/export.json")
+def discover_export_json(request: Request, q: str = "") -> Response:
+    """Download one federated discovery run as JSON, same coverage facts as the Markdown export."""
+
+    view, error = _discover_export_view(request, q)
+    if error is not None:
+        status_code, detail = error
+        raise HTTPException(status_code=status_code, detail=detail)
+    assert view is not None
+    payload = build_discovery_export_json(view)
+    return Response(
+        content=json.dumps(payload, indent=2) + "\n",
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="discovery-{view.search_run_id}.json"'
+        },
+    )
+
+
+_PROVIDER_CSS_CLASSES: dict[str, str] = {
+    "success": "is-ok",
+    "empty": "is-ok",
+    "rate_limited": "is-degraded",
+    "unavailable": "is-degraded",
+    "failed": "is-degraded",
+    "skipped": "is-skipped",
+    "disabled": "is-skipped",
 }
 
 
@@ -837,16 +936,16 @@ def _provider_status_view(status: FederatedProviderStatus) -> dict[str, object]:
     Never infers status from `result_count` (WEB-FRD-1) -- the label comes
     only from Core's own recorded `outcome`, including the `success` case
     with zero results ("searched, no matches" is not the same claim as
-    "unavailable").
+    "unavailable"). The label text itself comes from
+    `discovery_presentation.provider_outcome_label`, the same mapping
+    `discovery_export.py` uses for the Markdown/JSON downloads, so the
+    on-screen label and the exported label can never silently drift apart.
     """
 
-    label, css_class = _PROVIDER_OUTCOME_LABELS.get(
-        status.outcome, (status.outcome or "unknown", "is-skipped")
-    )
     return {
         "provider": status.provider,
-        "label": label,
-        "css_class": css_class,
+        "label": provider_outcome_label(status.outcome),
+        "css_class": _PROVIDER_CSS_CLASSES.get(status.outcome, "is-skipped"),
         "reason": status.reason,
         "result_count": status.result_count,
     }

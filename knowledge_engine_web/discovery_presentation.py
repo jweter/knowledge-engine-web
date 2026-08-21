@@ -14,6 +14,34 @@ from typing import Protocol
 
 type ObservedValue = str | int | bool
 
+#: Core's raw provider `outcome` values mapped to the one fixed, deterministic
+#: label vocabulary this project renders everywhere a provider outcome is
+#: shown -- the `/discover` page (`main.py`'s `_provider_status_view`) and
+#: the Markdown/JSON exports (`discovery_export.py`) both read this single
+#: mapping so the two surfaces cannot silently drift apart (the exact defect
+#: "Coverage limitations should travel with exports" was written to close).
+#: Never inferred from `result_count` -- see WEB-FRD-1.
+PROVIDER_OUTCOME_LABELS: dict[str, str] = {
+    "success": "searched",
+    "empty": "searched, no matches",
+    "rate_limited": "rate limited",
+    "unavailable": "unavailable",
+    "failed": "failed",
+    "skipped": "not searched",
+    "disabled": "disabled",
+}
+
+
+def provider_outcome_label(outcome: str) -> str:
+    """Map one Core-recorded provider outcome to its fixed display label.
+
+    An outcome value this project does not recognize falls back to the raw
+    value itself (or "unknown" if empty) rather than being hidden -- an
+    unrecognized outcome is still real provenance and must not disappear.
+    """
+
+    return PROVIDER_OUTCOME_LABELS.get(outcome, outcome or "unknown")
+
 
 class ProviderAssertionSource(Protocol):
     @property
@@ -317,6 +345,7 @@ def build_discovery_presentation(result: DiscoveryResultSource) -> DiscoveryPres
 
 
 __all__ = [
+    "PROVIDER_OUTCOME_LABELS",
     "DiscoveryCandidateView",
     "DiscoveryPresentation",
     "ObservationFlagSource",
@@ -326,4 +355,5 @@ __all__ = [
     "PublicationStatusView",
     "build_discovery_presentation",
     "build_publication_status",
+    "provider_outcome_label",
 ]
