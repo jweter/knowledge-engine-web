@@ -1,6 +1,6 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-08-21T00:57:00Z"
+updated_at: "2026-08-21T00:47:57Z"
 status_source: "Verified repository state plus docs/web_design.md and docs/federated_discovery_transparency_roadmap.md; this file is a continuity cache and never overrides higher-authority evidence."
 
 product:
@@ -45,7 +45,7 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-08-21T00:57:00Z"
+  checked_at: "2026-08-21T00:47:57Z"
   note: "Live PR/check/issue state is intentionally not cached as authoritative counts here. Scheduled runs must query GitHub directly before acting."
   open_prs: 1
   current_branch_slice:
