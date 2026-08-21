@@ -175,12 +175,18 @@ def _observation(
     retracted: bool | None = None,
     preprint: bool | None = None,
     preprint_version: int | None = None,
+    corrected: bool | None = None,
+    expression_of_concern: bool | None = None,
+    withdrawn: bool | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         provider=provider,
         retracted=retracted,
         preprint=preprint,
         preprint_version=preprint_version,
+        corrected=corrected,
+        expression_of_concern=expression_of_concern,
+        withdrawn=withdrawn,
     )
 
 
@@ -192,6 +198,9 @@ def _current_candidate(
     publication_year: int | None = 2026,
     providers: tuple[str, ...] = ("pubmed",),
     retraction_state: str = "not_checked",
+    correction_state: str = "not_checked",
+    expression_of_concern_state: str = "not_checked",
+    withdrawal_state: str = "not_checked",
 ) -> SimpleNamespace:
     return SimpleNamespace(
         canonical_id=canonical_id,
@@ -202,9 +211,9 @@ def _current_candidate(
         publication_status=PublicationStatusView(
             retraction_state=retraction_state,
             preprint_state="not_checked",
-            correction_state="not_checked",
-            expression_of_concern_state="not_checked",
-            withdrawal_state="not_checked",
+            correction_state=correction_state,
+            expression_of_concern_state=expression_of_concern_state,
+            withdrawal_state=withdrawal_state,
             preprint_versions=(),
             observations=(),
         ),
@@ -232,6 +241,9 @@ def test_candidate_freshness_reports_a_candidate_absent_from_the_previous_run() 
     assert len(freshness.newly_discovered) == 1
     assert freshness.newly_discovered[0].canonical_id == "doi:new"
     assert freshness.newly_retracted == ()
+    assert freshness.newly_corrected == ()
+    assert freshness.newly_expression_of_concern == ()
+    assert freshness.newly_withdrawn == ()
 
 
 def test_candidate_freshness_does_not_report_a_candidate_seen_in_both_runs_as_new() -> None:
@@ -256,7 +268,7 @@ def test_candidate_freshness_reports_a_retraction_flip_from_clear() -> None:
 
     assert len(freshness.newly_retracted) == 1
     assert freshness.newly_retracted[0].candidate.canonical_id == "doi:flip"
-    assert freshness.newly_retracted[0].previous_retraction_state == "clear"
+    assert freshness.newly_retracted[0].previous_state == "clear"
     assert freshness.newly_discovered == ()
 
 
@@ -267,7 +279,99 @@ def test_candidate_freshness_reports_a_retraction_flip_from_not_checked() -> Non
     freshness = build_candidate_freshness(current, previous)
 
     assert len(freshness.newly_retracted) == 1
-    assert freshness.newly_retracted[0].previous_retraction_state == "not_checked"
+    assert freshness.newly_retracted[0].previous_state == "not_checked"
+
+
+def test_candidate_freshness_reports_a_correction_flip() -> None:
+    current = (_current_candidate(canonical_id="doi:flip", correction_state="corrected"),)
+    previous = (
+        _previous_candidate(
+            canonical_id="doi:flip",
+            observations=(_observation("pubmed", corrected=False),),
+        ),
+    )
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert len(freshness.newly_corrected) == 1
+    assert freshness.newly_corrected[0].candidate.canonical_id == "doi:flip"
+    assert freshness.newly_corrected[0].previous_state == "clear"
+    assert freshness.newly_retracted == ()
+
+
+def test_candidate_freshness_reports_an_expression_of_concern_flip() -> None:
+    current = (
+        _current_candidate(
+            canonical_id="doi:flip", expression_of_concern_state="expression_of_concern"
+        ),
+    )
+    previous = (_previous_candidate(canonical_id="doi:flip", observations=()),)
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert len(freshness.newly_expression_of_concern) == 1
+    assert freshness.newly_expression_of_concern[0].previous_state == "not_checked"
+
+
+def test_candidate_freshness_reports_a_withdrawal_flip() -> None:
+    current = (_current_candidate(canonical_id="doi:flip", withdrawal_state="withdrawn"),)
+    previous = (
+        _previous_candidate(
+            canonical_id="doi:flip",
+            observations=(_observation("pubmed", withdrawn=False),),
+        ),
+    )
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert len(freshness.newly_withdrawn) == 1
+    assert freshness.newly_withdrawn[0].previous_state == "clear"
+
+
+def test_candidate_freshness_flags_are_independent_and_non_exclusive() -> None:
+    """A candidate newly retracted and newly corrected in the same run lands in both lists."""
+
+    current = (
+        _current_candidate(
+            canonical_id="doi:both",
+            retraction_state="retracted",
+            correction_state="corrected",
+        ),
+    )
+    previous = (
+        _previous_candidate(
+            canonical_id="doi:both",
+            observations=(_observation("pubmed", retracted=False, corrected=False),),
+        ),
+    )
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert len(freshness.newly_retracted) == 1
+    assert len(freshness.newly_corrected) == 1
+    assert freshness.newly_retracted[0].candidate.canonical_id == "doi:both"
+    assert freshness.newly_corrected[0].candidate.canonical_id == "doi:both"
+
+
+def test_candidate_freshness_does_not_repeat_an_already_corrected_or_withdrawn_candidate() -> None:
+    current = (
+        _current_candidate(
+            canonical_id="doi:still",
+            correction_state="corrected",
+            withdrawal_state="withdrawn",
+        ),
+    )
+    previous = (
+        _previous_candidate(
+            canonical_id="doi:still",
+            observations=(_observation("pubmed", corrected=True, withdrawn=True),),
+        ),
+    )
+
+    freshness = build_candidate_freshness(current, previous)
+
+    assert freshness.newly_corrected == ()
+    assert freshness.newly_withdrawn == ()
 
 
 def test_candidate_freshness_does_not_repeat_an_already_retracted_candidate() -> None:

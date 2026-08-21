@@ -721,6 +721,74 @@ def test_discover_shows_newly_retracted_candidates_with_was_now_framing(
     assert "Newly discovered works" not in body
 
 
+def test_discover_shows_newly_corrected_expression_of_concern_and_withdrawn_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WEB-FRD-5 item 7's remaining slice: all four flags, not retraction alone."""
+
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(
+            completeness="complete",
+            observation_flags=(
+                SimpleNamespace(
+                    provider="pubmed",
+                    retracted=None,
+                    preprint=None,
+                    preprint_version=None,
+                    corrected=True,
+                    expression_of_concern=True,
+                    withdrawn=True,
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        main, "run_discovery_history", lambda settings, research_question_id: _prior_run_history()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_discovery_candidate_snapshot",
+        lambda settings, search_run_id: _candidate_snapshot(
+            candidates=(
+                SimpleNamespace(
+                    canonical_id="pubmed:12345",
+                    title="A Trial of Semaglutide for Body Weight Reduction",
+                    doi="10.1000/example",
+                    publication_year=2026,
+                    observations=(
+                        SimpleNamespace(
+                            provider="pubmed",
+                            retracted=None,
+                            preprint=None,
+                            preprint_version=None,
+                            corrected=False,
+                            expression_of_concern=False,
+                            withdrawn=False,
+                        ),
+                    ),
+                ),
+            )
+        ),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Newly flagged as corrected" in body
+    assert "Newly flagged with an expression of concern" in body
+    assert "Newly flagged as withdrawn" in body
+    assert "now reported corrected" in body
+    assert "now reported under an expression of concern" in body
+    assert "now reported withdrawn" in body
+    assert "Newly flagged as retracted" not in body
+
+
 def test_discover_shows_an_honest_no_changes_message_when_nothing_changed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -755,7 +823,7 @@ def test_discover_shows_an_honest_no_changes_message_when_nothing_changed(
 
     assert response.status_code == 200
     body = response.text
-    assert "No newly discovered works and no newly retracted candidates" in body
+    assert "No newly discovered works and no newly flagged publication-status changes" in body
     assert "Newly discovered works" not in body
     assert "Newly flagged as retracted" not in body
 
