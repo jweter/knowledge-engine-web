@@ -429,6 +429,40 @@ def test_discover_shows_preprint_badge_with_version(
     assert "publication-status-banner" not in body
 
 
+def test_discover_shows_independent_correction_concern_and_withdrawal_warnings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main, "evaluate_discovery_capability", lambda settings: _available_capability()
+    )
+    monkeypatch.setattr(
+        main,
+        "run_guarded_discovery",
+        lambda settings, query, **kwargs: _discovery_result(
+            observation_flags=(
+                SimpleNamespace(
+                    provider="crossref",
+                    retracted=False,
+                    preprint=None,
+                    preprint_version=None,
+                    corrected=True,
+                    expression_of_concern=True,
+                    withdrawn=True,
+                ),
+            )
+        ),
+    )
+
+    response = TestClient(app).get("/discover", params={"q": "GLP-1 weight loss"})
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Corrected:" in body
+    assert "Expression of concern:" in body
+    assert "Withdrawn:" in body
+    assert "corrected:" in body and "yes" in body
+
+
 def test_discover_shows_orchestration_error_without_leaking_details(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

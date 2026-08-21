@@ -47,6 +47,12 @@ class ObservationFlagSource(Protocol):
     def preprint(self) -> bool | None: ...
     @property
     def preprint_version(self) -> int | None: ...
+    @property
+    def corrected(self) -> bool | None: ...
+    @property
+    def expression_of_concern(self) -> bool | None: ...
+    @property
+    def withdrawn(self) -> bool | None: ...
 
 
 class CandidateSource(Protocol):
@@ -90,7 +96,7 @@ class ProviderDisagreementView:
 
 @dataclass(frozen=True)
 class ProviderObservationFlagView:
-    """One provider's retraction/preprint observation, preserved exactly.
+    """One provider's publication-status observation, preserved exactly.
 
     ``None`` means the provider did not report the flag -- distinct from the
     provider explicitly reporting ``False``. AI does not merge, vote on, or
@@ -101,11 +107,14 @@ class ProviderObservationFlagView:
     retracted: bool | None
     preprint: bool | None
     preprint_version: int | None
+    corrected: bool | None
+    expression_of_concern: bool | None
+    withdrawn: bool | None
 
 
 @dataclass(frozen=True)
 class PublicationStatusView:
-    """WEB-FRD-4 rollup: a candidate's retraction/preprint status.
+    """WEB-FRD-4 rollup of independent provider publication-status flags.
 
     ``retraction_state`` and ``preprint_state`` are each one of:
 
@@ -125,6 +134,9 @@ class PublicationStatusView:
 
     retraction_state: str
     preprint_state: str
+    correction_state: str
+    expression_of_concern_state: str
+    withdrawal_state: str
     preprint_versions: tuple[int, ...]
     observations: tuple[ProviderObservationFlagView, ...]
 
@@ -154,7 +166,7 @@ class DiscoveryPresentation:
 def build_publication_status(
     flags: tuple[ObservationFlagSource, ...],
 ) -> PublicationStatusView:
-    """Roll up per-provider retraction/preprint flags without voting on them.
+    """Roll up per-provider publication-status flags without voting on them.
 
     Public (not module-private) because `discovery_freshness.py`'s
     candidate-level diff (WEB-FRD-5 item 7) reuses this exact rollup to
@@ -186,6 +198,38 @@ def build_publication_status(
     else:
         preprint_state = "not_checked"
 
+    corrected_reports = [
+        value for flag in flags if (value := getattr(flag, "corrected", None)) is not None
+    ]
+    if any(corrected_reports):
+        correction_state = "corrected"
+    elif corrected_reports:
+        correction_state = "clear"
+    else:
+        correction_state = "not_checked"
+
+    concern_reports = [
+        value
+        for flag in flags
+        if (value := getattr(flag, "expression_of_concern", None)) is not None
+    ]
+    if any(concern_reports):
+        expression_of_concern_state = "expression_of_concern"
+    elif concern_reports:
+        expression_of_concern_state = "clear"
+    else:
+        expression_of_concern_state = "not_checked"
+
+    withdrawn_reports = [
+        value for flag in flags if (value := getattr(flag, "withdrawn", None)) is not None
+    ]
+    if any(withdrawn_reports):
+        withdrawal_state = "withdrawn"
+    elif withdrawn_reports:
+        withdrawal_state = "clear"
+    else:
+        withdrawal_state = "not_checked"
+
     preprint_versions = tuple(
         flag.preprint_version for flag in flags if flag.preprint_version is not None
     )
@@ -196,6 +240,9 @@ def build_publication_status(
             retracted=flag.retracted,
             preprint=flag.preprint,
             preprint_version=flag.preprint_version,
+            corrected=getattr(flag, "corrected", None),
+            expression_of_concern=getattr(flag, "expression_of_concern", None),
+            withdrawn=getattr(flag, "withdrawn", None),
         )
         for flag in flags
     )
@@ -203,6 +250,9 @@ def build_publication_status(
     return PublicationStatusView(
         retraction_state=retraction_state,
         preprint_state=preprint_state,
+        correction_state=correction_state,
+        expression_of_concern_state=expression_of_concern_state,
+        withdrawal_state=withdrawal_state,
         preprint_versions=preprint_versions,
         observations=observations,
     )

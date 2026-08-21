@@ -30,6 +30,9 @@ class _ObservationFlags:
     retracted: bool | None
     preprint: bool | None
     preprint_version: int | None
+    corrected: bool | None = None
+    expression_of_concern: bool | None = None
+    withdrawn: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -273,3 +276,69 @@ def test_publication_status_flags_preprint_and_preserves_version() -> None:
     assert status.preprint_versions == (2,)
     # Retraction was never reported by either provider for this candidate.
     assert status.retraction_state == "not_checked"
+
+
+def test_publication_status_preserves_independent_nonexclusive_flags() -> None:
+    result = _Result(
+        candidates=(
+            _Candidate(
+                canonical_id="doi:10.1000/status",
+                title="A corrected work later withdrawn",
+                doi="10.1000/status",
+                publication_year=2026,
+                providers=("crossref", "pubmed"),
+                observation_flags=(
+                    _ObservationFlags(
+                        "crossref",
+                        retracted=False,
+                        preprint=None,
+                        preprint_version=None,
+                        corrected=True,
+                        expression_of_concern=True,
+                        withdrawn=True,
+                    ),
+                    _ObservationFlags(
+                        "pubmed",
+                        retracted=False,
+                        preprint=None,
+                        preprint_version=None,
+                    ),
+                ),
+            ),
+        ),
+        provider_disagreements=(),
+    )
+
+    status = build_discovery_presentation(result).candidates[0].publication_status
+
+    assert status.correction_state == "corrected"
+    assert status.expression_of_concern_state == "expression_of_concern"
+    assert status.withdrawal_state == "withdrawn"
+    assert status.retraction_state == "clear"
+    assert status.observations[1].corrected is None
+
+
+def test_publication_status_keeps_unreported_additional_flags_unknown() -> None:
+    result = _Result(
+        candidates=(
+            _Candidate(
+                canonical_id="pmid:unknown-status",
+                title="No Crossmark report",
+                doi=None,
+                publication_year=2026,
+                providers=("pubmed",),
+                observation_flags=(
+                    _ObservationFlags(
+                        "pubmed", retracted=False, preprint=False, preprint_version=None
+                    ),
+                ),
+            ),
+        ),
+        provider_disagreements=(),
+    )
+
+    status = build_discovery_presentation(result).candidates[0].publication_status
+
+    assert status.correction_state == "not_checked"
+    assert status.expression_of_concern_state == "not_checked"
+    assert status.withdrawal_state == "not_checked"

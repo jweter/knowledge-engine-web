@@ -1,6 +1,6 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-08-20T16:35:00Z"
+updated_at: "2026-08-21T00:45:00Z"
 status_source: "Verified repository state plus docs/web_design.md and docs/federated_discovery_transparency_roadmap.md; this file is a continuity cache and never overrides higher-authority evidence."
 
 product:
@@ -18,6 +18,7 @@ current_milestone:
   name: "WEB-FRD (federated discovery transparency) sequence"
   roadmap_file: "docs/federated_discovery_transparency_roadmap.md"
   state: "active"
+  latest_update: "WEB-FRD-4's correction/expression-of-concern/withdrawal Web consumer slice is implemented and locally verified on 2026-08-21. This supersedes the historical remaining-work wording in the detailed sub-milestone snapshot below."
   sub_milestone_status:
     WEB-FRD-1_provider_coverage: "complete -- /discover page renders provider status from Core's own recorded outcome, never inferred from result count"
     WEB-FRD-2_search_provenance_details: "complete -- all 5 exit criteria met. knowledge-engine-ai PR #51 parsed Core's coverage.created_at into FederatedDiscoveryResult.search_run_created_at; this session bumped Web's pinned knowledge-engine-ai commit to fd5964c0f9632d4622224b5d2608d32bc7b34989 (was f4715d32a62748ec1ff395ee57402d192362c1a5) and rendered the field in discover.html's 'Run timestamp' row, with an explicit 'not recorded' disclosure when the value is None."
@@ -44,9 +45,14 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-08-20T11:00:00Z"
+  checked_at: "2026-08-21T00:45:00Z"
   note: "Live PR/check/issue state is intentionally not cached as authoritative counts here. Scheduled runs must query GitHub directly before acting."
   open_prs: 0
+  current_branch_slice:
+    branch: "agent/web-frd4-publication-status"
+    milestone: "WEB-FRD-4"
+    change: "Pin AI commit 58c21b1 and render corrected, expression-of-concern, and withdrawn provider observations independently without converting unknown to clear."
+    state: "format, lint, typing, 336 tests, dependency audit, lock validation, and diff hygiene passed; pull request pending"
   ci_workflows:
     - ".github/workflows/quality.yml"
   local_quality_preflight:
@@ -55,6 +61,7 @@ verified_repository_state:
 
 next_continuation:
   priority: "P5-highest-value-authorized-roadmap"
+  current_action: "Verify the WEB-FRD-4 publication-status branch through the full local gate and rendered /discover page, then open one ready-for-review PR for fresh CI. This supersedes the historical action summary below."
   action: "This session: bumped the pinned knowledge-engine-ai revision to 2cab16b47bb9d3f42d777e989bf2637e8310fb4d (carries ke_client.federated_coverage_report(), the point-lookup wrapper for Core's newly candidate-snapshot-persisting federated-coverage-report --output), then closed WEB-FRD-5's remaining candidate-level slice of item 7 -- see the WEB-FRD-5_research_freshness_history entry above and docs/roadmap/web_frd5_freshness_history_design.md section 10 for the complete account. New: discovery_orchestration.run_discovery_candidate_snapshot(), discovery_freshness.build_candidate_freshness(), discovery_presentation.build_publication_status() (made public for reuse). discover.html gained 'Newly discovered works'/'Newly flagged as retracted' sections. Live-verified against the real ke binary (knowledge-engine-core installed at the PR #394 commit, a ledger seeded via FederatedSearchLedger.record(), a local server driven through the real subprocess calls end to end). WEB-FRD-5 is now complete -- no further continuation item for it. Separately, WEB-FRD-4's remaining slice is NOW UNBLOCKED and is the highest-value next Web slice. It previously needed a Core schema change, then an AI change, before Web could render anything; both landed on 2026-08-20: Core PR #396 (commit 4866ebd) wired Crossref's `update-to` relation to populate `corrected`/`expression_of_concern`/`withdrawn` on ProviderObservation with real data, and knowledge-engine-ai PR #57 (commit 58c21b1) parses all three at the ke_client boundary on both `FederatedProviderObservationFlags` (federated-discover and citation-snowball) and `FederatedCandidateObservation` (the persisted coverage-report shape). The Web slice: bump the pinned knowledge-engine-ai revision in pyproject.toml past 58c21b1 (currently 2cab16b, which predates the parsing), then extend `discovery_presentation.build_publication_status()` and the discover.html publication-status banner to render the three additional states alongside the existing retraction/preprint rendering. Two contracts to preserve, both inherited from Core and AI rather than invented here: the four publication-status flags are independent and non-exclusive (a work may be corrected and later retracted, so do not collapse them into one status enum or a priority ladder that hides the others), and an unreported flag is unknown, never rendered as an affirmative 'clear' -- Crossref crossmark participation is not universal. Verify against the real ke binary end to end before opening the PR, per this repo's existing practice. No other WEB-FRD milestone has known unblocked work; query live PR/issue state per the selection rule below before picking anything beyond this."
   selection_rule: "Before beginning roadmap work, query live PR state. Handle failed, green, blocked, conflicted, or pending existing work according to docs/agent-development-policy.md and knowledge-engine-core's shared policy document."
 

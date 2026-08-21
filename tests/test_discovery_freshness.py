@@ -202,6 +202,9 @@ def _current_candidate(
         publication_status=PublicationStatusView(
             retraction_state=retraction_state,
             preprint_state="not_checked",
+            correction_state="not_checked",
+            expression_of_concern_state="not_checked",
+            withdrawal_state="not_checked",
             preprint_versions=(),
             observations=(),
         ),

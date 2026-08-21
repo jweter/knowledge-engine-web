@@ -20,6 +20,24 @@
   {% else %}
   <p class="disclaimer">Retraction status: no provider reports this work as retracted.</p>
   {% endif %}
+  {% if candidate.publication_status.correction_state == "corrected" %}
+  <p class="publication-status-banner is-degraded" role="status">
+    <strong>Corrected:</strong> at least one provider reports a correction for
+    this work. Inspect the correction and use the current version.
+  </p>
+  {% endif %}
+  {% if candidate.publication_status.expression_of_concern_state == "expression_of_concern" %}
+  <p class="publication-status-banner is-critical" role="alert">
+    <strong>&#9888; Expression of concern:</strong> at least one provider reports
+    an expression of concern. Review the publisher notice before relying on it.
+  </p>
+  {% endif %}
+  {% if candidate.publication_status.withdrawal_state == "withdrawn" %}
+  <p class="publication-status-banner is-critical" role="alert">
+    <strong>&#9888; Withdrawn:</strong> at least one provider reports this work as
+    withdrawn. Do not treat it as reliable evidence without checking the notice.
+  </p>
+  {% endif %}
   {% if candidate.publication_status.preprint_state == "preprint" %}
   <p>
     <span class="discovery-status is-degraded"
@@ -38,6 +56,12 @@
         {% if obs.retracted is none %}not reported{% else %}{{ obs.retracted }}{% endif %}
         &middot; preprint:
         {% if obs.preprint is none %}not reported{% elif obs.preprint %}yes{% if obs.preprint_version %} (v{{ obs.preprint_version }}){% endif %}{% else %}no{% endif %}
+        &middot; corrected:
+        {% if obs.corrected is none %}not reported{% elif obs.corrected %}yes{% else %}no{% endif %}
+        &middot; expression of concern:
+        {% if obs.expression_of_concern is none %}not reported{% elif obs.expression_of_concern %}yes{% else %}no{% endif %}
+        &middot; withdrawn:
+        {% if obs.withdrawn is none %}not reported{% elif obs.withdrawn %}yes{% else %}no{% endif %}
       </dd>
       {% endfor %}
     </dl>
