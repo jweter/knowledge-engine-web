@@ -1325,6 +1325,37 @@ def test_publication_status_banner_degraded_has_visible_styling(
     assert "background" in rule_body
 
 
+def test_trust_warning_is_critical_has_visible_styling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ask.html applies class="trust-warning is-critical" to the Research Copilot
+    Verification findings paragraph and the withheld-narrative notice (see
+    knowledge_engine_web/templates/ask.html) -- the two places this page states
+    that the AI-narrated draft actually contains a specific found problem or is
+    being withheld because it failed a trust gate. Both previously shared the
+    generic ".empty-state" class (`color: var(--text-muted)`), the same muted
+    style used for ordinary "no data" placeholders elsewhere on this site --
+    correctly labeled in text, so not a color-only violation, but visually
+    indistinguishable from harmless empty-state text, which undercuts the
+    point of flagging a verification problem or a withheld narrative at all.
+    ".trust-warning.is-critical" must reuse the same visible banner treatment
+    (border, background) already proven for
+    ".publication-status-banner.is-critical" on /discover, not just inherit
+    plain muted text color.
+    """
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/static/style.css")
+
+    assert response.status_code == 200
+    css = response.text
+    match = re.search(r"\.trust-warning\.is-critical\s*\{([^}]*)\}", css)
+    assert match, "expected a dedicated .trust-warning.is-critical rule"
+    rule_body = match.group(1)
+    assert "border" in rule_body
+    assert "background" in rule_body
+
+
 def _create_fts_table_and_paper(
     engine: Engine, *, paper_id: int, title: str, doi: str, abstract: str = ""
 ) -> None:
@@ -1725,6 +1756,7 @@ def test_ask_withholds_a_narrative_when_the_close_gate_blocks(
     assert response.status_code == 200
     assert "Close gate:</strong> blocked" in response.text
     assert "draft narrative was recorded but is withheld" in response.text
+    assert 'class="trust-warning is-critical"' in response.text
     assert "Semaglutide reduces body weight [ev-1]." not in response.text
     assert "Resolved citations" not in response.text
     assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
@@ -1762,6 +1794,7 @@ def test_ask_shows_specific_verification_findings_when_flagged(
     assert "Verification:</strong>" in response.text
     assert "flagged for review" in response.text
     assert "Verification findings:" in response.text
+    assert 'class="trust-warning is-critical"' in response.text
     assert "Cited but not found in this session's retrieved evidence:" in response.text
     assert "<code>ev-99</code>" in response.text
     assert "Numbers stated in the narrative but not found" in response.text
