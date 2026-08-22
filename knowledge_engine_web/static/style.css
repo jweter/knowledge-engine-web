@@ -364,7 +364,8 @@ th {
   color: var(--status-skipped);
 }
 
-.publication-status-banner.is-critical {
+.publication-status-banner.is-critical,
+.trust-warning.is-critical {
   color: var(--status-critical);
   background: var(--status-critical-bg);
   border: 2px solid var(--status-critical);

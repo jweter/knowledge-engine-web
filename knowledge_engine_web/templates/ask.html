@@ -71,7 +71,7 @@
     {% else %}flagged for review{% endif %}
   </p>
   {% if copilot_result.verification and not copilot_result.verification.is_clean %}
-  <p class="empty-state">
+  <p class="trust-warning is-critical" role="alert">
     <strong>Verification findings:</strong>
     <ul>
       {% if copilot_result.verification.hallucinated_citations %}
@@ -113,7 +113,7 @@
   {% elif copilot_result.narrative_releaseable %}
   <p>{{ copilot_result.narrative }}</p>
   {% elif copilot_result.narrative %}
-  <p class="empty-state">
+  <p class="trust-warning is-critical" role="alert">
     A draft narrative was recorded but is withheld because deterministic
     verification or the Research ISA close gate did not pass. Inspect the
     durable session and unresolved criteria before using it.

@@ -340,6 +340,40 @@ Web-to-AI-to-Core path passed its independent workflow, citation, and
 contradiction gates, and Web now withholds generated drafts whenever that gate
 does not pass. This verification does not enable the Render alpha.
 
+## Implemented: `/ask` trust-warning styling for verification findings and withheld narratives
+
+**2026-08-22 styling fix**, found during a focused accessibility audit of
+`ask.html` and the other templates (the follow-up the WEB-FRD-4 styling-fix
+note below named as still worth doing, since that is where that bug was
+found). `ask.html`'s Verification findings paragraph (the specific
+hallucinated citations, ungrounded numbers, and missed qualifiers WEB-FRD-6
+already renders) and its withheld-narrative notice (the paragraph shown when
+a draft narrative exists but the Research ISA close gate blocked it) both
+used the generic `.empty-state` class (`color: var(--text-muted)`) -- the
+same muted style this site uses for ordinary "no data yet" placeholders like
+"No relevant papers found." Both paragraphs were correctly labeled in text,
+so this was not a color-only violation, but a real found problem or a
+withheld answer read as visually identical to harmless empty-state text,
+undercutting the reason WEB-FRD-6 and AI-O17 exist: making sure a person
+actually notices when the system caught its own narration doing something
+wrong. Added `class="trust-warning is-critical"` (plus `role="alert"`) to
+both paragraphs and a `.trust-warning.is-critical` CSS rule sharing
+`.publication-status-banner.is-critical`'s existing border/background/
+`--status-critical` treatment from `/discover` -- no new color token, no new
+visual language, matching the "no new presentation format invented" pattern
+the WEB-FRD-5 design doc already established. Covered by
+`tests/test_main.py::test_trust_warning_is_critical_has_visible_styling`
+(stylesheet rule, mirroring the WEB-FRD-4 styling test below) plus class
+assertions added to the existing
+`test_ask_withholds_a_narrative_when_the_close_gate_blocks` and
+`test_ask_shows_specific_verification_findings_when_flagged` tests. The
+`copilot_error`/`synthesis_error`/failed-workflow-step notices and the
+generic "no data" empty states elsewhere on the site were deliberately left
+on `.empty-state` -- this fix is scoped to the two paragraphs that state a
+concrete, specific trust-boundary problem (a caught fabrication, or an
+answer being deliberately withheld), not every failure or empty-state
+message on the page.
+
 ## Implemented: WEB-FRD-6 inspectable research path (`/ask`)
 
 WEB-FRD-6 is implemented for the `/ask` Research Copilot session path.
