@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -1297,6 +1298,31 @@ def test_static_stylesheet_is_served(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     assert response.status_code == 200
     assert "text/css" in response.headers["content-type"]
+
+
+def test_publication_status_banner_degraded_has_visible_styling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """discover.html applies class="publication-status-banner is-degraded" to the
+    "Corrected" and "Newly flagged as corrected" banners (see
+    knowledge_engine_web/templates/discover.html). Retraction/expression-of-concern/
+    withdrawal banners use "is-critical", which is styled with a colored border and
+    background so the warning cannot be missed. ".is-degraded" must get the same
+    banner treatment (its own border/background), not just inherit the base
+    ".publication-status-banner" rule -- an unstyled "Corrected" banner would silently
+    read as plain text next to the other, clearly-flagged publication-status warnings.
+    """
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/static/style.css")
+
+    assert response.status_code == 200
+    css = response.text
+    match = re.search(r"\.publication-status-banner\.is-degraded\s*\{([^}]*)\}", css)
+    assert match, "expected a dedicated .publication-status-banner.is-degraded rule"
+    rule_body = match.group(1)
+    assert "border" in rule_body
+    assert "background" in rule_body
 
 
 def _create_fts_table_and_paper(

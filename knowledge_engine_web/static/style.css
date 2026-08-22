@@ -10,6 +10,7 @@
   --code-bg: #f0f3f4;
   --status-ok: #1f7a3f;
   --status-degraded: #a15a00;
+  --status-degraded-bg: #fdf1e2;
   --status-skipped: #6b7580;
   --status-critical: #b3261e;
   --status-critical-bg: #fdecea;
@@ -28,6 +29,7 @@
     --code-bg: #1b232a;
     --status-ok: #6fcf8f;
     --status-degraded: #e0a458;
+    --status-degraded-bg: #3a2c19;
     --status-skipped: #97a3ad;
     --status-critical: #f28b82;
     --status-critical-bg: #3a1f1d;
@@ -366,6 +368,15 @@ th {
   color: var(--status-critical);
   background: var(--status-critical-bg);
   border: 2px solid var(--status-critical);
+  border-radius: 6px;
+  padding: 0.6rem 0.9rem;
+  font-weight: 600;
+}
+
+.publication-status-banner.is-degraded {
+  color: var(--status-degraded);
+  background: var(--status-degraded-bg);
+  border: 2px solid var(--status-degraded);
   border-radius: 6px;
   padding: 0.6rem 0.9rem;
   font-weight: 600;
