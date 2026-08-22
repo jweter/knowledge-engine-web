@@ -360,6 +360,16 @@ priority ladder, and preserves every provider's raw `True`/`False`/unreported
 observation in the inspectable breakdown. Unknown remains distinct from an
 explicit provider-reported `False`.
 
+**2026-08-22 fix:** the "Corrected" banner used the `is-degraded` CSS class,
+but `static/style.css` only styled `is-critical` (used by retraction/
+expression-of-concern/withdrawal). The correction banner therefore rendered
+as unstyled text -- correctly labeled, so still distinguishable without
+color, but visually far weaker than the other three warnings. Added a
+`.publication-status-banner.is-degraded` rule (border/background/bold,
+`--status-degraded` token) plus a new `--status-degraded-bg` token, so all
+four publication-status warnings now share the same visible-banner
+treatment. Web-only CSS/test change; no Core or AI dependency.
+
 Exit criteria:
 
 - retraction cannot be visually missed; **met** -- a bordered, colored,

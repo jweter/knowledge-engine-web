@@ -380,6 +380,22 @@ remains unknown rather than being presented as clear. The `/discover` card
 shows visible correction, expression-of-concern, and withdrawal banners and
 keeps each provider's raw observation inspectable.
 
+**2026-08-22 styling fix:** the "Corrected" banner (and the matching "Newly
+flagged as corrected" freshness banner) applies
+`class="publication-status-banner is-degraded"`, but `static/style.css` only
+ever styled the `.is-critical` variant used by retraction/expression-of-
+concern/withdrawal. The `.is-degraded` banner rendered as unstyled paragraph
+text -- correctly labeled, so not a color-only violation, but visually far
+less prominent than the other three publication-status warnings, which
+undercuts this milestone's own "retraction [and correction] cannot be
+visually missed" intent. Added a `.publication-status-banner.is-degraded`
+rule (border, background, bold) using the existing `--status-degraded`
+color token, plus a new `--status-degraded-bg` token (light and dark) mirroring
+`--status-critical-bg`'s pattern. Covered by
+`tests/test_main.py::test_publication_status_banner_degraded_has_visible_styling`,
+which parses the served stylesheet and fails without the fix (confirmed
+fail-before/pass-after).
+
 ## Implemented: WEB-FRD-5 research freshness history
 
 WEB-FRD-5 ("compare current and previous discovery runs for the same
