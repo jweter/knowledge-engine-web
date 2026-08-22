@@ -1,6 +1,6 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-08-21T19:30:00Z"
+updated_at: "2026-08-22T21:45:00Z"
 status_source: "Verified repository state plus docs/web_design.md and docs/federated_discovery_transparency_roadmap.md; this file is a continuity cache and never overrides higher-authority evidence."
 
 product:
@@ -45,7 +45,7 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-08-21T10:04:27Z"
+  checked_at: "2026-08-22T21:45:00Z"
   note: "Live PR/check/issue state is intentionally not cached as authoritative counts here. Scheduled runs must query GitHub directly before acting."
   open_prs: 0
   recently_merged_pr:
@@ -62,8 +62,8 @@ verified_repository_state:
 
 next_continuation:
   priority: "P5-highest-value-authorized-roadmap"
-  current_action: "WEB-FRD-1 through WEB-FRD-6 have no known unblocked Web-side implementation remaining. This session implemented the next-most-clearly-authorized documented item instead: docs/federated_discovery_transparency_roadmap.md's 'Improvements beyond the external reference' -> 'Coverage limitations should travel with exports' (see that section's own 'Status: implemented for /discover' entry for the full account). /discover had no export of any kind before this slice, so this added GET /discover/export.md and GET /discover/export.json (knowledge_engine_web/discovery_export.py), both built from the exact same FederatedDiscoveryResult/DiscoveryPresentation the page itself renders. Re-query live family state and roadmap evidence before selecting a new Web slice; do not manufacture work or alter Core/AI contracts from this presentation repository."
-  action: "No currently authorized Web-only continuation beyond the export slice above is known. Inspect the live Knowledge Engine family and current Web roadmap before starting another slice -- remaining documented ideas in this roadmap's 'Improvements beyond the external reference' section (provider-disagreement-as-metadata-inspection, user-controlled source scope, /ask export parity) are candidates but none is yet as concretely specified as the export item was."
+  current_action: "This session (2026-08-22) found no unblocked Web-side implementation slice concrete enough to build safely -- the same conclusion the prior session reached. It instead corrected a stale-documentation defect: docs/federated_discovery_transparency_roadmap.md's 'Improvements beyond the external reference' -> 'Provider disagreement should be a metadata inspection feature' had no 'Status:' note even though WEB-FRD-3 (merged well before this session) already implements exactly what that aspiration describes -- a per-candidate disagreement_state plus a field-by-field/provider-by-provider breakdown, explicitly distinguished from scientific contradiction, in discover.html and both export formats. Added a 'Status: implemented, via WEB-FRD-3' note there cross-referencing the existing capability. No code change; docs-only. Re-verified: 'user-controlled source scope' and '/ask export parity' remain genuinely unimplemented (not stale-doc issues) -- the former needs a real product decision on persisted per-session provider scope, the latter is honestly already marked 'not yet extended to /ask' in the exports section, both correctly still open."
+  action: "No currently authorized Web-only implementation slice beyond documentation correctness is known this session. Inspect the live Knowledge Engine family and current Web roadmap before starting another slice -- remaining documented ideas in this roadmap's 'Improvements beyond the external reference' section (user-controlled source scope, /ask export parity, search-quality-vs-evidence-quality UX distinction, accessibility hardening) are candidates but none is yet as concretely specified as the /discover export item was. knowledge-engine-ai's 2026-08-22 session-freshness slice (AI PR #65) does not create Web-side work: Web's /ask does not pass a discovery_policy to run_research_question, so AI-FRD-5 session freshness is not yet reachable from Web at all -- that remains a distinct, not-yet-authorized future slice, not this session's to start unilaterally."
   selection_rule: "Before beginning roadmap work, query live PR state. Handle failed, green, blocked, conflicted, or pending existing work according to docs/agent-development-policy.md and knowledge-engine-core's shared policy document."
 
 human_decision_required: null
