@@ -552,6 +552,18 @@ citation count, the UI can eventually show that as a metadata discrepancy. It
 must not appear in the same visual category as studies disagreeing on a
 scientific outcome.
 
+**Status: implemented, via WEB-FRD-3.** This aspiration predates WEB-FRD-3's
+own delivery and was never marked resolved here once WEB-FRD-3 shipped it --
+see that section above for the full account. `discovery_presentation.py`'s
+`build_discovery_presentation()` computes a per-candidate
+`disagreement_state` (`"reported"`/`"none_reported"`/`"unavailable"`) and a
+field-by-field, provider-by-provider assertion breakdown;
+`discover.html` renders it as an expandable "provider metadata disagreement"
+section per candidate, with explicit copy distinguishing it from scientific
+contradiction, exactly as this section asks. It is also carried into both
+export formats (`discovery_export.py`), so the distinction survives a
+download, not only the live page. Nothing further is scoped here.
+
 ### Coverage limitations should travel with exports
 
 Downloaded Markdown/JSON reports should carry the same provider/search coverage
