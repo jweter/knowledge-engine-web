@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-
 from knowledge_engine_ai.copilot.discovery_policy import FederatedDiscoveryPolicy
+
 from knowledge_engine_web import ai_orchestration
 from knowledge_engine_web.ai_orchestration import run_ai_orchestration
 from knowledge_engine_web.config import Settings
