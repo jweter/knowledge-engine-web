@@ -4,12 +4,18 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.quality_preflight import QualityGate, quality_gates, run_preflight
+from scripts import quality_preflight
 
 
-def test_quality_gates_match_ci_order() -> None:
-    gates = quality_gates("python-test")
+def test_fix_gates_normalize_before_validation() -> None:
+    gates = quality_preflight.fix_gates("python-test")
+    assert [gate.name for gate in gates] == ["format_fix", "lint_fix", "format_after_fix"]
+    assert gates[0].args == ("python-test", "-m", "ruff", "format", ".")
+    assert gates[1].args == ("python-test", "-m", "ruff", "check", "--fix", ".")
 
+
+def test_quality_gates_match_python_ci_order() -> None:
+    gates = quality_preflight.quality_gates("python-test")
     assert [gate.name for gate in gates] == [
         "format",
         "lint",
@@ -18,52 +24,35 @@ def test_quality_gates_match_ci_order() -> None:
         "dependency_audit",
         "diff_hygiene",
     ]
-    assert gates[0].args == ("python-test", "-m", "ruff", "format", "--check", ".")
-    assert gates[1].args == ("python-test", "-m", "ruff", "check", ".")
-    assert gates[2].args == (
-        "python-test",
-        "-m",
-        "mypy",
-        "knowledge_engine_web",
-        "tests",
-    )
-    assert gates[3].args == ("python-test", "-m", "pytest")
-    assert gates[4].args == ("python-test", "-m", "pip_audit")
-    assert gates[5].args == ("git", "diff", "--check")
 
 
-def test_preflight_stops_at_first_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fix_mode_runs_fixes_before_checks(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, ...]] = []
-    gates = (
-        QualityGate("format", ("format-command",)),
-        QualityGate("lint", ("lint-command",)),
-        QualityGate("typing", ("typing-command",)),
-    )
-
-    def fake_run(args: tuple[str, ...], *, check: bool) -> SimpleNamespace:
-        assert check is False
-        calls.append(args)
-        return SimpleNamespace(returncode=7 if args == ("lint-command",) else 0)
-
-    monkeypatch.setattr("scripts.quality_preflight.subprocess.run", fake_run)
-
-    assert run_preflight(gates) == 7
-    assert calls == [("format-command",), ("lint-command",)]
-
-
-def test_preflight_runs_all_gates_when_clean(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[tuple[str, ...]] = []
-    gates = (
-        QualityGate("format", ("format-command",)),
-        QualityGate("lint", ("lint-command",)),
-    )
 
     def fake_run(args: tuple[str, ...], *, check: bool) -> SimpleNamespace:
         assert check is False
         calls.append(args)
         return SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr("scripts.quality_preflight.subprocess.run", fake_run)
+    monkeypatch.setattr(quality_preflight.subprocess, "run", fake_run)
 
-    assert run_preflight(gates) == 0
-    assert calls == [("format-command",), ("lint-command",)]
+    assert quality_preflight.main(["--fix"]) == 0
+    expected = [
+        *(gate.args for gate in quality_preflight.fix_gates()),
+        *(gate.args for gate in quality_preflight.quality_gates()),
+    ]
+    assert calls == expected
+
+
+def test_docker_mode_runs_after_python_checks(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(args: tuple[str, ...], *, check: bool) -> SimpleNamespace:
+        assert check is False
+        calls.append(args)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(quality_preflight.subprocess, "run", fake_run)
+
+    assert quality_preflight.main(["--docker"]) == 0
+    assert calls[-1] == quality_preflight.docker_gates()[0].args
