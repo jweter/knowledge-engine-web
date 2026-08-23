@@ -4,6 +4,13 @@ The web page remains useful as deterministic retrieval when this optional
 runtime is incomplete. This module owns the integration boundary so route
 code does not need to know how `knowledge-engine-ai`, its durable session
 store, or core's `ke` subprocess interface are assembled.
+
+General Question Research Loop v1 deliberately enables the AI layer's
+bounded, deterministic coverage-gap discovery policy for Research Copilot
+runs. The local corpus remains the first stop; federated discovery runs only
+when the AI layer's evidence-record coverage rule says the indexed evidence
+is thin. Discovered candidates remain leads, not Evidence Records, until Core
+acquires and validates them.
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from knowledge_engine_ai.copilot.discovery_policy import FederatedDiscoveryPolicy
 from knowledge_engine_ai.copilot.run_research_question import (
     ResearchQuestionResult,
     run_research_question,
@@ -87,13 +95,36 @@ def evaluate_ai_capability(settings: Settings) -> AICapability:
     return AICapability(available=True, session_storage_mode=settings.session_storage_mode)
 
 
+def _build_discovery_policy(settings: Settings, executable: str) -> FederatedDiscoveryPolicy:
+    """Build the bounded default policy for arbitrary-question Research Copilot runs.
+
+    The policy's trigger is deterministic and implemented in
+    `knowledge-engine-ai`: indexed evidence is always searched first, and
+    external discovery is attempted only when deduplicated evidence-record
+    coverage falls below the configured AI-layer threshold. This helper only
+    supplies Web's durable ledger location, provider credentials, and Core CLI.
+    """
+
+    return FederatedDiscoveryPolicy(
+        ledger_root=Path(settings.federated_discovery_ledger_root),
+        openalex_api_key=settings.federated_openalex_api_key,
+        semantic_scholar_api_key=settings.federated_semantic_scholar_api_key,
+        ke_executable=executable,
+    )
+
+
 def run_ai_orchestration(
     settings: Settings,
     question: str,
     *,
     timeout_seconds: float | None = None,
 ) -> ResearchQuestionResult:
-    """Run one durable Research Copilot session using configured local inputs."""
+    """Run one durable Research Copilot session using configured local inputs.
+
+    General Question Research Loop v1 enables bounded coverage-gap discovery
+    on this path. This does not make discovery candidates citable evidence;
+    acquisition/validation remains a separate Core responsibility.
+    """
 
     capability = evaluate_ai_capability(settings)
     if not capability.available:
@@ -118,13 +149,14 @@ def run_ai_orchestration(
             sources=Path(settings.sources_path),
             evidence=Path(settings.evidence_records_path),
             llm=OllamaLLM(model=model, host=settings.ollama_host),
+            discovery_policy=_build_discovery_policy(settings, executable),
             ke_executable=executable,
             timeout_seconds=timeout_seconds,
         )
     except Exception as exc:
-        # This integration crosses SQLite, subprocess, file, and local-model
-        # boundaries. Visitor output must not leak paths or raw exception
-        # details; deterministic retrieval remains available.
+        # This integration crosses SQLite, subprocess, file, network-provider,
+        # and local-model boundaries. Visitor output must not leak paths or raw
+        # exception details; deterministic retrieval remains available.
         raise AIOrchestrationError(
             "Research Copilot could not complete this request. "
             "Deterministic retrieval results are still shown below."
