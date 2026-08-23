@@ -383,6 +383,64 @@ th {
   font-weight: 600;
 }
 
+.discovery-method-details {
+  margin: 1rem 0;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.discovery-method-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.discovery-method-details summary:hover,
+.discovery-method-details summary:focus-visible {
+  color: var(--accent);
+}
+
+.discovery-method-details[open] summary {
+  margin-bottom: 0.6rem;
+}
+
+.discovery-method-details dl {
+  margin: 0.5rem 0;
+}
+
+.discovery-method-details dt {
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.discovery-method-details dt:first-child {
+  margin-top: 0;
+}
+
+.discovery-method-details dd {
+  margin: 0.15rem 0 0;
+}
+
+.ask-trace-events {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.ask-trace-events li {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-alt);
+}
+
 .concept-preview-frame {
   display: block;
   width: 100vw;
