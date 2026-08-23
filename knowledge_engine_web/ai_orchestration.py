@@ -32,6 +32,7 @@ from knowledge_engine_ai.sessions.repository import SessionRepository, new_conne
 
 from knowledge_engine_web.ai_guardrails import AIRequestGuard
 from knowledge_engine_web.config import Settings
+from knowledge_engine_web.discovery_orchestration import evaluate_discovery_capability
 
 _GLOBAL_AI_REQUEST_GUARD = AIRequestGuard()
 _EXECUTION_TIMEOUT_FRAGMENTS = (
@@ -73,12 +74,14 @@ class _ResearchResultLike(Protocol):
 
 
 def evaluate_ai_capability(settings: Settings) -> AICapability:
-    """Fail closed unless every local Research Copilot prerequisite exists.
+    """Fail closed unless every Research Copilot prerequisite exists.
 
     This is deliberately a static deployment check. It does not contact
-    Ollama, execute `ke`, create the session database, or otherwise mutate
-    state merely to render the Ask form. Runtime dependencies are exercised
-    only after a person explicitly requests AI narration.
+    Ollama, execute `ke`, create the session database, or contact scholarly
+    providers merely to render the Ask form. Because General Question Research
+    Loop v1 enables bounded discovery on every Research Copilot run, the
+    discovery ledger must pass the same storage checks used by `/discover`
+    before the AI path is advertised as available.
     """
 
     if not _nonblank(settings.llm_model):
@@ -92,6 +95,9 @@ def evaluate_ai_capability(settings: Settings) -> AICapability:
     session_capability = _evaluate_session_storage(settings)
     if not session_capability.available:
         return session_capability
+    discovery_capability = evaluate_discovery_capability(settings)
+    if not discovery_capability.available:
+        return _unavailable(discovery_capability.reason_code or "discovery_unavailable")
     return AICapability(available=True, session_storage_mode=settings.session_storage_mode)
 
 
@@ -102,7 +108,8 @@ def _build_discovery_policy(settings: Settings, executable: str) -> FederatedDis
     `knowledge-engine-ai`: indexed evidence is always searched first, and
     external discovery is attempted only when deduplicated evidence-record
     coverage falls below the configured AI-layer threshold. This helper only
-    supplies Web's durable ledger location, provider credentials, and Core CLI.
+    supplies Web's validated durable ledger location, provider credentials,
+    and Core CLI.
     """
 
     return FederatedDiscoveryPolicy(
