@@ -1,20 +1,8 @@
-"""Run Knowledge Engine Web's deterministic local quality gates in CI order.
-
-Invoke from the repository root with:
-
-    poetry run python scripts/quality_preflight.py
-
-The script intentionally stops at the first failing gate so the first actionable
-failure stays visible. GitHub Actions (`.github/workflows/quality.yml`'s
-`checks` job) remains the authoritative merge gate; this script only mirrors
-its deterministic, Poetry-managed steps so a connector/agent-authored change
-can be validated locally before a PR is opened or updated. It deliberately
-does not attempt the `docker` job (image build + container smoke test) --
-that job is not Poetry-managed and CI itself is the right place to run it.
-"""
+"""Run Knowledge Engine Web's local quality gates with optional safe autofix."""
 
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -29,41 +17,43 @@ class QualityGate:
     args: tuple[str, ...]
 
 
-def quality_gates(python_executable: str = sys.executable) -> tuple[QualityGate, ...]:
-    """Return the canonical local gate sequence, in the same order as CI's
-    `checks` job."""
+def fix_gates(python_executable: str = sys.executable) -> tuple[QualityGate, ...]:
+    """Return safe normalization gates used before check-only validation."""
     return (
-        QualityGate(
-            "format",
-            (python_executable, "-m", "ruff", "format", "--check", "."),
-        ),
-        QualityGate(
-            "lint",
-            (python_executable, "-m", "ruff", "check", "."),
-        ),
+        QualityGate("format_fix", (python_executable, "-m", "ruff", "format", ".")),
+        QualityGate("lint_fix", (python_executable, "-m", "ruff", "check", "--fix", ".")),
+        QualityGate("format_after_fix", (python_executable, "-m", "ruff", "format", ".")),
+    )
+
+
+def quality_gates(python_executable: str = sys.executable) -> tuple[QualityGate, ...]:
+    """Return the canonical Poetry-managed CI gate sequence."""
+    return (
+        QualityGate("format", (python_executable, "-m", "ruff", "format", "--check", ".")),
+        QualityGate("lint", (python_executable, "-m", "ruff", "check", ".")),
         QualityGate(
             "typing",
             (python_executable, "-m", "mypy", "knowledge_engine_web", "tests"),
         ),
+        QualityGate("tests", (python_executable, "-m", "pytest")),
+        QualityGate("dependency_audit", (python_executable, "-m", "pip_audit")),
+        QualityGate("diff_hygiene", ("git", "diff", "--check")),
+    )
+
+
+def docker_gates() -> tuple[QualityGate, ...]:
+    """Return the repository-specific container build gate."""
+    return (
         QualityGate(
-            "tests",
-            (python_executable, "-m", "pytest"),
-        ),
-        QualityGate(
-            "dependency_audit",
-            (python_executable, "-m", "pip_audit"),
-        ),
-        QualityGate(
-            "diff_hygiene",
-            ("git", "diff", "--check"),
+            "docker_build",
+            ("docker", "build", "-t", "knowledge-engine-web-alpha:preflight", "."),
         ),
     )
 
 
-def run_preflight(gates: Sequence[QualityGate] | None = None) -> int:
+def run_preflight(gates: Sequence[QualityGate]) -> int:
     """Run gates in order, stopping at the first non-zero return code."""
-    selected = tuple(gates) if gates is not None else quality_gates()
-    for gate in selected:
+    for gate in gates:
         print(f"\n=== quality preflight: {gate.name} ===", flush=True)
         completed = subprocess.run(gate.args, check=False)  # noqa: S603
         if completed.returncode != 0:
@@ -73,14 +63,32 @@ def run_preflight(gates: Sequence[QualityGate] | None = None) -> int:
                 file=sys.stderr,
             )
             return completed.returncode
-    print("\nQuality preflight passed.")
     return 0
 
 
-def main() -> None:
-    """CLI entrypoint."""
-    raise SystemExit(run_preflight())
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run optional safe fixes, CI-parity checks, and optionally a Docker build."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--fix", action="store_true", help="Apply safe Ruff fixes first.")
+    parser.add_argument(
+        "--docker",
+        action="store_true",
+        help="Also build the production Docker image after Python gates pass.",
+    )
+    args = parser.parse_args(argv)
+
+    if args.fix:
+        returncode = run_preflight(fix_gates())
+        if returncode != 0:
+            return returncode
+
+    returncode = run_preflight(quality_gates())
+    if returncode != 0:
+        return returncode
+    if args.docker:
+        return run_preflight(docker_gates())
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main(sys.argv[1:]))
