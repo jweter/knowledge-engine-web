@@ -3,9 +3,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
+from knowledge_engine_ai.copilot.discovery_policy import FederatedDiscoveryPolicy
 from knowledge_engine_web import ai_orchestration
 from knowledge_engine_web.ai_orchestration import run_ai_orchestration
 from knowledge_engine_web.config import Settings
@@ -54,8 +56,7 @@ def test_web_research_copilot_enables_bounded_discovery_policy_for_every_questio
 
     assert result.session_id == expected.session_id
     assert captured["question"] == "Does creatine improve maximal strength?"
-    policy = captured["discovery_policy"]
-    assert policy is not None
+    policy = cast(FederatedDiscoveryPolicy, captured["discovery_policy"])
     assert policy.ledger_root == Path(settings.federated_discovery_ledger_root)
     assert policy.enable_federated_discovery is True
     assert policy.openalex_api_key == "oa-test"
@@ -73,3 +74,29 @@ def test_general_question_policy_keeps_indexed_evidence_first(tmp_path: Path) ->
     assert policy.min_evidence_record_coverage > 0
     assert policy.discovery_limit_per_provider <= 100
     assert policy.discovery_max_execution_seconds > 0
+
+
+def test_general_question_ai_capability_rejects_invalid_persistent_discovery_ledger(
+    tmp_path: Path,
+) -> None:
+    settings = _ready_settings(tmp_path)
+    persistent_root = tmp_path / "persistent"
+    persistent_root.mkdir()
+    outside_ledger = tmp_path / "outside" / "federated-runs"
+    outside_ledger.parent.mkdir()
+    settings = Settings(
+        _env_file=None,
+        **(
+            settings.model_dump()
+            | {
+                "discovery_ledger_storage_mode": "persistent",
+                "discovery_ledger_persistent_root": str(persistent_root),
+                "federated_discovery_ledger_root": str(outside_ledger),
+            }
+        ),
+    )
+
+    capability = ai_orchestration.evaluate_ai_capability(settings)
+
+    assert not capability.available
+    assert capability.reason_code == "persistent_ledger_path_invalid"
