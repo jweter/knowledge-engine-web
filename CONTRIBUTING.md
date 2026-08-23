@@ -15,7 +15,7 @@ the project still being healthy in 10 years.
 2. Create a branch from `main`.
 3. Make a focused change.
 4. Add or update tests.
-5. Run the quality checks.
+5. Run the repository preflight.
 6. Open a pull request.
 
 After the initial bootstrap, avoid committing directly to `main`. Use feature
@@ -40,16 +40,25 @@ Use Conventional Commits:
 - `test: cover empty graph rendering`
 - `chore: bump knowledge-engine-core pin`
 
-## Quality Checks
+## Quality Preflight
 
-Run these before opening a pull request:
+Before opening or updating a Python pull request, run:
 
 ```bash
-poetry run ruff format --check .
-poetry run ruff check .
-poetry run mypy knowledge_engine_web tests
-poetry run pytest
+poetry install
+poetry run python scripts/quality_preflight.py --fix
 ```
+
+For deployment-sensitive changes, also build the production image locally:
+
+```bash
+poetry run python scripts/quality_preflight.py --fix --docker
+```
+
+The preflight safely normalizes Ruff formatting/lint first, then runs the same
+Poetry-managed gates as CI: format check, lint, strict mypy, pytest, pip-audit,
+and diff hygiene. `--docker` adds the repository-specific production image build.
+GitHub Actions remains authoritative and still performs the full container smoke test.
 
 ## Code Style
 
@@ -58,7 +67,7 @@ poetry run pytest
 - Avoid global mutable state.
 - Add docstrings for public classes and functions.
 - Never compute, infer, or display a confidence rating, synthesis, or
-  judgment about what evidence means -- that seam stays with the future
+  judgment about what evidence means -- that seam stays with the
   `knowledge-engine-ai` layer. See `README.md`'s "The Seam" section.
 
 ## Tests
