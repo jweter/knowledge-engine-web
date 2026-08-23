@@ -1356,6 +1356,40 @@ def test_trust_warning_is_critical_has_visible_styling(
     assert "background" in rule_body
 
 
+def test_discovery_method_details_has_visible_styling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ask.html and discover.html both wrap disclosure sections (ask.html's
+    "Research path (session trace)"; discover.html's "Search method and
+    provenance", "Publication-status observations by provider", "What
+    providers disagree about", and "Since your last search") in
+    class="discovery-method-details" <details> elements, with ask.html's
+    trace event list further marked class="ask-trace-events" (see
+    knowledge_engine_web/templates/ask.html and
+    knowledge_engine_web/templates/discover.html). Neither selector had a
+    stylesheet rule at all, so every one of these disclosures rendered as a
+    bare browser-default <details> block instead of reading as an
+    intentional, designed part of the page -- a real gap, though (unlike the
+    .trust-warning/.publication-status-banner cases) a plain-styling gap
+    rather than a hidden or color-only signal. Assert dedicated rules exist
+    for both selectors so this can't silently regress back to unstyled.
+    """
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/static/style.css")
+
+    assert response.status_code == 200
+    css = response.text
+    details_match = re.search(r"\.discovery-method-details\s*\{([^}]*)\}", css)
+    assert details_match, "expected a dedicated .discovery-method-details rule"
+    details_rule_body = details_match.group(1)
+    assert "border" in details_rule_body
+    assert "background" in details_rule_body
+
+    trace_match = re.search(r"\.ask-trace-events\s*\{([^}]*)\}", css)
+    assert trace_match, "expected a dedicated .ask-trace-events rule"
+
+
 def _create_fts_table_and_paper(
     engine: Engine, *, paper_id: int, title: str, doi: str, abstract: str = ""
 ) -> None:
