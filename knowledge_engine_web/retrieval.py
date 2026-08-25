@@ -2,21 +2,14 @@
 
 Reads the same `paper_search` FTS5 virtual table `core`'s
 `knowledge_engine/database.py` creates and `knowledge_engine/search.py`'s
-`SearchService` queries -- ported here rather than imported, matching
-`graph_reader.py`'s "read `core`'s database directly, never import
-`knowledge_engine`" decision (`docs/web_design.md`). The FTS5 query
-logic (`build_natural_language_fts_query`, the `bm25`/`snippet` SQL) is
-copied verbatim from `core`'s `SearchService`. FTS5 remains candidate
-generation; a deterministic second pass then re-ranks by how well each
-candidate's text covers the question's *distinctive* terms, weighted by
-each term's corpus-wide rarity (a smoothed IDF) so that words shared by
-nearly every paper in a topically narrow corpus (e.g. "GLP-1",
-"obesity" in a GLP-1 corpus) cannot drown out a question's actually
-differentiating words (e.g. "height"). This applies whether or not
-Evidence Records are configured; when they are, the same rarity
-weighting is applied to Evidence Record field coverage instead of raw
-title/abstract text. The reranker never uses Evidence Quality,
-confidence, consensus, or an LLM.
+`SearchService` queries. FTS5 is candidate generation only: Ask then re-ranks
+candidates by how much of the *actual submitted question* their source-linked
+evidence covers and marks only sufficiently aligned candidates as direct
+matches.
+
+This module intentionally does not synthesize scientific claims. It does,
+however, protect the Ask product from presenting a merely topical paper as if
+it answered an outcome the source never studied.
 """
 
 from __future__ import annotations
@@ -40,6 +33,8 @@ _NATURAL_LANGUAGE_STOPWORDS = {
     "and",
     "are",
     "as",
+    "at",
+    "be",
     "by",
     "do",
     "does",
@@ -47,6 +42,7 @@ _NATURAL_LANGUAGE_STOPWORDS = {
     "from",
     "in",
     "is",
+    "it",
     "of",
     "on",
     "or",
@@ -55,7 +51,12 @@ _NATURAL_LANGUAGE_STOPWORDS = {
     "with",
 }
 
+# Candidate generation must be broader than the final visible result set.
+# A narrow top-5 FTS OR query can easily miss the paper containing the rare,
+# question-defining term. The second pass is what decides directness.
+_RETRIEVAL_CANDIDATE_LIMIT = 200
 _EVIDENCE_CANDIDATE_LIMIT = 500
+_DIRECT_ALIGNMENT_THRESHOLD = 0.60
 _EVIDENCE_FIELD_WEIGHTS = {
     "research_question": 5.0,
     "claim_text": 3.0,
@@ -77,17 +78,22 @@ class SearchResult:
     snippet: str
     matched_query: str
     evidence_alignment_score: float = 0.0
+    direct_match: bool = False
 
 
 def build_natural_language_fts_query(question: str) -> str:
     """Convert a natural-language question into a safe SQLite FTS query.
 
-    Identical to `core`'s `knowledge_engine.search.build_natural_language_fts_query`.
+    Meaningful two-character terms are deliberately preserved. Scientific
+    questions routinely contain short outcome/acronym tokens such as IQ, AI,
+    BP, or HR. The previous three-character floor silently discarded `IQ`,
+    turning e.g. "does semaglutide increase IQ?" into a broad semaglutide
+    query and allowing unrelated cardiometabolic papers to look relevant.
     """
 
-    tokens = []
+    tokens: list[str] = []
     for token in re.findall(r"[A-Za-z][A-Za-z0-9]+", question.lower()):
-        if len(token) < 3 or token in _NATURAL_LANGUAGE_STOPWORDS:
+        if len(token) < 2 or token in _NATURAL_LANGUAGE_STOPWORDS:
             continue
         if token not in tokens:
             tokens.append(token)
@@ -101,23 +107,14 @@ def answer_retrieval(
     *,
     evidence_path: Path | None = None,
 ) -> list[SearchResult]:
-    """Retrieve papers relevant to a natural-language question.
+    """Retrieve and relevance-qualify papers for a natural-language question.
 
-    Retrieval only -- converts a question into a conservative FTS query
-    and returns ranked papers, no scientific claim is synthesized. Returns
-    an empty list for a blank question, an FTS-query-less question (e.g.
-    only stopwords), or a database with no `paper_search` table yet
-    (predates `core`'s FTS index, or a fixture database in tests) --
-    never raises for any of those real, expected states.
+    FTS is intentionally broad candidate generation. The final ranking uses
+    rarity-weighted coverage of the submitted question and each returned
+    `SearchResult` records whether it clears the direct-answer threshold.
 
-    FTS5's `bm25()` alone is not enough to differentiate questions in a
-    topically narrow corpus: a term present in nearly every paper's title
-    (e.g. "GLP-1" in a GLP-1-only corpus) can outweigh a question's one
-    actually distinguishing word (e.g. "height"), so unrelated questions
-    end up returning the same top papers. The second-pass rerank below
-    weights each question token by its corpus-wide rarity (a smoothed
-    IDF) before scoring coverage, so rare/distinguishing words count for
-    more than words nearly every paper shares.
+    The caller may still expose below-threshold papers as explicitly labelled
+    background, but must not present them as evidence that answers the question.
     """
 
     normalized_question = question.strip()
@@ -127,16 +124,16 @@ def answer_retrieval(
     if not fts_query:
         return []
 
-    # A database predating `core`'s FTS index (or a fixture database in
-    # tests without one) is a real, expected state, matching
-    # `graph_reader.py`'s "missing table means empty, not an error" posture.
     if "paper_search" not in set(inspect(engine).get_table_names()):
         return []
 
     evidence_by_doi = (
         index_evidence_records_by_doi(evidence_path) if evidence_path is not None else {}
     )
-    candidate_limit = max(limit, _EVIDENCE_CANDIDATE_LIMIT) if evidence_by_doi else limit
+    candidate_limit = max(
+        limit,
+        _EVIDENCE_CANDIDATE_LIMIT if evidence_by_doi else _RETRIEVAL_CANDIDATE_LIMIT,
+    )
     question_tokens = _retrieval_tokens(normalized_question)
 
     with engine.connect() as connection:
@@ -180,7 +177,11 @@ def answer_retrieval(
             records = evidence_by_doi.get(normalize_doi(candidate.doi or ""), ())
             alignment = max(
                 (_evidence_alignment(question_tokens, token_weights, record) for record in records),
-                default=0.0,
+                default=_text_alignment(
+                    question_tokens,
+                    token_weights,
+                    f"{candidate.title} {candidate.abstract or ''}",
+                ),
             )
         else:
             alignment = _text_alignment(
@@ -190,7 +191,11 @@ def answer_retrieval(
             (
                 alignment,
                 lexical_rank,
-                replace(candidate, evidence_alignment_score=alignment),
+                replace(
+                    candidate,
+                    evidence_alignment_score=alignment,
+                    direct_match=alignment >= _DIRECT_ALIGNMENT_THRESHOLD,
+                ),
             )
         )
     ranked.sort(key=lambda item: (-item[0], item[1]))
@@ -203,20 +208,12 @@ def _retrieval_tokens(value: object) -> set[str]:
     return {
         token
         for token in re.findall(r"[A-Za-z][A-Za-z0-9]+", value.lower())
-        if len(token) >= 3 and token not in _NATURAL_LANGUAGE_STOPWORDS
+        if len(token) >= 2 and token not in _NATURAL_LANGUAGE_STOPWORDS
     }
 
 
 def _token_idf_weights(connection: Connection, tokens: set[str]) -> dict[str, float]:
-    """Return a smoothed inverse-document-frequency weight per token.
-
-    A token nearly every paper in the corpus contains (e.g. "obesity" in
-    a corpus that is entirely about obesity) gets a weight near zero; a
-    token few papers contain (e.g. "height") gets a large weight. This is
-    the standard smoothed-IDF form `log((N + 1) / (df + 1)) + 1`, which
-    stays positive and finite even when a token matches every paper or no
-    paper at all.
-    """
+    """Return a smoothed inverse-document-frequency weight per token."""
 
     if not tokens:
         return {}
