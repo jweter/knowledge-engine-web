@@ -60,8 +60,8 @@ def test_merely_topical_semaglutide_paper_is_not_a_direct_iq_answer(tmp_path: Pa
         title="Effects of Semaglutide on Cardiometabolic Risk in People with Obesity",
         doi="10.1000/cardiometabolic",
         abstract=(
-            "Semaglutide treatment was associated with changes in body weight, waist circumference, "
-            "HbA1c, blood pressure, and visceral fat."
+            "Semaglutide treatment was associated with changes in body weight, "
+            "waist circumference, HbA1c, blood pressure, and visceral fat."
         ),
     )
 
