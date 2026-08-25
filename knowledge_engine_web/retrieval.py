@@ -177,11 +177,7 @@ def answer_retrieval(
             records = evidence_by_doi.get(normalize_doi(candidate.doi or ""), ())
             alignment = max(
                 (_evidence_alignment(question_tokens, token_weights, record) for record in records),
-                default=_text_alignment(
-                    question_tokens,
-                    token_weights,
-                    f"{candidate.title} {candidate.abstract or ''}",
-                ),
+                default=0.0,
             )
         else:
             alignment = _text_alignment(
