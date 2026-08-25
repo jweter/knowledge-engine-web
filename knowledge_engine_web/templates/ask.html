@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Knowledge Engine -- Ask{% endblock %}
 {% block content %}
-<h1>Ask Knowledge Engine</h1>
+<h1>Experimental retrieval</h1>
 <p class="disclaimer">
-  Ask searches the indexed evidence for the question you actually typed, qualifies
-  whether each source directly addresses that question, and puts the answer before
-  the paper list. Related-but-incomplete papers are shown separately as background.
+  Ask searches the indexed evidence for the question you actually typed, qualifies whether
+  sources directly address that question, and puts an answer summary before the source list.
+  Related-but-incomplete papers remain visible as background rather than being presented as
+  direct answers.
 </p>
 
 <form method="get" action="/ask" class="ask-form" id="ask-form">
@@ -21,12 +22,18 @@
   {% if synthesis_available %}
   <label class="ask-synthesize-toggle">
     <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested %}checked{% endif %} />
-    Also run Research Copilot
+    Also run Research Copilot (local model, durable session, real inference)
+  </label>
+  {% else %}
+  <label class="ask-synthesize-toggle is-unavailable">
+    <input type="checkbox" disabled aria-disabled="true" />
+    Research Copilot unavailable on this deployment; Ask is retrieval-only.
   </label>
   {% endif %}
   <button type="submit" id="ask-submit">Ask</button>
   <p class="ask-running-status" id="ask-running-status" role="status" aria-live="polite" hidden>
-    Research Copilot is running. Retrieval and verification may take a few minutes.
+    Research Copilot is running. Retrieval, synthesis, and verification may take a few minutes.
+    Deterministic retrieval will remain available if it cannot complete.
   </p>
 </form>
 
@@ -36,66 +43,160 @@
 
 {% if results is not none %}
 {% set direct_results = results | selectattr('paper.direct_match') | list %}
-{% set background_results = results | rejectattr('paper.direct_match') | list %}
-
 <section class="ask-result-card ask-synthesis">
   <p class="trust-label">Question</p>
   <h2>{{ question }}</h2>
-
+  <h3>Answer</h3>
   {% if synthesize_requested and copilot_result and copilot_result.narrative_releaseable %}
-    <p class="trust-label reviewed">AI-generated, verification passed</p>
-    <h3>Answer</h3>
-    <p>{{ copilot_result.narrative }}</p>
+  <p>{{ copilot_result.narrative }}</p>
   {% elif direct_results %}
-    {% set best = direct_results[0] %}
-    <p class="trust-label computed">Directly aligned indexed evidence</p>
-    <h3>Answer</h3>
-    {% if best.evidence_entries and best.evidence_entries[0].evidence.claim_text %}
-      <p>{{ best.evidence_entries[0].evidence.claim_text }}</p>
-      <p class="disclaimer">
-        This response is the stored source-linked claim from the best directly aligned
-        evidence record, not a newly invented scientific conclusion.
-      </p>
-    {% else %}
-      <p>
-        Knowledge Engine found a source that directly addresses this question, but this
-        deployment does not have a stored source-linked claim available to state a more
-        specific answer safely. See the supporting source below.
-      </p>
-    {% endif %}
+  {% set best = direct_results[0] %}
+  {% if best.evidence_entries and best.evidence_entries[0].evidence.claim_text %}
+  <p>{{ best.evidence_entries[0].evidence.claim_text }}</p>
+  <p class="disclaimer">Stored source-linked claim from the best directly aligned evidence record.</p>
   {% else %}
-    <p class="trust-label">No direct indexed evidence</p>
-    <h3>Answer</h3>
-    <p>
-      I could not find evidence in the indexed corpus that directly answers
-      &ldquo;{{ question }}&rdquo;.
-    </p>
-    <p class="disclaimer">
-      Papers that only share the broad topic are not treated as answers. If related
-      papers were found, they are separated below as background rather than presented
-      as evidence for the requested outcome.
-    </p>
+  <p>
+    Knowledge Engine found a source that directly addresses this question, but no stored
+    source-linked claim is available for a more specific answer. See the source below.
+  </p>
   {% endif %}
-
-  {% if copilot_error %}
-  <p class="empty-state">{{ copilot_error }}</p>
+  {% else %}
+  <p>I could not find evidence in the indexed corpus that directly answers &ldquo;{{ question }}&rdquo;.</p>
+  <p class="disclaimer">
+    Papers that only share the broad topic are not treated as answers. They are labelled
+    background below.
+  </p>
   {% endif %}
 </section>
 
-{% if direct_results %}
-<h2>Supporting evidence</h2>
+{% if synthesize_requested %}
+<section class="ask-result-card ask-synthesis">
+  <p class="trust-label reviewed">AI-generated, not reviewed</p>
+  <h3>Research Copilot result</h3>
+  <p class="disclaimer">
+    Local-model narration over a durable retrieval session, followed by deterministic citation
+    and qualifier checks. This is not a scientific judgment or new evidence.
+  </p>
+  {% if copilot_error %}
+  <p class="empty-state">{{ copilot_error }}</p>
+  {% endif %}
+  {% if copilot_result %}
+  {% set failed_steps = copilot_result.workflow.steps | rejectattr('succeeded') | list %}
+  <p>
+    <strong>Session:</strong> <code>{{ copilot_result.session_id }}</code><br />
+    <strong>Workflow:</strong> {% if failed_steps %}{{ failed_steps | length }} step(s) failed{% else %}completed{% endif %}<br />
+    <strong>Close gate:</strong> {{ copilot_result.close_result.status.value }}<br />
+    <strong>Verification:</strong>
+    {% if copilot_result.verification is none %}not run
+    {% elif copilot_result.verification.is_clean %}passed
+    {% else %}flagged for review{% endif %}
+  </p>
+  {% if copilot_result.verification and not copilot_result.verification.is_clean %}
+  <div class="trust-warning is-critical" role="alert">
+    <strong>Verification findings:</strong>
+    <ul>
+      {% if copilot_result.verification.hallucinated_citations %}
+      <li>
+        Cited but not found in this session's retrieved evidence:
+        {% for evidence_record_id in copilot_result.verification.hallucinated_citations %}<code>{{ evidence_record_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+      </li>
+      {% endif %}
+      {% if copilot_result.verification.ungrounded_numbers %}
+      <li>
+        Numbers stated in the narrative but not found in cited evidence:
+        {% for number in copilot_result.verification.ungrounded_numbers %}<code>{{ number }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+      </li>
+      {% endif %}
+      {% if copilot_result.verification.missed_qualifiers %}
+      <li>
+        Qualifying or contradicting evidence not cited:
+        {% for evidence_record_id in copilot_result.verification.missed_qualifiers %}<code>{{ evidence_record_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+      </li>
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if failed_steps %}
+  <p class="empty-state">
+    The durable session recorded an incomplete retrieval workflow. No narrative should be
+    treated as a complete answer.
+  </p>
+  {% endif %}
+  {% if copilot_result.close_result.validation and copilot_result.close_result.validation.unresolved_required_criteria %}
+  <p class="empty-state">
+    <strong>Unresolved close-gate criteria:</strong>
+    {% for criterion_id in copilot_result.close_result.validation.unresolved_required_criteria %}<code>{{ criterion_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+  {% endif %}
+  {% if copilot_result.synthesis_error %}
+  <p class="empty-state">The local model did not produce a narrative. The session recorded the failure.</p>
+  {% elif copilot_result.narrative_releaseable %}
+  <p>{{ copilot_result.narrative }}</p>
+  {% elif copilot_result.narrative %}
+  <p class="trust-warning is-critical" role="alert">
+    A draft narrative was recorded but is withheld because deterministic verification or the
+    Research ISA close gate did not pass.
+  </p>
+  {% else %}
+  <p class="empty-state">No evidence with a stated claim was retrieved to narrate.</p>
+  {% endif %}
+  {% if copilot_result.narrative_releaseable and copilot_result.session_report and copilot_result.session_report.sourced_claims %}
+  <h4>Resolved citations</h4>
+  <ul>
+    {% for claim in copilot_result.session_report.sourced_claims %}
+    <li>
+      <strong>{{ claim.evidence_record_id }}</strong> -- {{ claim.paper_citation }}
+      {% if claim.paper_doi %}(DOI: {{ claim.paper_doi }}){% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if copilot_result.trace and copilot_result.trace.events %}
+  <details class="discovery-method-details">
+    <summary>Research path (session trace)</summary>
+    <ol class="ask-trace-events">
+      {% for event in copilot_result.trace.events %}
+      <li>
+        <strong>{{ event.workflow_node }}</strong> --
+        {% if event.succeeded %}succeeded{% else %}FAILED{% endif %}
+        {% if event.model_name or event.tool_name %} via <code>{{ event.model_name or event.tool_name }}</code>{% endif %}
+        {% if event.duration_ms is not none %} ({{ event.duration_ms }}ms){% endif %}
+        {% if event.notes %}<br /><span class="disclaimer">{{ event.notes }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <dl>
+      <dt>Total recorded duration</dt>
+      <dd>{% if copilot_result.trace.total_duration_ms is not none %}{{ copilot_result.trace.total_duration_ms }}ms (known-duration steps only){% else %}not recorded{% endif %}</dd>
+      <dt>Evidence records traced to this run</dt>
+      <dd>
+        {% if copilot_result.trace.evidence_record_ids %}{% for evidence_record_id in copilot_result.trace.evidence_record_ids %}<code>{{ evidence_record_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}{% else %}none recorded on any event{% endif %}
+      </dd>
+    </dl>
+  </details>
+  {% endif %}
+  {% elif not copilot_error %}
+  <p class="empty-state">No Research Copilot result was returned.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<h2>Results for &ldquo;{{ question }}&rdquo;</h2>
+{% if results %}
 <ol class="ask-results">
-  {% for item in direct_results %}
+  {% for item in results %}
   {% set paper = item.paper %}
   <li class="ask-result-card">
-    <p class="trust-label">Direct match</p>
+    <p class="trust-label">{% if paper.direct_match %}Direct match{% else %}Background only{% endif %}</p>
     <h3><a href="/papers/{{ paper.paper_id }}">{{ paper.title }}</a></h3>
     <p class="disclaimer">
       {% if paper.doi %}DOI: {{ paper.doi }}{% endif %}
       {% if paper.publication_year %} &middot; {{ paper.publication_year }}{% endif %}
-      &middot; question alignment {{ '%.0f' | format(paper.evidence_alignment_score * 100) }}%
     </p>
     <p class="ask-snippet">{{ paper.snippet }}</p>
+    {% if paper.evidence_alignment_score > 0 %}
+    <p class="disclaimer">Ranking signal: source-linked evidence text aligned with this question.</p>
+    {% endif %}
     {% if item.evidence_entries %}
     <div class="ask-evidence">
       {% for entry in item.evidence_entries %}
@@ -106,57 +207,32 @@
         <p><a href="/claims/{{ evidence.evidence_record_id }}"><strong>{{ evidence.evidence_record_id }}</strong></a></p>
         {% if evidence.claim_text %}<p>{{ evidence.claim_text }}</p>{% endif %}
         {% if intelligence %}
+        <p class="trust-label computed">Computed, deterministic</p>
         <div class="ask-evidence-metrics">
           <div><strong>{{ intelligence.quality.score }}/100</strong><span>Evidence Quality</span></div>
           <div>
             <strong>{% if intelligence.consensus.score is not none %}{{ intelligence.consensus.score }}/100{% else %}not yet assessable{% endif %}</strong>
-            <span>Evidence Consensus</span>
+            <span>Evidence Consensus{% if intelligence.consensus.score is not none %} ({{ intelligence.consensus.reliability }}){% endif %}</span>
           </div>
           <div>
             <strong>{% if intelligence.confidence.score is not none %}{{ intelligence.confidence.score }}/100{% else %}not yet assessable{% endif %}</strong>
-            <span>Claim Confidence</span>
+            <span>Claim Confidence{% if intelligence.confidence.score is not none %} ({{ intelligence.confidence.reliability }}){% endif %}</span>
           </div>
         </div>
         {% endif %}
       </div>
       {% endfor %}
     </div>
+    {% else %}
+    <p class="empty-state">No evidence record matched for this paper.</p>
     {% endif %}
   </li>
   {% endfor %}
 </ol>
-{% endif %}
-
-{% if background_results %}
-<details class="discovery-method-details">
-  <summary>Related background papers (not direct answers) &mdash; {{ background_results | length }}</summary>
-  <p class="disclaimer">
-    These sources matched part of the query but did not cover enough of the actual
-    question to be presented as supporting evidence.
-  </p>
-  <ol class="ask-results">
-    {% for item in background_results %}
-    {% set paper = item.paper %}
-    <li class="ask-result-card">
-      <p class="trust-label">Background only</p>
-      <h3><a href="/papers/{{ paper.paper_id }}">{{ paper.title }}</a></h3>
-      <p class="disclaimer">
-        {% if paper.doi %}DOI: {{ paper.doi }}{% endif %}
-        {% if paper.publication_year %} &middot; {{ paper.publication_year }}{% endif %}
-        &middot; question alignment {{ '%.0f' | format(paper.evidence_alignment_score * 100) }}%
-      </p>
-      <p class="ask-snippet">{{ paper.snippet }}</p>
-    </li>
-    {% endfor %}
-  </ol>
-</details>
-{% endif %}
-
-{% if not direct_results and not background_results %}
-<p class="empty-state">No papers matched the submitted question in the indexed corpus.</p>
+{% else %}
+<p class="empty-state">No relevant papers found in the indexed corpus.</p>
 {% endif %}
 {% endif %}
-
 <script>
   (() => {
     const form = document.getElementById("ask-form");
