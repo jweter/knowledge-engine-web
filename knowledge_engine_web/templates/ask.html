@@ -109,7 +109,7 @@
       {% endif %}
       {% if copilot_result.verification.missed_qualifiers %}
       <li>
-        Qualifying or contradicting evidence not cited:
+        Qualifying or contradicting evidence records the narrative never cited:
         {% for evidence_record_id in copilot_result.verification.missed_qualifiers %}<code>{{ evidence_record_id }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
       </li>
       {% endif %}
