@@ -633,3 +633,8 @@ chatbot response and more like an inspectable scientific instrument:
 
 That is how broader scholarly discovery becomes a trust improvement rather than
 merely a larger search box.
+
+
+## Cross-roadmap status: WEB-GQR-1 research-state rendering
+
+Status: implemented on the WEB-GQR-1 branch/PR #90. The `/ask` Research Copilot surface now renders AI-owned deterministic research state rather than inferring progress or evidence sufficiency from prose. This complements WEB-FRD-6's inspectable research path: provider/discovery limitations remain visible, and newly discovered candidates are explicitly not evidence until Core acquisition/extraction/re-retrieval makes them validated Evidence Records. See `docs/general_question_research_loop_v1.md`.

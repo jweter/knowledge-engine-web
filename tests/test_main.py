@@ -1545,6 +1545,12 @@ def _unavailable_capability() -> AICapability:
 def _copilot_result() -> SimpleNamespace:
     return SimpleNamespace(
         session_id="session-123",
+        research_state=SimpleNamespace(
+            schema_version=1,
+            state=SimpleNamespace(value="indexed_answer"),
+            reason="indexed_evidence_sufficient",
+            indexed_evidence_record_count=1,
+        ),
         narrative="Semaglutide reduces body weight [ev-1].",
         narrative_releaseable=True,
         synthesis_error=None,
