@@ -84,6 +84,7 @@
   {% set failed_steps = copilot_result.workflow.steps | rejectattr('succeeded') | list %}
   <p>
     <strong>Session:</strong> <code>{{ copilot_result.session_id }}</code><br />
+    <strong>Research state:</strong> <code>{{ copilot_result.research_state.state.value }}</code><br />
     <strong>Workflow:</strong> {% if failed_steps %}{{ failed_steps | length }} step(s) failed{% else %}completed{% endif %}<br />
     <strong>Close gate:</strong> {{ copilot_result.close_result.status.value }}<br />
     <strong>Verification:</strong>
@@ -91,6 +92,33 @@
     {% elif copilot_result.verification.is_clean %}passed
     {% else %}flagged for review{% endif %}
   </p>
+  {% set research_state = copilot_result.research_state.state.value %}
+  {% if research_state == 'indexed_answer' %}
+  <p class="disclaimer">Indexed evidence was sufficient for the grounded answer shown below.</p>
+  {% elif research_state == 'research_required' %}
+  <p class="empty-state">Indexed coverage is thin; bounded research is required before a fuller grounded answer can be released.</p>
+  {% elif research_state == 'researching' %}
+  <p class="empty-state">Bounded research is still in progress.</p>
+  {% elif research_state == 'partial_answer' %}
+  <p class="trust-warning">This is a grounded partial answer from indexed evidence. Additional discovered leads are not yet evidence.</p>
+  {% elif research_state == 'insufficient_evidence' %}
+  <p class="empty-state">There is not enough grounded evidence to release a Research Copilot answer.</p>
+  {% elif research_state == 'provider_degraded' %}
+  <p class="trust-warning">A grounded partial answer is available, but one or more research providers were incomplete or unavailable.</p>
+  {% elif research_state == 'blocked' %}
+  <p class="trust-warning is-critical" role="alert">A required retrieval or release gate blocked this research run.</p>
+  {% endif %}
+  <details class="discovery-method-details">
+    <summary>Research-state details</summary>
+    <dl>
+      <dt>Contract version</dt>
+      <dd>{{ copilot_result.research_state.schema_version }}</dd>
+      <dt>Reason</dt>
+      <dd><code>{{ copilot_result.research_state.reason }}</code></dd>
+      <dt>Indexed evidence records</dt>
+      <dd>{{ copilot_result.research_state.indexed_evidence_record_count }}</dd>
+    </dl>
+  </details>
   {% if copilot_result.verification and not copilot_result.verification.is_clean %}
   <div class="trust-warning is-critical" role="alert">
     <strong>Verification findings:</strong>
