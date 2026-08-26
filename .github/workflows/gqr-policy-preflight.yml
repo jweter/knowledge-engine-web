@@ -34,23 +34,14 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-
           path = Path("tests/test_main.py")
           text = path.read_text(encoding="utf-8")
           anchor = '        session_id="session-123",\n        narrative="Semaglutide reduces body weight [ev-1].",'
-          replacement = '''        session_id="session-123",
-        research_state=SimpleNamespace(
-            schema_version=1,
-            state=SimpleNamespace(value="indexed_answer"),
-            reason="indexed_evidence_sufficient",
-            indexed_evidence_record_count=1,
-        ),
-        narrative="Semaglutide reduces body weight [ev-1].",'''
+          replacement = '        session_id="session-123",\n        research_state=SimpleNamespace(\n            schema_version=1,\n            state=SimpleNamespace(value="indexed_answer"),\n            reason="indexed_evidence_sufficient",\n            indexed_evidence_record_count=1,\n        ),\n        narrative="Semaglutide reduces body weight [ev-1].",'
           if "research_state=SimpleNamespace(" not in text:
               if anchor not in text:
                   raise RuntimeError("copilot fixture anchor not found")
-              text = text.replace(anchor, replacement, 1)
-              path.write_text(text, encoding="utf-8")
+              path.write_text(text.replace(anchor, replacement, 1), encoding="utf-8")
           PY
 
       - name: Refresh required design and continuity records
@@ -59,24 +50,20 @@ jobs:
           from pathlib import Path
           import json
           import re
-
           web_design = Path("docs/web_design.md")
           marker = "## Implemented: General Question Research Loop state rendering (WEB-GQR-1)"
           text = web_design.read_text(encoding="utf-8")
           if marker not in text:
-              text += f'''\n\n{marker}\n\n`/ask` now consumes `knowledge-engine-ai`'s stable deterministic research-state contract after a guarded Research Copilot run. Web wraps the AI result without re-deriving state from narrative prose and renders explicit visitor messaging for `indexed_answer`, `research_required`, `researching`, `partial_answer`, `insufficient_evidence`, `provider_degraded`, and `blocked`. The state panel also exposes the contract schema version, deterministic reason, and indexed Evidence Record count. Discovery candidates remain leads and are never presented as grounded evidence. `researching` is schema-reserved for the later durable asynchronous workflow and is not emitted by the current synchronous AI derivation. See `docs/general_question_research_loop_v1.md` WEB-GQR-1.\n'''
+              text += "\n\n" + marker + "\n\n`/ask` now consumes `knowledge-engine-ai`'s stable deterministic research-state contract after a guarded Research Copilot run. Web wraps the AI result without re-deriving state from narrative prose and renders explicit visitor messaging for `indexed_answer`, `research_required`, `researching`, `partial_answer`, `insufficient_evidence`, `provider_degraded`, and `blocked`. The state panel also exposes the contract schema version, deterministic reason, and indexed Evidence Record count. Discovery candidates remain leads and are never presented as grounded evidence. `researching` is schema-reserved for the later durable asynchronous workflow and is not emitted by the current synchronous AI derivation. See `docs/general_question_research_loop_v1.md` WEB-GQR-1.\n"
               web_design.write_text(text, encoding="utf-8")
-
           frd = Path("docs/federated_discovery_transparency_roadmap.md")
           frd_marker = "## Cross-roadmap status: WEB-GQR-1 research-state rendering"
           text = frd.read_text(encoding="utf-8")
           if frd_marker not in text:
-              text += f'''\n\n{frd_marker}\n\nStatus: implemented on the WEB-GQR-1 branch/PR #90. The `/ask` Research Copilot surface now renders AI-owned deterministic research state rather than inferring progress or evidence sufficiency from prose. This complements WEB-FRD-6's inspectable research path: provider/discovery limitations remain visible, and newly discovered candidates are explicitly not evidence until Core acquisition/extraction/re-retrieval makes them validated Evidence Records. See `docs/general_question_research_loop_v1.md`.\n'''
+              text += "\n\n" + frd_marker + "\n\nStatus: implemented on the WEB-GQR-1 branch/PR #90. The `/ask` Research Copilot surface now renders AI-owned deterministic research state rather than inferring progress or evidence sufficiency from prose. This complements WEB-FRD-6's inspectable research path: provider/discovery limitations remain visible, and newly discovered candidates are explicitly not evidence until Core acquisition/extraction/re-retrieval makes them validated Evidence Records. See `docs/general_question_research_loop_v1.md`.\n"
               frd.write_text(text, encoding="utf-8")
-
           status = Path("docs/project-status.yaml")
           text = status.read_text(encoding="utf-8")
-
           def replace_line(text: str, indent: str, key: str, value: object) -> str:
               pattern = rf"(?m)^{re.escape(indent + key)}:.*$"
               replacement = f"{indent}{key}: {json.dumps(value)}"
@@ -84,28 +71,12 @@ jobs:
               if count != 1:
                   raise RuntimeError(f"expected one {key} line, found {count}")
               return updated
-
-          text = replace_line(text, "", "updated_at", "2026-08-26T10:19:00Z")
-          text = replace_line(
-              text,
-              "  ",
-              "latest_update",
-              "WEB-GQR-1 is implemented in PR #90: Web consumes AI-owned deterministic research-state metadata, renders all seven stable visitor states, and pins the merged AI #75 contract commit. Fresh exact-head CI remains required before merge.",
-          )
-          text = replace_line(text, "  ", "checked_at", "2026-08-26T10:19:00Z")
+          text = replace_line(text, "", "updated_at", "2026-08-26T10:20:00Z")
+          text = replace_line(text, "  ", "latest_update", "WEB-GQR-1 is implemented in PR #90: Web consumes AI-owned deterministic research-state metadata, renders all seven stable visitor states, and pins the merged AI #75 contract commit. Fresh exact-head CI remains required before merge.")
+          text = replace_line(text, "  ", "checked_at", "2026-08-26T10:20:00Z")
           text = replace_line(text, "  ", "open_prs", 1)
-          text = replace_line(
-              text,
-              "  ",
-              "current_action",
-              "PR #90 implements WEB-GQR-1 research-state rendering downstream of merged knowledge-engine-ai #75. The Poetry lock is regenerated from the pinned AI commit, state-specific visitor copy is regressed, and required design/roadmap continuity records are updated on the same branch. Merge only after fresh Quality and Docker checks pass on the exact final head.",
-          )
-          text = replace_line(
-              text,
-              "  ",
-              "action",
-              "After PR #90 merges, WEB-GQR-2 (coverage panel) is the next Web GQR slice, but do not start it in the same autonomous project-development run; Core acquisition/extraction and AI re-retrieval remain prerequisites for treating newly discovered literature as grounded answer evidence.",
-          )
+          text = replace_line(text, "  ", "current_action", "PR #90 implements WEB-GQR-1 research-state rendering downstream of merged knowledge-engine-ai #75. The Poetry lock is regenerated from the pinned AI commit, state-specific visitor copy is regressed, and required design/roadmap continuity records are updated on the same branch. Merge only after fresh Quality and Docker checks pass on the exact final head.")
+          text = replace_line(text, "  ", "action", "After PR #90 merges, WEB-GQR-2 (coverage panel) is the next Web GQR slice, but do not start it in the same autonomous project-development run; Core acquisition/extraction and AI re-retrieval remain prerequisites for treating newly discovered literature as grounded answer evidence.")
           status.write_text(text, encoding="utf-8")
           PY
 
