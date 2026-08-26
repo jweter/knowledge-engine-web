@@ -30,6 +30,29 @@ jobs:
       - name: Install project
         run: poetry install
 
+      - name: Repair Research Copilot test fixture for stable state contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/test_main.py")
+          text = path.read_text(encoding="utf-8")
+          anchor = '        session_id="session-123",\n        narrative="Semaglutide reduces body weight [ev-1].",'
+          replacement = '''        session_id="session-123",
+        research_state=SimpleNamespace(
+            schema_version=1,
+            state=SimpleNamespace(value="indexed_answer"),
+            reason="indexed_evidence_sufficient",
+            indexed_evidence_record_count=1,
+        ),
+        narrative="Semaglutide reduces body weight [ev-1].",'''
+          if "research_state=SimpleNamespace(" not in text:
+              if anchor not in text:
+                  raise RuntimeError("copilot fixture anchor not found")
+              text = text.replace(anchor, replacement, 1)
+              path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Refresh required design and continuity records
         run: |
           python - <<'PY'
@@ -62,14 +85,14 @@ jobs:
                   raise RuntimeError(f"expected one {key} line, found {count}")
               return updated
 
-          text = replace_line(text, "", "updated_at", "2026-08-26T10:16:00Z")
+          text = replace_line(text, "", "updated_at", "2026-08-26T10:19:00Z")
           text = replace_line(
               text,
               "  ",
               "latest_update",
               "WEB-GQR-1 is implemented in PR #90: Web consumes AI-owned deterministic research-state metadata, renders all seven stable visitor states, and pins the merged AI #75 contract commit. Fresh exact-head CI remains required before merge.",
           )
-          text = replace_line(text, "  ", "checked_at", "2026-08-26T10:16:00Z")
+          text = replace_line(text, "  ", "checked_at", "2026-08-26T10:19:00Z")
           text = replace_line(text, "  ", "open_prs", 1)
           text = replace_line(
               text,
@@ -103,12 +126,12 @@ jobs:
           grep -q 'Does creatine improve maximal strength?' /tmp/ask.html
           grep -q 'Experimental retrieval' /tmp/ask.html
 
-      - name: Commit continuity updates and remove this one-shot workflow
+      - name: Commit verified fixes, continuity updates, and remove one-shot workflow
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/gqr-policy-preflight.yml
-          git add docs/web_design.md docs/federated_discovery_transparency_roadmap.md docs/project-status.yaml
+          git add tests/test_main.py docs/web_design.md docs/federated_discovery_transparency_roadmap.md docs/project-status.yaml
           git diff --cached --check
-          git commit -m "Record WEB-GQR-1 continuity and verification"
+          git commit -m "Fix GQR fixture and record WEB-GQR-1 continuity"
           git push origin HEAD:agent/gqr-research-state-rendering
