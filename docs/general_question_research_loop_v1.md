@@ -101,6 +101,8 @@ The autonomous AI research path must remain bounded even though the person-invok
 - [x] add state-specific visitor messaging;
 - [x] never infer state solely from narrative text.
 
+Verification completed on the PR branch before final CI: the repository's full `scripts/quality_preflight.py` gate passed after repairing the existing Ask test fixture for the new state contract, and a local `uvicorn` server successfully served an `/ask` request for a non-GLP-1 question. Fresh PR-triggered Quality and Docker checks on the exact final head remain the merge authority.
+
 ### WEB-GQR-2 - Coverage panel
 - show provider attempts/outcomes;
 - show candidate/acquisition totals separately from Evidence Record totals;
