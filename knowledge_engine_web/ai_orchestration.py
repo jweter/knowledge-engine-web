@@ -22,12 +22,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from knowledge_engine_ai.copilot.discovery_policy import FederatedDiscoveryPolicy
+from knowledge_engine_ai.copilot.discovery_policy import (
+    DiscoveryAugmentationResult,
+    FederatedDiscoveryPolicy,
+)
+from knowledge_engine_ai.copilot.research_state import ResearchStateResult, derive_research_state
 from knowledge_engine_ai.copilot.run_research_question import (
     ResearchQuestionResult,
     run_research_question,
 )
 from knowledge_engine_ai.llm import OllamaLLM
+from knowledge_engine_ai.orchestrator.close_gate import SessionCloseResult
+from knowledge_engine_ai.orchestrator.observability import SessionTrace
+from knowledge_engine_ai.orchestrator.session_report import SessionReport
+from knowledge_engine_ai.orchestrator.verification import VerificationResult
+from knowledge_engine_ai.orchestrator.workflow import WorkflowResult
 from knowledge_engine_ai.sessions.repository import SessionRepository, new_connection
 
 from knowledge_engine_web.ai_guardrails import AIRequestGuard
@@ -49,6 +58,63 @@ class AICapability:
     reason_code: str | None = None
     visitor_message: str | None = None
     session_storage_mode: str | None = None
+
+
+@dataclass(frozen=True)
+class WebResearchResult:
+    """Web-facing Research Copilot result with AI-owned GQR workflow state.
+
+    Web deliberately does not infer state from narrative text, candidate
+    counts, or provider counts. The state is derived by knowledge-engine-ai
+    from its deterministic workflow facts and carried through unchanged here.
+    """
+
+    research: ResearchQuestionResult
+    research_state: ResearchStateResult
+
+    @property
+    def session_id(self) -> str:
+        return self.research.session_id
+
+    @property
+    def question(self) -> str:
+        return self.research.question
+
+    @property
+    def workflow(self) -> WorkflowResult:
+        return self.research.workflow
+
+    @property
+    def discovery(self) -> DiscoveryAugmentationResult | None:
+        return self.research.discovery
+
+    @property
+    def narrative(self) -> str | None:
+        return self.research.narrative
+
+    @property
+    def synthesis_error(self) -> str | None:
+        return self.research.synthesis_error
+
+    @property
+    def verification(self) -> VerificationResult | None:
+        return self.research.verification
+
+    @property
+    def session_report(self) -> SessionReport | None:
+        return self.research.session_report
+
+    @property
+    def close_result(self) -> SessionCloseResult:
+        return self.research.close_result
+
+    @property
+    def trace(self) -> SessionTrace:
+        return self.research.trace
+
+    @property
+    def narrative_releaseable(self) -> bool:
+        return self.research.narrative_releaseable
 
 
 class AIOrchestrationError(RuntimeError):
@@ -179,8 +245,8 @@ def run_guarded_ai_orchestration(
     *,
     client_key: str,
     guard: AIRequestGuard | None = None,
-) -> ResearchQuestionResult:
-    """Admit and run one bounded Research Copilot request."""
+) -> WebResearchResult:
+    """Admit one bounded request and attach AI's deterministic GQR state."""
 
     request_guard = guard if guard is not None else _GLOBAL_AI_REQUEST_GUARD
     with request_guard.admit(
@@ -189,10 +255,14 @@ def run_guarded_ai_orchestration(
         rate_limit_requests=settings.ai_rate_limit_requests,
         rate_limit_window_seconds=settings.ai_rate_limit_window_seconds,
     ):
-        return run_ai_orchestration(
+        research = run_ai_orchestration(
             settings,
             question,
             timeout_seconds=settings.ai_request_timeout_seconds,
+        )
+        return WebResearchResult(
+            research=research,
+            research_state=derive_research_state(research),
         )
 
 
@@ -276,6 +346,7 @@ def _evaluate_session_storage(settings: Settings) -> AICapability:
 __all__ = [
     "AICapability",
     "AIOrchestrationError",
+    "WebResearchResult",
     "evaluate_ai_capability",
     "result_reached_execution_limit",
     "run_ai_orchestration",

@@ -646,3 +646,8 @@ they go. What's been added since, following the same patterns:
   navigation). Not designed against one page; revisit at the second
   page, the same "don't design for a hypothetical" discipline `core`
   itself follows throughout.
+
+
+## Implemented: General Question Research Loop state rendering (WEB-GQR-1)
+
+`/ask` now consumes `knowledge-engine-ai`'s stable deterministic research-state contract after a guarded Research Copilot run. Web wraps the AI result without re-deriving state from narrative prose and renders explicit visitor messaging for `indexed_answer`, `research_required`, `researching`, `partial_answer`, `insufficient_evidence`, `provider_degraded`, and `blocked`. The state panel also exposes the contract schema version, deterministic reason, and indexed Evidence Record count. Discovery candidates remain leads and are never presented as grounded evidence. `researching` is schema-reserved for the later durable asynchronous workflow and is not emitted by the current synchronous AI derivation. See `docs/general_question_research_loop_v1.md` WEB-GQR-1.

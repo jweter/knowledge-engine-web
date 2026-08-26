@@ -19,11 +19,13 @@ Research Copilot now receives the AI layer's bounded `FederatedDiscoveryPolicy` 
 3. provider credentials and the durable discovery-ledger path come from existing Web settings;
 4. discovered candidates are still leads only and are not presented as citable Evidence Records.
 
-This closes the current Web-to-AI wiring gap, but it is only GQR-0. Full arbitrary-question answering still requires Core's acquisition/extraction bridge and AI re-retrieval.
+WEB-GQR-1 now also consumes `knowledge-engine-ai`'s stable `derive_research_state` contract and renders that metadata directly on `/ask`. Web does not recreate or infer the state from answer prose. The AI dependency is pinned to the merged contract commit, and `poetry.lock` is regenerated from that dependency declaration.
+
+This closes the current Web-to-AI discovery and research-state wiring gaps, but it does not complete arbitrary-question answering. Core's acquisition/extraction bridge and AI re-retrieval are still required before newly discovered literature can become grounded answer evidence.
 
 ## Required user-visible states
 
-The Web contract should render stable research states from AI rather than infer them from prose:
+The Web contract renders stable research states from AI rather than inferring them from prose:
 
 - `indexed_answer`
 - `research_required`
@@ -32,6 +34,8 @@ The Web contract should render stable research states from AI rather than infer 
 - `insufficient_evidence`
 - `provider_degraded`
 - `blocked`
+
+`researching` is part of the stable schema and already has visitor-facing copy, but the current Research Copilot request is synchronous, so AI does not emit that state yet. It is reserved for the later durable/polling workflow.
 
 Recommended visitor-facing progression:
 
@@ -90,12 +94,14 @@ The autonomous AI research path must remain bounded even though the person-invok
 - [x] pass bounded `FederatedDiscoveryPolicy` into Web Research Copilot runs;
 - [x] forward existing ledger/provider configuration;
 - [x] add regression test with a non-GLP-1 question;
-- [ ] CI verification and merge.
+- [x] CI verification and merge.
 
 ### WEB-GQR-1 - Render research state
-- accept stable AI research-state metadata;
-- add state-specific visitor messaging;
-- never infer state solely from narrative text.
+- [x] accept stable AI research-state metadata;
+- [x] add state-specific visitor messaging;
+- [x] never infer state solely from narrative text.
+
+Verification completed on the PR branch before final CI: the repository's full `scripts/quality_preflight.py` gate passed after repairing the existing Ask test fixture for the new state contract, and a local `uvicorn` server successfully served an `/ask` request for a non-GLP-1 question. Fresh PR-triggered Quality and Docker checks on the exact final head remain the merge authority.
 
 ### WEB-GQR-2 - Coverage panel
 - show provider attempts/outcomes;
