@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from knowledge_engine_ai.copilot.research_state import ResearchState, ResearchStateResult
 
 from knowledge_engine_web import ai_orchestration
 from knowledge_engine_web.ai_guardrails import AIRequestGuard
@@ -252,7 +253,7 @@ def test_run_ai_orchestration_wires_current_settings_and_closes_connection(
     assert captured["model"] == "qwen2.5:1.5b"
 
 
-def test_guarded_orchestration_passes_the_configured_deadline(
+def test_guarded_orchestration_passes_deadline_and_attaches_ai_owned_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = _ready_settings(tmp_path)
@@ -261,7 +262,17 @@ def test_guarded_orchestration_passes_the_configured_deadline(
         **(settings.model_dump() | {"ai_request_timeout_seconds": 42.0}),
     )
     captured: dict[str, object] = {}
-    expected = SimpleNamespace(session_id="session-123")
+    expected = SimpleNamespace(session_id="session-123", narrative="arbitrary prose")
+    expected_state = ResearchStateResult(
+        schema_version=1,
+        state=ResearchState.RESEARCH_REQUIRED,
+        reason="indexed_coverage_insufficient_bounded_research_started",
+        indexed_evidence_record_count=1,
+        discovery_triggered=True,
+        federated_discovery_attempted=True,
+        acquisition_plan_attempted=False,
+        provider_degraded=False,
+    )
 
     def fake_run(
         settings: Settings,
@@ -273,7 +284,12 @@ def test_guarded_orchestration_passes_the_configured_deadline(
         captured["timeout_seconds"] = timeout_seconds
         return expected
 
+    def fake_derive(result: object) -> ResearchStateResult:
+        assert result is expected
+        return expected_state
+
     monkeypatch.setattr(ai_orchestration, "run_ai_orchestration", fake_run)
+    monkeypatch.setattr(ai_orchestration, "derive_research_state", fake_derive)
 
     result = run_guarded_ai_orchestration(
         settings,
@@ -283,6 +299,8 @@ def test_guarded_orchestration_passes_the_configured_deadline(
     )
 
     assert result.session_id == "session-123"
+    assert result.research_state is expected_state
+    assert result.research_state.state is ResearchState.RESEARCH_REQUIRED
     assert captured == {"question": "question", "timeout_seconds": 42.0}
 
 
