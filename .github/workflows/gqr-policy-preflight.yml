@@ -1,0 +1,114 @@
+name: GQR policy preflight
+
+on:
+  push:
+    branches:
+      - agent/gqr-research-state-rendering
+
+permissions:
+  contents: write
+
+jobs:
+  preflight-and-continuity:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v7
+        with:
+          ref: agent/gqr-research-state-rendering
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: python -m pip install poetry
+
+      - name: Install project
+        run: poetry install
+
+      - name: Refresh required design and continuity records
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          web_design = Path("docs/web_design.md")
+          marker = "## Implemented: General Question Research Loop state rendering (WEB-GQR-1)"
+          text = web_design.read_text(encoding="utf-8")
+          if marker not in text:
+              text += f'''\n\n{marker}\n\n`/ask` now consumes `knowledge-engine-ai`'s stable deterministic research-state contract after a guarded Research Copilot run. Web wraps the AI result without re-deriving state from narrative prose and renders explicit visitor messaging for `indexed_answer`, `research_required`, `researching`, `partial_answer`, `insufficient_evidence`, `provider_degraded`, and `blocked`. The state panel also exposes the contract schema version, deterministic reason, and indexed Evidence Record count. Discovery candidates remain leads and are never presented as grounded evidence. `researching` is schema-reserved for the later durable asynchronous workflow and is not emitted by the current synchronous AI derivation. See `docs/general_question_research_loop_v1.md` WEB-GQR-1.\n'''
+              web_design.write_text(text, encoding="utf-8")
+
+          frd = Path("docs/federated_discovery_transparency_roadmap.md")
+          frd_marker = "## Cross-roadmap status: WEB-GQR-1 research-state rendering"
+          text = frd.read_text(encoding="utf-8")
+          if frd_marker not in text:
+              text += f'''\n\n{frd_marker}\n\nStatus: implemented on the WEB-GQR-1 branch/PR #90. The `/ask` Research Copilot surface now renders AI-owned deterministic research state rather than inferring progress or evidence sufficiency from prose. This complements WEB-FRD-6's inspectable research path: provider/discovery limitations remain visible, and newly discovered candidates are explicitly not evidence until Core acquisition/extraction/re-retrieval makes them validated Evidence Records. See `docs/general_question_research_loop_v1.md`.\n'''
+              frd.write_text(text, encoding="utf-8")
+
+          status = Path("docs/project-status.yaml")
+          text = status.read_text(encoding="utf-8")
+
+          def replace_line(text: str, indent: str, key: str, value: object) -> str:
+              pattern = rf"(?m)^{re.escape(indent + key)}:.*$"
+              replacement = f"{indent}{key}: {json.dumps(value)}"
+              updated, count = re.subn(pattern, replacement, text, count=1)
+              if count != 1:
+                  raise RuntimeError(f"expected one {key} line, found {count}")
+              return updated
+
+          text = replace_line(text, "", "updated_at", "2026-08-26T10:16:00Z")
+          text = replace_line(
+              text,
+              "  ",
+              "latest_update",
+              "WEB-GQR-1 is implemented in PR #90: Web consumes AI-owned deterministic research-state metadata, renders all seven stable visitor states, and pins the merged AI #75 contract commit. Fresh exact-head CI remains required before merge.",
+          )
+          text = replace_line(text, "  ", "checked_at", "2026-08-26T10:16:00Z")
+          text = replace_line(text, "  ", "open_prs", 1)
+          text = replace_line(
+              text,
+              "  ",
+              "current_action",
+              "PR #90 implements WEB-GQR-1 research-state rendering downstream of merged knowledge-engine-ai #75. The Poetry lock is regenerated from the pinned AI commit, state-specific visitor copy is regressed, and required design/roadmap continuity records are updated on the same branch. Merge only after fresh Quality and Docker checks pass on the exact final head.",
+          )
+          text = replace_line(
+              text,
+              "  ",
+              "action",
+              "After PR #90 merges, WEB-GQR-2 (coverage panel) is the next Web GQR slice, but do not start it in the same autonomous project-development run; Core acquisition/extraction and AI re-retrieval remain prerequisites for treating newly discovered literature as grounded answer evidence.",
+          )
+          status.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Run full repository quality preflight
+        run: poetry run python scripts/quality_preflight.py
+
+      - name: Smoke-load Ask over HTTP
+        run: |
+          poetry run uvicorn knowledge_engine_web.main:app --host 127.0.0.1 --port 8000 >/tmp/ke-web.log 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid 2>/dev/null || true' EXIT
+          for _ in $(seq 1 20); do
+            if curl -fsS 'http://127.0.0.1:8000/ask?q=Does%20creatine%20improve%20maximal%20strength%3F' >/tmp/ask.html; then
+              break
+            fi
+            sleep 1
+          done
+          grep -q 'Does creatine improve maximal strength?' /tmp/ask.html
+          grep -q 'Experimental retrieval' /tmp/ask.html
+
+      - name: Commit continuity updates and remove this one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/gqr-policy-preflight.yml
+          git add docs/web_design.md docs/federated_discovery_transparency_roadmap.md docs/project-status.yaml
+          git diff --cached --check
+          git commit -m "Record WEB-GQR-1 continuity and verification"
+          git push origin HEAD:agent/gqr-research-state-rendering
