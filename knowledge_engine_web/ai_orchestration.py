@@ -20,7 +20,9 @@ from __future__ import annotations
 import os
 import shutil
 import sqlite3
+import subprocess
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 
@@ -55,6 +57,28 @@ _EXECUTION_TIMEOUT_FRAGMENTS = (
     "configured execution time limit",
     "did not respond within",
 )
+
+# Commands the current composed Research Copilot path can invoke through
+# knowledge-engine-ai. This is intentionally explicit rather than assuming
+# any executable named "ke" is the right Core build. Command-specific --help
+# probes do not contact providers, mutate research state, or run a model.
+_RESEARCH_CORE_COMMANDS: tuple[str, ...] = (
+    "evidence-report",
+    "evidence-intelligence",
+    "federated-discover",
+    "citation-snowball",
+    "general-question-acquisition-plan",
+    "general-question-acquire-pmc",
+    "general-question-acquire-europe-pmc",
+    "general-question-acquire-core",
+    "general-question-acquire-unpaywall",
+    "extraction-review-batch-generate",
+    "extraction-review-autoclassify",
+    "extraction-review-promote",
+    "evidence-review-automate",
+    "evidence-record-review-promote",
+)
+_CORE_COMMAND_HELP_TIMEOUT_SECONDS = 3.0
 
 
 @dataclass(frozen=True)
@@ -161,12 +185,13 @@ class _ResearchResultLike(Protocol):
 def evaluate_ai_capability(settings: Settings) -> AICapability:
     """Fail closed unless every complete Research Copilot prerequisite exists.
 
-    This is deliberately a static deployment check. It does not contact
-    Ollama, execute `ke`, create the session database, create acquisition
-    directories, or contact scholarly providers merely to render the Ask
-    form. Research mode can now promote newly grounded EvidenceRecords, so
-    both the durable evidence file and acquired-paper destination must be
-    writable before Web advertises the complete path as available.
+    The ordinary local check remains filesystem-only. Hosted deployments may
+    additionally enable ``core_cli_command_preflight``; that performs cached,
+    command-specific ``--help`` probes against the configured local Core CLI.
+    Those probes do not contact Ollama, scholarly providers, or mutate Core
+    state. Research mode can promote newly grounded EvidenceRecords, so both
+    the durable evidence file and acquired-paper destination must be writable
+    before Web advertises the complete path as available.
     """
 
     if not _nonblank(settings.llm_model):
@@ -175,8 +200,11 @@ def evaluate_ai_capability(settings: Settings) -> AICapability:
         return _unavailable("sources_unavailable")
     if _configured_writable_file(settings.evidence_records_path) is None:
         return _unavailable("evidence_unavailable")
-    if _resolve_executable(settings.ke_executable) is None:
+    executable = _resolve_executable(settings.ke_executable)
+    if executable is None:
         return _unavailable("core_cli_unavailable")
+    if settings.core_cli_command_preflight and not _core_cli_has_required_commands(executable):
+        return _unavailable("core_cli_incomplete")
     if not _directory_destination_is_usable(Path(settings.research_papers_dir)):
         return _unavailable("research_papers_unavailable")
     session_capability = _evaluate_session_storage(settings)
@@ -347,6 +375,32 @@ def _nonblank(value: str | None) -> bool:
 def _resolve_executable(value: str) -> str | None:
     executable = value.strip()
     return shutil.which(executable) if executable else None
+
+
+@lru_cache(maxsize=8)
+def _core_cli_has_required_commands(executable: str) -> bool:
+    """Verify the configured Core CLI exposes the complete Research command set.
+
+    The result is process-cached because a deployed executable is immutable for
+    the lifetime of the Web process. Each probe is deliberately ``--help``
+    only: no provider request, database mutation, acquisition, extraction, or
+    model call can occur merely from rendering the Ask page.
+    """
+
+    for command in _RESEARCH_CORE_COMMANDS:
+        try:
+            result = subprocess.run(
+                [executable, command, "--help"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=_CORE_COMMAND_HELP_TIMEOUT_SECONDS,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        if result.returncode != 0:
+            return False
+    return True
 
 
 def _directory_destination_is_usable(path: Path) -> bool:
