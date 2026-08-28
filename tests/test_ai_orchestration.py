@@ -3,8 +3,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
+from knowledge_engine_ai.copilot.discovery_policy import FederatedDiscoveryPolicy
 from knowledge_engine_ai.copilot.grounded_completion import GroundedCompletionPolicy
 from knowledge_engine_ai.copilot.research_state import ResearchState, ResearchStateResult
 
@@ -75,15 +77,7 @@ def test_ai_capability_requires_writable_evidence_for_grounded_promotion(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = _ready_settings(tmp_path)
-    evidence_path = Path(settings.evidence_records_path or "")
-    real_access = ai_orchestration.os.access
-
-    def fake_access(path: object, mode: int) -> bool:
-        if Path(path) == evidence_path and mode == ai_orchestration.os.W_OK:
-            return False
-        return real_access(path, mode)
-
-    monkeypatch.setattr(ai_orchestration.os, "access", fake_access)
+    monkeypatch.setattr(ai_orchestration, "_configured_writable_file", lambda value: None)
 
     capability = evaluate_ai_capability(settings)
 
@@ -279,16 +273,14 @@ def test_run_ai_orchestration_wires_complete_grounded_research_path(
     assert captured["ke_executable"] == sys.executable
     assert captured["model"] == "qwen2.5:1.5b"
 
-    discovery_policy = captured["discovery_policy"]
-    assert discovery_policy is not None
-    assert discovery_policy.enable_acquisition_plan is True  # type: ignore[union-attr]
+    discovery_policy = cast(FederatedDiscoveryPolicy, captured["discovery_policy"])
+    assert discovery_policy.enable_acquisition_plan is True
 
-    completion_policy = captured["grounded_completion_policy"]
-    assert isinstance(completion_policy, GroundedCompletionPolicy)
+    completion_policy = cast(GroundedCompletionPolicy, captured["grounded_completion_policy"])
     assert completion_policy.ledger_root == Path(settings.federated_discovery_ledger_root)
     assert completion_policy.papers_dir == Path(settings.research_papers_dir)
     assert completion_policy.grounding_model == "qwen2.5:1.5b"
-    assert completion_policy.ledger_root == discovery_policy.ledger_root  # type: ignore[union-attr]
+    assert completion_policy.ledger_root == discovery_policy.ledger_root
 
 
 def test_guarded_orchestration_passes_deadline_and_attaches_ai_owned_state(
