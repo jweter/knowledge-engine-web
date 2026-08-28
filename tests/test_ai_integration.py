@@ -171,7 +171,9 @@ def test_research_copilot_is_callable_through_the_web_boundary(
     assert result.close_result.status.value == "completed"
     assert result.discovery is not None
     assert result.discovery.triggered is False
-    assert result.grounded_completion is None
+    assert result.grounded_completion is not None
+    assert result.grounded_completion.attempted is False
+    assert result.grounded_completion.skipped_reason == "no acquisition plan available"
 
     # The session really persisted to the configured SQLite path -- not
     # just an in-memory result -- proving `session_db_path` is wired for
