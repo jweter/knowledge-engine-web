@@ -69,7 +69,9 @@ def build_sources_snapshot(database_path: Path, output_path: Path) -> int:
             "ORDER BY lower(doi), rowid"
         ).fetchall()
     except sqlite3.Error as exc:
-        raise AlphaWorkspaceError("Could not read paper metadata from the snapshot database.") from exc
+        raise AlphaWorkspaceError(
+            "Could not read paper metadata from the snapshot database."
+        ) from exc
     finally:
         connection.close()
 
@@ -140,7 +142,8 @@ def _merge_evidence_records(baseline_path: Path, durable_path: Path) -> None:
 
     durable_lines, durable_ids = _validated_jsonl(durable_path)
     missing_lines = [
-        line for line, record_id in zip(baseline_lines, baseline_ids, strict=True)
+        line
+        for line, record_id in zip(baseline_lines, baseline_ids, strict=True)
         if record_id not in durable_ids
     ]
     if missing_lines:
@@ -170,9 +173,7 @@ def _validated_jsonl(path: Path) -> tuple[list[str], list[str]]:
             raise AlphaWorkspaceError(f"{path.name} line {line_number} is not a JSON object.")
         record_id = payload.get("evidence_record_id")
         if not isinstance(record_id, str) or not record_id.strip():
-            raise AlphaWorkspaceError(
-                f"{path.name} line {line_number} has no evidence_record_id."
-            )
+            raise AlphaWorkspaceError(f"{path.name} line {line_number} has no evidence_record_id.")
         normalized_id = record_id.strip()
         if normalized_id in seen:
             continue
@@ -193,7 +194,9 @@ def _atomic_copy(source: Path, destination: Path) -> None:
 
 def _atomic_write_lines(destination: Path, lines: list[str]) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=destination.parent, delete=False) as handle:
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=destination.parent, delete=False
+    ) as handle:
         temporary_path = Path(handle.name)
         for line in lines:
             handle.write(line)
