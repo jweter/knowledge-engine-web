@@ -85,6 +85,42 @@ def test_ai_capability_requires_writable_evidence_for_grounded_promotion(
     assert capability.reason_code == "evidence_unavailable"
 
 
+def test_core_cli_preflight_checks_complete_research_command_surface(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[str] = []
+
+    def fake_run(argv: list[str], **kwargs: object) -> SimpleNamespace:
+        assert kwargs["check"] is False
+        assert kwargs["timeout"] == ai_orchestration._CORE_COMMAND_HELP_TIMEOUT_SECONDS
+        assert argv[0] == "/fake/ke"
+        assert argv[2] == "--help"
+        commands.append(argv[1])
+        return SimpleNamespace(returncode=0)
+
+    ai_orchestration._core_cli_has_required_commands.cache_clear()
+    monkeypatch.setattr(ai_orchestration.subprocess, "run", fake_run)
+
+    assert ai_orchestration._core_cli_has_required_commands("/fake/ke")
+    assert tuple(commands) == ai_orchestration._RESEARCH_CORE_COMMANDS
+
+
+def test_hosted_core_cli_preflight_fails_closed_when_command_surface_is_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _ready_settings(tmp_path)
+    settings = Settings(
+        _env_file=None,
+        **(settings.model_dump() | {"core_cli_command_preflight": True}),
+    )
+    monkeypatch.setattr(ai_orchestration, "_core_cli_has_required_commands", lambda value: False)
+
+    capability = evaluate_ai_capability(settings)
+
+    assert not capability.available
+    assert capability.reason_code == "core_cli_incomplete"
+
+
 def test_capability_check_does_not_create_runtime_storage(tmp_path: Path) -> None:
     settings = _ready_settings(tmp_path)
     session_db = Path(settings.session_db_path)
@@ -233,6 +269,7 @@ def test_render_blueprint_requires_persistent_research_storage() -> None:
     assert "value: /var/data" in blueprint
     assert "KE_WEB_RESEARCH_PAPERS_DIR" in blueprint
     assert "value: /var/data/research_papers" in blueprint
+    assert "KE_WEB_CORE_CLI_COMMAND_PREFLIGHT" in blueprint
 
 
 def test_render_blueprint_declares_ai_o16_guardrail_defaults() -> None:
