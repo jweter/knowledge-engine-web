@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     ai_max_concurrent_requests: int = Field(default=1, gt=0)
     ai_rate_limit_requests: int = Field(default=3, gt=0)
     ai_rate_limit_window_seconds: float = Field(default=600.0, gt=0)
+    # GQR-4/GQR-5: Research mode may acquire accessible full text before
+    # grounded extraction. This directory is a durable product input/output,
+    # not a cache: an acquired Paper may be reused by later research runs.
+    research_papers_dir: str = "data/research_papers"
     # Federated discovery (WEB-FRD-1): a second, separate opt-in feature that
     # also calls `ke` and real scholarly-provider HTTPS APIs. Kept on its own
     # budget/guard rather than sharing the Research Copilot settings above so
