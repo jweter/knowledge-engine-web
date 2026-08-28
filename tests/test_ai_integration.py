@@ -14,6 +14,11 @@ JSON parsing, real `SessionRepository` persistence to a real SQLite
 file at `Settings().session_db_path`, and a real ISA close-gate
 evaluation -- everything except the two things this project cannot
 depend on being present in CI (`core` itself, a running local model).
+
+The fixture deliberately contains three indexed EvidenceRecords, meeting the
+bounded discovery policy's current adequacy threshold. This keeps this legacy
+integration test focused on the baseline indexed path; dedicated GQR tests cover
+the thin-coverage discovery/acquisition/grounded-completion path.
 """
 
 from __future__ import annotations
@@ -38,9 +43,9 @@ _EVIDENCE_REPORT_PAYLOAD = {
     "sources_path": "sources.csv",
     "evidence_path": "evidence.jsonl",
     "evidence_summary": {
-        "total": 1,
+        "total": 3,
         "draft": 0,
-        "reviewed": 1,
+        "reviewed": 3,
         "needs_revision": 0,
         "rejected": 0,
         "unspecified": 0,
@@ -67,7 +72,17 @@ _EVIDENCE_REPORT_PAYLOAD = {
                     "evidence_record_id": "ev-1",
                     "claim_text": "Semaglutide reduced body weight.",
                     "evidence_direction": "supports",
-                }
+                },
+                {
+                    "evidence_record_id": "ev-2",
+                    "claim_text": "Semaglutide improved a second weight endpoint.",
+                    "evidence_direction": "supports",
+                },
+                {
+                    "evidence_record_id": "ev-3",
+                    "claim_text": "Semaglutide improved a third weight endpoint.",
+                    "evidence_direction": "supports",
+                },
             ],
         }
     ],
@@ -133,6 +148,7 @@ def test_research_copilot_is_callable_through_the_web_boundary(
     settings = Settings(
         sources_path=str(sources),
         evidence_records_path=str(evidence),
+        research_papers_dir=str(tmp_path / "research-papers"),
         session_db_path=str(session_db),
         session_storage_mode="persistent",
         session_persistent_root=str(tmp_path),
@@ -153,6 +169,9 @@ def test_research_copilot_is_callable_through_the_web_boundary(
     assert result.verification is not None
     assert result.verification.is_clean
     assert result.close_result.status.value == "completed"
+    assert result.discovery is not None
+    assert result.discovery.triggered is False
+    assert result.grounded_completion is None
 
     # The session really persisted to the configured SQLite path -- not
     # just an in-memory result -- proving `session_db_path` is wired for
@@ -164,11 +183,12 @@ def test_research_copilot_is_callable_through_the_web_boundary(
     assert persisted.user_question_original == "does semaglutide reduce body weight"
 
 
-def test_settings_new_fields_default_to_none_and_a_local_data_path() -> None:
+def test_settings_new_fields_default_to_none_and_local_data_paths() -> None:
     settings = Settings(_env_file=None)
 
     assert settings.sources_path is None
     assert settings.session_db_path == "data/research_sessions.db"
+    assert settings.research_papers_dir == "data/research_papers"
     assert settings.session_storage_mode == "local"
     assert settings.session_persistent_root is None
     assert settings.ke_executable == "ke"
@@ -183,6 +203,12 @@ def test_settings_new_fields_default_to_none_and_a_local_data_path() -> None:
     [
         ("KE_WEB_SOURCES_PATH", "/tmp/x/sources.csv", "sources_path", "/tmp/x/sources.csv"),
         ("KE_WEB_SESSION_DB_PATH", "/tmp/x/sessions.db", "session_db_path", "/tmp/x/sessions.db"),
+        (
+            "KE_WEB_RESEARCH_PAPERS_DIR",
+            "/tmp/x/research-papers",
+            "research_papers_dir",
+            "/tmp/x/research-papers",
+        ),
         ("KE_WEB_SESSION_STORAGE_MODE", "persistent", "session_storage_mode", "persistent"),
         ("KE_WEB_SESSION_PERSISTENT_ROOT", "/tmp/x", "session_persistent_root", "/tmp/x"),
         ("KE_WEB_KE_EXECUTABLE", "/tmp/x/ke", "ke_executable", "/tmp/x/ke"),
