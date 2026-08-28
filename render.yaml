@@ -25,6 +25,11 @@ services:
         value: /var/data
       - key: KE_WEB_SESSION_DB_PATH
         value: /var/data/research_sessions.sqlite3
+      # Hosted Research mode must prove that the configured `ke` executable is
+      # the complete command surface AI can actually invoke, not merely any
+      # executable with that path/name. The probe is cached and --help-only.
+      - key: KE_WEB_CORE_CLI_COMMAND_PREFLIGHT
+        value: "true"
       # GQR-4/GQR-5: accessible full text acquired by Research mode is reusable
       # research state, not an ephemeral cache. Keep it on the same persistent
       # disk contract as Research Sessions.

@@ -1,6 +1,7 @@
 # Alpha deployment image. Bundles a point-in-time snapshot of core's
-# database and evidence file at build time -- this is a read-only alpha
-# for testing hosting/browsers/latency, not a live-updating service.
+# database and evidence file at build time. Normal Web retrieval remains
+# snapshot-backed; optional Research Copilot state may be seeded into an
+# operator-provided persistent mount at container startup.
 # See docs/deployment.md's "Alpha hosting (Render)" section: refresh the
 # snapshot with scripts/refresh-alpha-snapshot.sh before each rebuild.
 FROM python:3.12-slim AS base
@@ -30,15 +31,27 @@ RUN poetry install --only main
 # before `docker build` (that gitignored-local approach broke the first
 # real deploy; see docs/deployment.md).
 COPY data ./data
+COPY scripts ./scripts
+
+# Research Copilot's Core interface requires a sources.csv metadata overlay.
+# The public Core contract requires doi/title only, both already present in the
+# committed papers snapshot, so generate this deterministic image-local seed at
+# build time instead of introducing another manually-maintained corpus artifact.
+RUN poetry run python -m knowledge_engine_web.alpha_workspace build-sources \
+      --database /app/data/knowledge_engine.sqlite3 \
+      --output /app/data/sources.csv \
+    && chmod +x /app/scripts/start-alpha.sh
 
 ENV KE_WEB_DATABASE_URL=sqlite:////app/data/knowledge_engine.sqlite3 \
     KE_WEB_EVIDENCE_RECORDS_PATH=/app/data/evidence_records.jsonl \
+    KE_WEB_SOURCES_PATH=/app/data/sources.csv \
     KE_WEB_SNAPSHOT_METADATA_PATH=/app/data/snapshot_metadata.json \
     KE_WEB_WHATS_CHANGED_BASELINE_PATH=/app/data/whats_changed_baseline.json \
     KE_WEB_HOST=0.0.0.0
 
 EXPOSE 8000
 
-# Render (and most PaaS hosts) inject $PORT at runtime; fall back to
-# 8000 for `docker run` without one set.
-CMD ["sh", "-c", "KE_WEB_PORT=${PORT:-8000} poetry run knowledge-engine-web"]
+# The startup wrapper uses a real persistent mount when one exists and leaves
+# the committed retrieval snapshot in place otherwise. Render injects $PORT;
+# the wrapper falls back to KE_WEB_PORT/8000 for local docker runs.
+CMD ["/app/scripts/start-alpha.sh"]
