@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -99,7 +100,7 @@ def test_core_cli_preflight_checks_complete_research_command_surface(
         return SimpleNamespace(returncode=0)
 
     ai_orchestration._core_cli_has_required_commands.cache_clear()
-    monkeypatch.setattr(ai_orchestration.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     assert ai_orchestration._core_cli_has_required_commands("/fake/ke")
     assert tuple(commands) == ai_orchestration._RESEARCH_CORE_COMMANDS
