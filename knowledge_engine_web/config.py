@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     session_storage_mode: Literal["local", "persistent"] = "local"
     session_persistent_root: str | None = None
     ke_executable: str = "ke"
+    # Hosted deployments may require a stronger readiness check than merely
+    # finding an executable on PATH. When enabled, Web verifies that the
+    # configured Core CLI exposes every command Research Copilot can invoke.
+    # Kept off by default for local/test compatibility; Render turns it on.
+    core_cli_command_preflight: bool = False
     ai_request_timeout_seconds: float = Field(default=180.0, gt=0)
     ai_max_concurrent_requests: int = Field(default=1, gt=0)
     ai_rate_limit_requests: int = Field(default=3, gt=0)
