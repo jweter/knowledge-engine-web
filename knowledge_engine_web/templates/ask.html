@@ -22,7 +22,7 @@
   {% if synthesis_available %}
   <label class="ask-synthesize-toggle">
     <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested %}checked{% endif %} />
-    Also run Research Copilot (local model, durable session, real inference)
+    Research mode: broaden thin coverage, ground new evidence, and verify the answer
   </label>
   {% else %}
   <label class="ask-synthesize-toggle is-unavailable">
@@ -32,8 +32,9 @@
   {% endif %}
   <button type="submit" id="ask-submit">Ask</button>
   <p class="ask-running-status" id="ask-running-status" role="status" aria-live="polite" hidden>
-    Research Copilot is running. Retrieval, synthesis, and verification may take a few minutes.
-    Deterministic retrieval will remain available if it cannot complete.
+    Research mode is running: indexed retrieval first, then bounded discovery, acquisition and
+    grounding if coverage is thin, followed by re-retrieval, synthesis, and verification.
+    Deterministic retrieval will remain available if the research path cannot complete.
   </p>
 </form>
 
@@ -74,8 +75,9 @@
   <p class="trust-label reviewed">AI-generated, not reviewed</p>
   <h3>Research Copilot result</h3>
   <p class="disclaimer">
-    Local-model narration over a durable retrieval session, followed by deterministic citation
-    and qualifier checks. This is not a scientific judgment or new evidence.
+    Local-model narration over a durable research session, followed by deterministic citation
+    and qualifier checks. Newly discovered literature can support the answer only after Core
+    acquires it, grounds and promotes Evidence Records, and re-runs the original question.
   </p>
   {% if copilot_error %}
   <p class="empty-state">{{ copilot_error }}</p>
@@ -100,13 +102,28 @@
   {% elif research_state == 'researching' %}
   <p class="empty-state">Bounded research is still in progress.</p>
   {% elif research_state == 'partial_answer' %}
-  <p class="trust-warning">This is a grounded partial answer from indexed evidence. Additional discovered leads are not yet evidence.</p>
+  <p class="trust-warning">This is a grounded partial answer from indexed evidence. Additional discovered leads did not become the evidence used for this answer.</p>
+  {% elif research_state == 'researched_answer' %}
+  <p class="trust-label computed">Grounded researched answer</p>
+  <p>
+    Indexed coverage was insufficient, so Research mode broadened the search. Newly acquired
+    literature passed grounded EvidenceRecord promotion, the original question was re-run, and
+    the released answer uses that re-retrieved grounded evidence.
+  </p>
   {% elif research_state == 'insufficient_evidence' %}
+  {% if copilot_result.research_state.grounded_completion_attempted %}
+  <p class="empty-state">The bounded research path completed, but it did not produce enough grounded evidence for a releaseable answer.</p>
+  {% else %}
   <p class="empty-state">There is not enough grounded evidence to release a Research Copilot answer.</p>
+  {% endif %}
   {% elif research_state == 'provider_degraded' %}
+  {% if copilot_result.research_state.used_reretrieved_evidence %}
+  <p class="trust-warning">A grounded researched answer is available and uses newly promoted evidence, but one or more attempted research providers were incomplete or unavailable.</p>
+  {% else %}
   <p class="trust-warning">A grounded partial answer is available, but one or more research providers were incomplete or unavailable.</p>
+  {% endif %}
   {% elif research_state == 'blocked' %}
-  <p class="trust-warning is-critical" role="alert">A required retrieval or release gate blocked this research run.</p>
+  <p class="trust-warning is-critical" role="alert">A required retrieval, grounded-completion, or release gate blocked this research run.</p>
   {% endif %}
   <details class="discovery-method-details">
     <summary>Research-state details</summary>
@@ -115,8 +132,16 @@
       <dd>{{ copilot_result.research_state.schema_version }}</dd>
       <dt>Reason</dt>
       <dd><code>{{ copilot_result.research_state.reason }}</code></dd>
-      <dt>Indexed evidence records</dt>
+      <dt>Indexed evidence records at the adequacy check</dt>
       <dd>{{ copilot_result.research_state.indexed_evidence_record_count }}</dd>
+      <dt>Grounded completion attempted</dt>
+      <dd>{% if copilot_result.research_state.grounded_completion_attempted %}yes{% else %}no{% endif %}</dd>
+      <dt>Grounded completion produced re-retrievable evidence</dt>
+      <dd>{% if copilot_result.research_state.grounded_completion_completed %}yes{% else %}no{% endif %}</dd>
+      <dt>Newly promoted Evidence Records</dt>
+      <dd>{{ copilot_result.research_state.promoted_evidence_record_count }}</dd>
+      <dt>Answer evidence source</dt>
+      <dd>{% if copilot_result.research_state.used_reretrieved_evidence %}post-research original-question re-retrieval{% else %}initial indexed retrieval{% endif %}</dd>
     </dl>
   </details>
   {% if copilot_result.verification and not copilot_result.verification.is_clean %}
