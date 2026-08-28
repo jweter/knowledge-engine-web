@@ -67,9 +67,7 @@ def test_web_research_mode_enables_complete_bounded_research_for_every_question(
     assert discovery_policy.semantic_scholar_api_key == "s2-test"
     assert discovery_policy.ke_executable == sys.executable
 
-    completion_policy = cast(
-        GroundedCompletionPolicy, captured["grounded_completion_policy"]
-    )
+    completion_policy = cast(GroundedCompletionPolicy, captured["grounded_completion_policy"])
     assert completion_policy.ledger_root == discovery_policy.ledger_root
     assert completion_policy.papers_dir == Path(settings.research_papers_dir)
     assert completion_policy.grounding_model == "qwen2.5:1.5b"
