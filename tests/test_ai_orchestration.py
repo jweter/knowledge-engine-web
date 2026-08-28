@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from knowledge_engine_ai.copilot.grounded_completion import GroundedCompletionPolicy
 from knowledge_engine_ai.copilot.research_state import ResearchState, ResearchStateResult
 
 from knowledge_engine_web import ai_orchestration
@@ -29,6 +30,7 @@ def _ready_settings(tmp_path: Path) -> Settings:
         llm_model="qwen2.5:1.5b",
         sources_path=str(sources),
         evidence_records_path=str(evidence),
+        research_papers_dir=str(tmp_path / "research-papers"),
         session_db_path=str(tmp_path / "sessions.sqlite3"),
         ke_executable=sys.executable,
     )
@@ -51,6 +53,7 @@ def test_ai_capability_is_available_when_all_static_prerequisites_exist(
         ({"evidence_records_path": None}, "evidence_unavailable"),
         ({"ke_executable": "missing-ke-command-for-test"}, "core_cli_unavailable"),
         ({"session_db_path": "missing-parent/sessions.sqlite3"}, "session_store_unavailable"),
+        ({"research_papers_dir": "missing-parent/research-papers"}, "research_papers_unavailable"),
     ],
 )
 def test_ai_capability_fails_closed_with_a_stable_reason(
@@ -68,12 +71,34 @@ def test_ai_capability_fails_closed_with_a_stable_reason(
     assert "KE_WEB_" not in capability.visitor_message
 
 
-def test_capability_check_does_not_create_the_session_database(tmp_path: Path) -> None:
+def test_ai_capability_requires_writable_evidence_for_grounded_promotion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _ready_settings(tmp_path)
+    evidence_path = Path(settings.evidence_records_path or "")
+    real_access = ai_orchestration.os.access
+
+    def fake_access(path: object, mode: int) -> bool:
+        if Path(path) == evidence_path and mode == ai_orchestration.os.W_OK:
+            return False
+        return real_access(path, mode)
+
+    monkeypatch.setattr(ai_orchestration.os, "access", fake_access)
+
+    capability = evaluate_ai_capability(settings)
+
+    assert not capability.available
+    assert capability.reason_code == "evidence_unavailable"
+
+
+def test_capability_check_does_not_create_runtime_storage(tmp_path: Path) -> None:
     settings = _ready_settings(tmp_path)
     session_db = Path(settings.session_db_path)
+    papers_dir = Path(settings.research_papers_dir)
 
     assert evaluate_ai_capability(settings).available
     assert not session_db.exists()
+    assert not papers_dir.exists()
 
 
 def test_persistent_session_storage_accepts_a_database_inside_the_mount(
@@ -205,13 +230,15 @@ def test_persistent_session_storage_rejects_a_symlink_escape(tmp_path: Path) -> 
     assert capability.reason_code == "persistent_session_path_invalid"
 
 
-def test_render_blueprint_requires_persistent_session_storage() -> None:
+def test_render_blueprint_requires_persistent_research_storage() -> None:
     blueprint = (Path(__file__).parents[1] / "render.yaml").read_text(encoding="utf-8")
 
     assert "KE_WEB_SESSION_STORAGE_MODE" in blueprint
     assert "value: persistent" in blueprint
     assert "KE_WEB_SESSION_PERSISTENT_ROOT" in blueprint
     assert "value: /var/data" in blueprint
+    assert "KE_WEB_RESEARCH_PAPERS_DIR" in blueprint
+    assert "value: /var/data/research_papers" in blueprint
 
 
 def test_render_blueprint_declares_ai_o16_guardrail_defaults() -> None:
@@ -223,7 +250,7 @@ def test_render_blueprint_declares_ai_o16_guardrail_defaults() -> None:
     assert "KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS" in blueprint
 
 
-def test_run_ai_orchestration_wires_current_settings_and_closes_connection(
+def test_run_ai_orchestration_wires_complete_grounded_research_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = _ready_settings(tmp_path)
@@ -252,6 +279,17 @@ def test_run_ai_orchestration_wires_current_settings_and_closes_connection(
     assert captured["ke_executable"] == sys.executable
     assert captured["model"] == "qwen2.5:1.5b"
 
+    discovery_policy = captured["discovery_policy"]
+    assert discovery_policy is not None
+    assert discovery_policy.enable_acquisition_plan is True  # type: ignore[union-attr]
+
+    completion_policy = captured["grounded_completion_policy"]
+    assert isinstance(completion_policy, GroundedCompletionPolicy)
+    assert completion_policy.ledger_root == Path(settings.federated_discovery_ledger_root)
+    assert completion_policy.papers_dir == Path(settings.research_papers_dir)
+    assert completion_policy.grounding_model == "qwen2.5:1.5b"
+    assert completion_policy.ledger_root == discovery_policy.ledger_root  # type: ignore[union-attr]
+
 
 def test_guarded_orchestration_passes_deadline_and_attaches_ai_owned_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -264,13 +302,17 @@ def test_guarded_orchestration_passes_deadline_and_attaches_ai_owned_state(
     captured: dict[str, object] = {}
     expected = SimpleNamespace(session_id="session-123", narrative="arbitrary prose")
     expected_state = ResearchStateResult(
-        schema_version=1,
+        schema_version=2,
         state=ResearchState.RESEARCH_REQUIRED,
         reason="indexed_coverage_insufficient_bounded_research_started",
         indexed_evidence_record_count=1,
         discovery_triggered=True,
         federated_discovery_attempted=True,
-        acquisition_plan_attempted=False,
+        acquisition_plan_attempted=True,
+        grounded_completion_attempted=False,
+        grounded_completion_completed=False,
+        used_reretrieved_evidence=False,
+        promoted_evidence_record_count=0,
         provider_degraded=False,
     )
 
