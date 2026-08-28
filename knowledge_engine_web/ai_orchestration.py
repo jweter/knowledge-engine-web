@@ -5,12 +5,14 @@ runtime is incomplete. This module owns the integration boundary so route
 code does not need to know how `knowledge-engine-ai`, its durable session
 store, or core's `ke` subprocess interface are assembled.
 
-General Question Research Loop v1 deliberately enables the AI layer's
-bounded, deterministic coverage-gap discovery policy for Research Copilot
-runs. The local corpus remains the first stop; federated discovery runs only
-when the AI layer's evidence-record coverage rule says the indexed evidence
-is thin. Discovered candidates remain leads, not Evidence Records, until Core
-acquires and validates them.
+General Question Research Loop v1 enables the AI layer's bounded,
+deterministic coverage-gap research path for Research Copilot runs. The local
+corpus remains the first stop. When indexed EvidenceRecord coverage is thin,
+AI may run federated discovery, request Core's bounded acquisition plan,
+acquire accessible papers, ground and promote new evidence, re-run the
+original question, and only then synthesize from that new evidence. Discovery
+candidates and acquired Papers never become answer evidence merely by being
+found or downloaded.
 """
 
 from __future__ import annotations
@@ -26,12 +28,17 @@ from knowledge_engine_ai.copilot.discovery_policy import (
     DiscoveryAugmentationResult,
     FederatedDiscoveryPolicy,
 )
+from knowledge_engine_ai.copilot.grounded_completion import (
+    GroundedCompletionPolicy,
+    GroundedCompletionResult,
+)
 from knowledge_engine_ai.copilot.research_state import ResearchStateResult, derive_research_state
 from knowledge_engine_ai.copilot.run_research_question import (
     ResearchQuestionResult,
     run_research_question,
 )
 from knowledge_engine_ai.llm import OllamaLLM
+from knowledge_engine_ai.models import EvidenceReport
 from knowledge_engine_ai.orchestrator.close_gate import SessionCloseResult
 from knowledge_engine_ai.orchestrator.observability import SessionTrace
 from knowledge_engine_ai.orchestrator.session_report import SessionReport
@@ -52,7 +59,7 @@ _EXECUTION_TIMEOUT_FRAGMENTS = (
 
 @dataclass(frozen=True)
 class AICapability:
-    """One deployment's static ability to attempt a Research Copilot run."""
+    """One deployment's static ability to attempt a complete Research Copilot run."""
 
     available: bool
     reason_code: str | None = None
@@ -87,6 +94,18 @@ class WebResearchResult:
     @property
     def discovery(self) -> DiscoveryAugmentationResult | None:
         return self.research.discovery
+
+    @property
+    def grounded_completion(self) -> GroundedCompletionResult | None:
+        return self.research.grounded_completion
+
+    @property
+    def effective_evidence_report(self) -> EvidenceReport | None:
+        return self.research.effective_evidence_report
+
+    @property
+    def used_reretrieved_evidence(self) -> bool:
+        return self.research.used_reretrieved_evidence
 
     @property
     def narrative(self) -> str | None:
@@ -140,24 +159,26 @@ class _ResearchResultLike(Protocol):
 
 
 def evaluate_ai_capability(settings: Settings) -> AICapability:
-    """Fail closed unless every Research Copilot prerequisite exists.
+    """Fail closed unless every complete Research Copilot prerequisite exists.
 
     This is deliberately a static deployment check. It does not contact
-    Ollama, execute `ke`, create the session database, or contact scholarly
-    providers merely to render the Ask form. Because General Question Research
-    Loop v1 enables bounded discovery on every Research Copilot run, the
-    discovery ledger must pass the same storage checks used by `/discover`
-    before the AI path is advertised as available.
+    Ollama, execute `ke`, create the session database, create acquisition
+    directories, or contact scholarly providers merely to render the Ask
+    form. Research mode can now promote newly grounded EvidenceRecords, so
+    both the durable evidence file and acquired-paper destination must be
+    writable before Web advertises the complete path as available.
     """
 
     if not _nonblank(settings.llm_model):
         return _unavailable("model_not_configured")
     if _configured_file(settings.sources_path) is None:
         return _unavailable("sources_unavailable")
-    if _configured_file(settings.evidence_records_path) is None:
+    if _configured_writable_file(settings.evidence_records_path) is None:
         return _unavailable("evidence_unavailable")
     if _resolve_executable(settings.ke_executable) is None:
         return _unavailable("core_cli_unavailable")
+    if not _directory_destination_is_usable(Path(settings.research_papers_dir)):
+        return _unavailable("research_papers_unavailable")
     session_capability = _evaluate_session_storage(settings)
     if not session_capability.available:
         return session_capability
@@ -168,14 +189,13 @@ def evaluate_ai_capability(settings: Settings) -> AICapability:
 
 
 def _build_discovery_policy(settings: Settings, executable: str) -> FederatedDiscoveryPolicy:
-    """Build the bounded default policy for arbitrary-question Research Copilot runs.
+    """Build Web's bounded discovery-and-acquisition-plan policy.
 
-    The policy's trigger is deterministic and implemented in
-    `knowledge-engine-ai`: indexed evidence is always searched first, and
-    external discovery is attempted only when deduplicated evidence-record
-    coverage falls below the configured AI-layer threshold. This helper only
-    supplies Web's validated durable ledger location, provider credentials,
-    and Core CLI.
+    Indexed evidence is always searched first. External discovery is attempted
+    only when AI's deterministic evidence-record coverage rule says the index
+    is thin. Acquisition planning is enabled here because Research mode now
+    composes the GQR-4/GQR-5 grounded-completion bridge; the plan still cannot
+    put a candidate into synthesis by itself.
     """
 
     return FederatedDiscoveryPolicy(
@@ -183,6 +203,18 @@ def _build_discovery_policy(settings: Settings, executable: str) -> FederatedDis
         openalex_api_key=settings.federated_openalex_api_key,
         semantic_scholar_api_key=settings.federated_semantic_scholar_api_key,
         ke_executable=executable,
+        enable_acquisition_plan=True,
+    )
+
+
+def _build_grounded_completion_policy(settings: Settings) -> GroundedCompletionPolicy:
+    """Build the bounded GQR-4/GQR-5 policy paired with Web's discovery policy."""
+
+    assert settings.llm_model is not None
+    return GroundedCompletionPolicy(
+        ledger_root=Path(settings.federated_discovery_ledger_root),
+        papers_dir=Path(settings.research_papers_dir),
+        grounding_model=settings.llm_model.strip(),
     )
 
 
@@ -192,11 +224,14 @@ def run_ai_orchestration(
     *,
     timeout_seconds: float | None = None,
 ) -> ResearchQuestionResult:
-    """Run one durable Research Copilot session using configured local inputs.
+    """Run one complete durable Research Copilot session.
 
-    General Question Research Loop v1 enables bounded coverage-gap discovery
-    on this path. This does not make discovery candidates citable evidence;
-    acquisition/validation remains a separate Core responsibility.
+    The composed path is indexed retrieval first, then bounded discovery and
+    acquisition planning only when coverage is thin, followed by grounded
+    completion and original-question re-retrieval. Synthesis uses the
+    reretrieved report only when newly promoted grounded evidence exists;
+    otherwise AI keeps the original report and records why the research path
+    did not produce replacement evidence.
     """
 
     capability = evaluate_ai_capability(settings)
@@ -223,13 +258,15 @@ def run_ai_orchestration(
             evidence=Path(settings.evidence_records_path),
             llm=OllamaLLM(model=model, host=settings.ollama_host),
             discovery_policy=_build_discovery_policy(settings, executable),
+            grounded_completion_policy=_build_grounded_completion_policy(settings),
             ke_executable=executable,
             timeout_seconds=timeout_seconds,
         )
     except Exception as exc:
-        # This integration crosses SQLite, subprocess, file, network-provider,
-        # and local-model boundaries. Visitor output must not leak paths or raw
-        # exception details; deterministic retrieval remains available.
+        # This integration crosses SQLite, subprocess, writable corpus,
+        # provider-network, acquisition, and local-model boundaries. Visitor
+        # output must not leak paths or raw exception details; deterministic
+        # retrieval remains available.
         raise AIOrchestrationError(
             "Research Copilot could not complete this request. "
             "Deterministic retrieval results are still shown below."
@@ -296,6 +333,13 @@ def _configured_file(value: str | None) -> Path | None:
     return path if path.is_file() else None
 
 
+def _configured_writable_file(value: str | None) -> Path | None:
+    path = _configured_file(value)
+    if path is None or not os.access(path, os.W_OK):
+        return None
+    return path
+
+
 def _nonblank(value: str | None) -> bool:
     return bool(value and value.strip())
 
@@ -303,6 +347,12 @@ def _nonblank(value: str | None) -> bool:
 def _resolve_executable(value: str) -> str | None:
     executable = value.strip()
     return shutil.which(executable) if executable else None
+
+
+def _directory_destination_is_usable(path: Path) -> bool:
+    if path.exists():
+        return path.is_dir() and os.access(path, os.W_OK)
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 
 def _session_store_is_usable(path: Path) -> bool:
