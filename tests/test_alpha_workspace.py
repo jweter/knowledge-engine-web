@@ -87,11 +87,15 @@ def test_seed_prepares_research_inputs_without_overwriting_durable_evidence(
         _record("ev-base-a", "baseline A") + "\n", encoding="utf-8"
     )
     durable_evidence = persistent_root / "evidence_records.jsonl"
-    durable_evidence.write_text(_record("ev-research", "promoted research") + "\n", encoding="utf-8")
+    durable_evidence.write_text(
+        _record("ev-research", "promoted research") + "\n", encoding="utf-8"
+    )
 
     result = seed_persistent_workspace(snapshot_root, persistent_root)
 
-    records = [json.loads(line) for line in durable_evidence.read_text(encoding="utf-8").splitlines()]
+    records = [
+        json.loads(line) for line in durable_evidence.read_text(encoding="utf-8").splitlines()
+    ]
     assert [record["evidence_record_id"] for record in records] == ["ev-research", "ev-base-a"]
     assert result.evidence_path == durable_evidence
     assert result.sources_path.read_text(encoding="utf-8") == (
@@ -123,7 +127,9 @@ def test_reseed_adds_new_baseline_records_and_keeps_prior_research_records(
     )
     seed_persistent_workspace(snapshot_root, persistent_root)
 
-    records = [json.loads(line) for line in durable_evidence.read_text(encoding="utf-8").splitlines()]
+    records = [
+        json.loads(line) for line in durable_evidence.read_text(encoding="utf-8").splitlines()
+    ]
     assert [record["evidence_record_id"] for record in records] == [
         "ev-base-a",
         "ev-research",
@@ -158,5 +164,7 @@ def test_dockerfile_builds_sources_and_uses_persistent_aware_startup() -> None:
     assert "KE_WEB_SOURCES_PATH=/app/data/sources.csv" in dockerfile
     assert 'CMD ["/app/scripts/start-alpha.sh"]' in dockerfile
     assert "alpha_workspace seed" in startup
-    assert 'export KE_WEB_EVIDENCE_RECORDS_PATH="$persistent_root/evidence_records.jsonl"' in startup
+    assert (
+        'export KE_WEB_EVIDENCE_RECORDS_PATH="$persistent_root/evidence_records.jsonl"' in startup
+    )
     assert 'export KE_WEB_SOURCES_PATH="$persistent_root/sources.csv"' in startup
