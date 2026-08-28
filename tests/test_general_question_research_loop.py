@@ -7,6 +7,7 @@ from typing import cast
 
 import pytest
 from knowledge_engine_ai.copilot.discovery_policy import FederatedDiscoveryPolicy
+from knowledge_engine_ai.copilot.grounded_completion import GroundedCompletionPolicy
 
 from knowledge_engine_web import ai_orchestration
 from knowledge_engine_web.ai_orchestration import run_ai_orchestration
@@ -24,6 +25,7 @@ def _ready_settings(tmp_path: Path) -> Settings:
         llm_model="qwen2.5:1.5b",
         sources_path=str(sources),
         evidence_records_path=str(evidence),
+        research_papers_dir=str(tmp_path / "research-papers"),
         session_db_path=str(tmp_path / "sessions.sqlite3"),
         ke_executable=sys.executable,
         federated_discovery_ledger_root=str(ledger),
@@ -32,7 +34,7 @@ def _ready_settings(tmp_path: Path) -> Settings:
     )
 
 
-def test_web_research_copilot_enables_bounded_discovery_policy_for_every_question(
+def test_web_research_mode_enables_complete_bounded_research_for_every_question(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = _ready_settings(tmp_path)
@@ -56,24 +58,34 @@ def test_web_research_copilot_enables_bounded_discovery_policy_for_every_questio
 
     assert result.session_id == expected.session_id
     assert captured["question"] == "Does creatine improve maximal strength?"
-    policy = cast(FederatedDiscoveryPolicy, captured["discovery_policy"])
-    assert policy.ledger_root == Path(settings.federated_discovery_ledger_root)
-    assert policy.enable_federated_discovery is True
-    assert policy.openalex_api_key == "oa-test"
-    assert policy.semantic_scholar_api_key == "s2-test"
-    assert policy.ke_executable == sys.executable
+
+    discovery_policy = cast(FederatedDiscoveryPolicy, captured["discovery_policy"])
+    assert discovery_policy.ledger_root == Path(settings.federated_discovery_ledger_root)
+    assert discovery_policy.enable_federated_discovery is True
+    assert discovery_policy.enable_acquisition_plan is True
+    assert discovery_policy.openalex_api_key == "oa-test"
+    assert discovery_policy.semantic_scholar_api_key == "s2-test"
+    assert discovery_policy.ke_executable == sys.executable
+
+    completion_policy = cast(
+        GroundedCompletionPolicy, captured["grounded_completion_policy"]
+    )
+    assert completion_policy.ledger_root == discovery_policy.ledger_root
+    assert completion_policy.papers_dir == Path(settings.research_papers_dir)
+    assert completion_policy.grounding_model == "qwen2.5:1.5b"
 
 
 def test_general_question_policy_keeps_indexed_evidence_first(tmp_path: Path) -> None:
     settings = _ready_settings(tmp_path)
     policy = ai_orchestration._build_discovery_policy(settings, sys.executable)
 
-    # The AI layer owns the deterministic coverage-gap trigger. Web only opts
-    # the Research Copilot into that bounded policy; it does not bypass local
-    # retrieval or turn discovery candidates directly into evidence.
+    # The AI layer owns the deterministic coverage-gap trigger. Web opts
+    # Research mode into discovery + acquisition planning, but neither is
+    # allowed to bypass local retrieval or turn candidates directly into evidence.
     assert policy.min_evidence_record_coverage > 0
     assert policy.discovery_limit_per_provider <= 100
     assert policy.discovery_max_execution_seconds > 0
+    assert policy.enable_acquisition_plan is True
 
 
 def test_general_question_ai_capability_rejects_invalid_persistent_discovery_ledger(
@@ -112,12 +124,16 @@ def test_ask_template_maps_every_stable_gqr_state_to_visitor_messaging() -> None
         "research_required",
         "researching",
         "partial_answer",
+        "researched_answer",
         "insufficient_evidence",
         "provider_degraded",
         "blocked",
     ):
         assert f"research_state == '{state}'" in template
 
-    assert "Additional discovered leads are not yet evidence." in template
+    assert "Newly acquired" in template
+    assert "post-research original-question re-retrieval" in template
     assert "copilot_result.research_state.reason" in template
-    assert "copilot_result.research_state.indexed_evidence_record_count" in template
+    assert "copilot_result.research_state.grounded_completion_attempted" in template
+    assert "copilot_result.research_state.promoted_evidence_record_count" in template
+    assert "copilot_result.research_state.used_reretrieved_evidence" in template
