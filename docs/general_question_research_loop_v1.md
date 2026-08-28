@@ -10,18 +10,23 @@ The Ask experience must behave like a research tool, not a fixed-corpus demo. A 
 
 The Web layer does not decide scientific truth. It invokes the AI orchestration path safely and renders the resulting research state, evidence provenance, search coverage, and limitations.
 
-## Immediate change in this branch
+## Current Research mode path
 
-Research Copilot now receives the AI layer's bounded `FederatedDiscoveryPolicy` by default from the Web orchestration bridge. This means:
+Research mode now supplies both AI policies required by the complete synchronous GQR path:
 
-1. indexed evidence is still searched first;
-2. when the AI layer's deterministic coverage-gap rule fires, Core federated discovery is attempted;
-3. provider credentials and the durable discovery-ledger path come from existing Web settings;
-4. discovered candidates are still leads only and are not presented as citable Evidence Records.
+1. indexed evidence is searched first;
+2. when AI's deterministic coverage-gap rule fires, Core federated discovery is attempted;
+3. Web enables Core's bounded acquisition plan for that discovery run;
+4. the same discovery ledger is passed to `GroundedCompletionPolicy`;
+5. eligible accessible papers may be acquired or already-indexed papers reused;
+6. automatic extraction must pass Core's grounded review and durable EvidenceRecord promotion boundary;
+7. the original question is re-run against the enlarged grounded evidence base;
+8. synthesis switches to that reretrieved report only when newly promoted grounded evidence exists;
+9. deterministic citation/qualifier verification and the Research ISA close gate still control release.
 
-WEB-GQR-1 now also consumes `knowledge-engine-ai`'s stable `derive_research_state` contract and renders that metadata directly on `/ask`. Web does not recreate or infer the state from answer prose. The AI dependency is pinned to the merged contract commit, and `poetry.lock` is regenerated from that dependency declaration.
+Discovery candidates, acquisition-plan rows, acquired Papers, and staged automatic classifications never become answer evidence merely by existing.
 
-This closes the current Web-to-AI discovery and research-state wiring gaps, but it does not complete arbitrary-question answering. Core's acquisition/extraction bridge and AI re-retrieval are still required before newly discovered literature can become grounded answer evidence.
+Web consumes `knowledge-engine-ai`'s stable `derive_research_state` contract and renders that metadata directly on `/ask`. Web does not recreate or infer the state from answer prose. The pinned AI dependency includes `ResearchStateResult` schema v2, which distinguishes a releaseable indexed answer from a releaseable answer that actually used grounded post-research re-retrieval.
 
 ## Required user-visible states
 
@@ -31,11 +36,14 @@ The Web contract renders stable research states from AI rather than inferring th
 - `research_required`
 - `researching`
 - `partial_answer`
+- `researched_answer`
 - `insufficient_evidence`
 - `provider_degraded`
 - `blocked`
 
-`researching` is part of the stable schema and already has visitor-facing copy, but the current Research Copilot request is synchronous, so AI does not emit that state yet. It is reserved for the later durable/polling workflow.
+`researched_answer` means the released narrative actually used newly promoted grounded evidence returned by the original-question re-retrieval. `partial_answer` means indexed evidence was releaseable, but newly discovered leads did not become the evidence used for that answer.
+
+`researching` remains part of the stable schema for the later durable/polling workflow. The current HTTP request is synchronous, so the page can show an immediate generic running notice and the complete durable event trace after the request returns, but it cannot yet stream each in-progress event live.
 
 Recommended visitor-facing progression:
 
@@ -46,47 +54,53 @@ Searching scholarly providers...
 Validating and acquiring eligible sources...
 Extracting grounded evidence...
 Re-checking the original question against the enlarged evidence base...
-Preparing a source-grounded answer...
+Preparing and verifying a source-grounded answer...
 ```
 
-Do not display a stage that Core/AI has not actually entered.
+Do not claim a stage succeeded unless its durable AI/Core result says so.
 
 ## Final answer requirements
 
 Every completed Research Copilot result should make these distinctions explicit:
 
-- evidence that was already indexed before this question;
-- evidence newly acquired during this research run;
+- whether indexed evidence was sufficient;
+- whether grounded completion was attempted;
+- how many new Evidence Records were promoted;
+- whether the released answer used post-research re-retrieval or the initial index;
 - providers searched and providers degraded/unavailable;
 - incomplete coverage;
-- domain-specific assessment profile availability;
 - citations and Evidence Record provenance;
-- whether the answer is complete, partial, or insufficiently supported.
+- whether the answer is indexed, partial, researched, blocked, or insufficiently supported.
 
 No model-memory assertion may be styled as evidence.
 
 ## UX rules
 
-1. Do not turn `0 indexed results` into a dead-end message when bounded discovery is available.
-2. Do not say `searching the literature` before the AI layer has actually triggered discovery.
-3. Do not render raw provider candidates as if they support the answer.
-4. Do not hide provider failures.
-5. Do not hide that domain-specific confidence scoring is unavailable.
-6. Keep deterministic retrieval visible if AI synthesis fails.
-7. Keep the final citation path inspectable to source/evidence details.
+1. Do not turn `0 indexed results` into a dead-end message while bounded research is still eligible to run.
+2. Do not render raw provider candidates or merely acquired Papers as answer evidence.
+3. Do not hide provider, acquisition, extraction, or release-gate failures.
+4. Keep deterministic retrieval visible if AI synthesis fails.
+5. Keep the final citation path inspectable to source/evidence details.
+6. Label a run `researched_answer` only when AI says reretrieved grounded evidence was actually used.
+7. Label `insufficient_evidence` after the bounded research path has genuinely been evaluated, not immediately after an indexed miss.
 
 ## Configuration
 
-General Question v1 reuses existing settings:
+General Question v1 uses:
 
 - `KE_WEB_FEDERATED_DISCOVERY_LEDGER_ROOT`
 - `KE_WEB_FEDERATED_OPENALEX_API_KEY`
 - `KE_WEB_FEDERATED_SEMANTIC_SCHOLAR_API_KEY`
+- `KE_WEB_RESEARCH_PAPERS_DIR`
 - `KE_WEB_KE_EXECUTABLE`
+- `KE_WEB_LLM_MODEL`
+- writable `KE_WEB_EVIDENCE_RECORDS_PATH` for durable grounded promotion
 - AI request timeout/rate/concurrency settings
 - persistent session and discovery-ledger storage settings
 
-The autonomous AI research path must remain bounded even though the person-invoked discovery UI may have separate limits.
+On Render, acquired papers are placed under `/var/data/research_papers` so reusable full text survives redeploys when the persistent disk is actually provisioned.
+
+The autonomous AI research path remains bounded even though the person-invoked discovery UI has separate limits.
 
 ## Build slices
 
@@ -101,7 +115,14 @@ The autonomous AI research path must remain bounded even though the person-invok
 - [x] add state-specific visitor messaging;
 - [x] never infer state solely from narrative text.
 
-Verification completed on the PR branch before final CI: the repository's full `scripts/quality_preflight.py` gate passed after repairing the existing Ask test fixture for the new state contract, and a local `uvicorn` server successfully served an `/ask` request for a non-GLP-1 question. Fresh PR-triggered Quality and Docker checks on the exact final head remain the merge authority.
+### WEB-GQR-1B - Execute grounded completion from Research mode
+- [x] enable acquisition planning in Web's bounded AI discovery policy;
+- [x] supply `GroundedCompletionPolicy` with the same discovery ledger;
+- [x] configure a reusable acquired-paper directory;
+- [x] require writable evidence storage before advertising full Research mode;
+- [x] surface researched-vs-indexed answer provenance and promoted-record counts;
+- [x] preserve the post-run durable ResearchSession trace, including grounded acquisition, extraction, and re-retrieval events produced by AI;
+- [x] pin AI's grounded-completion + ResearchState v2 contract.
 
 ### WEB-GQR-2 - Coverage panel
 - show provider attempts/outcomes;
@@ -110,12 +131,12 @@ Verification completed on the PR branch before final CI: the repository's full `
 - show freshness/research-run identity.
 
 ### WEB-GQR-3 - Evidence provenance
-- distinguish `indexed_before_run` and `acquired_during_run` evidence;
+- distinguish `indexed_before_run` and `acquired_during_run` evidence at individual citation level;
 - preserve source links/evidence detail navigation;
 - label unsupported domain confidence profiles as unavailable.
 
 ### WEB-GQR-4 - Long-running research UX
-Once Core acquisition can exceed a synchronous request safely, move the UI to a durable job/session polling model rather than extending HTTP request timeouts indefinitely. Session identity and progress must survive refresh/redeploy where persistent storage is configured.
+Move the UI to a durable job/session polling model rather than extending HTTP request timeouts indefinitely. Session identity and live stage progress must survive refresh/redeploy where persistent storage is configured.
 
 ### WEB-GQR-5 - Failure drills
 Test and render:
@@ -130,8 +151,8 @@ Test and render:
 
 ## Acceptance test
 
-A visitor asks `Does creatine supplementation improve maximal strength?` on a deployment whose local evidence does not cover creatine. The page first checks indexed evidence, then visibly broadens the search when the deterministic gap trigger fires. Once Core acquisition/re-retrieval is implemented, the same session progresses to newly acquired validated evidence and a cited answer. If the research cannot acquire enough grounded evidence, the page reports that outcome rather than fabricating a response.
+A visitor asks `Does creatine supplementation improve maximal strength?` on a deployment whose local evidence does not cover creatine. The page first checks indexed evidence, then broadens the search when the deterministic gap trigger fires. The same session can proceed through acquisition, grounded extraction/promotion, original-question re-retrieval, and a verified cited answer. If the research path completes without enough grounded evidence, the state is `insufficient_evidence` rather than a fabricated response. If newly grounded evidence actually supports the released answer, the state is `researched_answer` and the page says the answer came from post-research re-retrieval.
 
 ## Definition of done
 
-Web's portion is complete when arbitrary questions have a transparent, durable research-state experience from indexed lookup through bounded research and final grounded answer, with provider coverage and evidence provenance visible throughout.
+Web's synchronous GQR path is complete when arbitrary questions can transparently move from indexed lookup through bounded grounded research to a verified final answer in one durable session. Live event-by-event progress streaming, richer coverage/funnel panels, and individual citation old-vs-new provenance remain subsequent Web slices.
