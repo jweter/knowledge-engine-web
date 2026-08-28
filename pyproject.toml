@@ -21,13 +21,10 @@ sqlalchemy = "^2.0.31"
 # AI-O13: git dependency, not a path dependency -- these are separate
 # GitHub repos with no shared package registry, and unlike core (read
 # via SQLAlchemy reflection, never imported), this really is a Python
-# import. See docs/web_design.md's "Planned: full orchestrator
-# integration" section for why, and knowledge-engine-ai's
-# docs/web_integration_design.md for the real dependency-weight cost
-# this adds (core's full stack, torch included, once `ke` needs to run
-# as a subprocess). AI-O16 bounds that runtime but does not make it part
-# of the current Render image or provision hosted inference.
-knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "9e7fd4f6f6aa494679278471e00bf6995feab11e" }
+# import. The pinned AI revision includes GQR grounded completion plus
+# ResearchState v2 so Web never re-derives whether an answer actually used
+# newly acquired, grounded, re-retrieved evidence.
+knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "6fa7db516cac52afae1e496b3998ce0e28384025" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"
