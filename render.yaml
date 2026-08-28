@@ -25,6 +25,11 @@ services:
         value: /var/data
       - key: KE_WEB_SESSION_DB_PATH
         value: /var/data/research_sessions.sqlite3
+      # GQR-4/GQR-5: accessible full text acquired by Research mode is reusable
+      # research state, not an ephemeral cache. Keep it on the same persistent
+      # disk contract as Research Sessions.
+      - key: KE_WEB_RESEARCH_PAPERS_DIR
+        value: /var/data/research_papers
       # AI-O16: process-local safety defaults for the optional compute path.
       # They do not make the missing hosted AI prerequisites available.
       - key: KE_WEB_AI_REQUEST_TIMEOUT_SECONDS
