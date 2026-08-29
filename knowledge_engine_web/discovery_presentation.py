@@ -43,6 +43,31 @@ def provider_outcome_label(outcome: str) -> str:
     return PROVIDER_OUTCOME_LABELS.get(outcome, outcome or "unknown")
 
 
+#: The one fixed mapping from a Core-recorded provider `outcome` to the CSS
+#: status class every surface that renders a provider outcome badge uses --
+#: `/discover` (`main.py`'s `_provider_status_view`) and the WEB-GQR-2
+#: Research Copilot coverage panel (`research_coverage_presentation.py`)
+#: both read this single mapping so the two badges cannot silently drift
+#: apart, the same anti-drift reasoning `PROVIDER_OUTCOME_LABELS` above
+#: already documents. An unrecognized outcome renders as "is-skipped"
+#: (never hidden, never guessed "ok") rather than raising.
+PROVIDER_STATUS_CSS_CLASSES: dict[str, str] = {
+    "success": "is-ok",
+    "empty": "is-ok",
+    "rate_limited": "is-degraded",
+    "unavailable": "is-degraded",
+    "failed": "is-degraded",
+    "skipped": "is-skipped",
+    "disabled": "is-skipped",
+}
+
+
+def provider_status_css_class(outcome: str) -> str:
+    """Map one Core-recorded provider outcome to its fixed badge CSS class."""
+
+    return PROVIDER_STATUS_CSS_CLASSES.get(outcome, "is-skipped")
+
+
 class ProviderAssertionSource(Protocol):
     @property
     def provider(self) -> str: ...
@@ -346,6 +371,7 @@ def build_discovery_presentation(result: DiscoveryResultSource) -> DiscoveryPres
 
 __all__ = [
     "PROVIDER_OUTCOME_LABELS",
+    "PROVIDER_STATUS_CSS_CLASSES",
     "DiscoveryCandidateView",
     "DiscoveryPresentation",
     "ObservationFlagSource",
@@ -356,4 +382,5 @@ __all__ = [
     "build_discovery_presentation",
     "build_publication_status",
     "provider_outcome_label",
+    "provider_status_css_class",
 ]

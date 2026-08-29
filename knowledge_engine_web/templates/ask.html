@@ -144,6 +144,128 @@
       <dd>{% if copilot_result.research_state.used_reretrieved_evidence %}post-research original-question re-retrieval{% else %}initial indexed retrieval{% endif %}</dd>
     </dl>
   </details>
+  {% if coverage_panel %}
+  <details class="discovery-method-details">
+    <summary>Research coverage</summary>
+    <p class="disclaimer">
+      Discovery, acquisition, and extraction counts below are search-and-acquisition
+      provenance, not evidence-quality scores. A low count can mean a genuinely thin
+      literature or a deliberate adequacy stop, not a failure.
+    </p>
+    <dl>
+      <dt>Indexed evidence-record coverage at the adequacy check</dt>
+      <dd>{{ coverage_panel.indexed_evidence_record_coverage }}</dd>
+      <dt>Federated discovery</dt>
+      <dd>
+        {% if coverage_panel.federated_discovery_attempted %}
+        attempted &mdash; {{ coverage_panel.trigger_reason }}
+        {% elif coverage_panel.discovery_triggered %}
+        {{ coverage_panel.trigger_reason }}
+        {% if coverage_panel.federated_discovery_error %}(<code>{{ coverage_panel.federated_discovery_error }}</code>){% endif %}
+        {% else %}
+        not needed &mdash; {{ coverage_panel.trigger_reason }}
+        {% endif %}
+      </dd>
+      {% if coverage_panel.search_run_id %}
+      <dt>Search run</dt>
+      <dd>
+        <code>{{ coverage_panel.search_run_id }}</code>
+        {% if coverage_panel.completeness %}({{ coverage_panel.completeness }}){% endif %}
+        {% if coverage_panel.search_run_created_at %}<br /><code>{{ coverage_panel.search_run_created_at }}</code>{% endif %}
+      </dd>
+      <dt>Discovery candidates found (leads, not evidence)</dt>
+      <dd>{{ coverage_panel.candidate_count }}</dd>
+      {% endif %}
+    </dl>
+    {% if coverage_panel.provider_rows %}
+    <table class="discovery-provider-table">
+      <thead>
+        <tr>
+          <th>Provider</th>
+          <th>Status</th>
+          <th>Results</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in coverage_panel.provider_rows %}
+        <tr>
+          <td>{{ row.provider }}</td>
+          <td>
+            <span class="discovery-status {{ row.css_class }}">{{ row.label }}</span>
+            {% if row.reason %}<span class="disclaimer">({{ row.reason }})</span>{% endif %}
+          </td>
+          <td>{{ row.result_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if coverage_panel.grounded_completion_attempted or coverage_panel.grounded_completion_skipped_reason %}
+    <dl>
+      <dt>Grounded extraction &amp; acquisition (GQR-4/GQR-5)</dt>
+      <dd>
+        {% if coverage_panel.grounded_completion_attempted %}
+        attempted
+        {% else %}
+        not attempted &mdash; {{ coverage_panel.grounded_completion_skipped_reason }}
+        {% endif %}
+      </dd>
+      <dt>Already-indexed papers reused</dt>
+      <dd>{{ coverage_panel.already_indexed_paper_count }}</dd>
+      {% if coverage_panel.acquisition_routes %}
+      <dt>Acquisition routes</dt>
+      <dd>
+        <table class="discovery-provider-table">
+          <thead>
+            <tr>
+              <th>Route</th>
+              <th>Candidates</th>
+              <th>Persisted</th>
+              <th>Reused</th>
+              <th>Outcome</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for route in coverage_panel.acquisition_routes %}
+            <tr>
+              <td>{{ route.route }}</td>
+              <td>{{ route.candidate_count }}</td>
+              <td>{{ route.persisted_count }}</td>
+              <td>{{ route.reused_count }}</td>
+              <td>
+                {% if route.error %}<span class="discovery-status is-degraded">failed</span> <span class="disclaimer">({{ route.error }})</span>
+                {% elif route.attempted %}<span class="discovery-status is-ok">attempted</span>
+                {% else %}<span class="discovery-status is-skipped">not attempted</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </dd>
+      {% endif %}
+      <dt>Extraction funnel: drafted &rarr; classified &rarr; staged &rarr; grounded &rarr; promoted</dt>
+      <dd>
+        {{ coverage_panel.draft_item_count }} &rarr;
+        {{ coverage_panel.classified_item_count }} &rarr;
+        {{ coverage_panel.staged_record_count }} &rarr;
+        {{ coverage_panel.grounded_record_count }} &rarr;
+        {{ coverage_panel.promoted_record_count }}
+        {% if coverage_panel.grounding_failure_count %}
+        <br /><span class="disclaimer">{{ coverage_panel.grounding_failure_count }} staged record(s) failed grounding verification and were not promoted.</span>
+        {% endif %}
+      </dd>
+      {% if coverage_panel.extraction_error %}
+      <dt>Extraction error</dt>
+      <dd><code>{{ coverage_panel.extraction_error }}</code></dd>
+      {% endif %}
+      {% if coverage_panel.reretrieval_error %}
+      <dt>Re-retrieval error</dt>
+      <dd><code>{{ coverage_panel.reretrieval_error }}</code></dd>
+      {% endif %}
+    </dl>
+    {% endif %}
+  </details>
+  {% endif %}
   {% if copilot_result.verification and not copilot_result.verification.is_clean %}
   <div class="trust-warning is-critical" role="alert">
     <strong>Verification findings:</strong>
