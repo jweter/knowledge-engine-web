@@ -1551,6 +1551,34 @@ def _copilot_result() -> SimpleNamespace:
             reason="indexed_evidence_sufficient",
             indexed_evidence_record_count=1,
         ),
+        discovery=SimpleNamespace(
+            triggered=False,
+            trigger_reason=(
+                "Evidence-record coverage (1) met the configured threshold (1); "
+                "federated discovery was not needed."
+            ),
+            evidence_record_coverage=1,
+            federated_discovery=None,
+            federated_discovery_attempted=False,
+            federated_discovery_error=None,
+            acquisition_plan_attempted=False,
+            acquisition_plan_skipped_reason=None,
+            acquisition_plan_error=None,
+        ),
+        grounded_completion=SimpleNamespace(
+            attempted=False,
+            already_indexed_paper_ids=(),
+            acquisition_routes=(),
+            draft_item_count=0,
+            classified_item_count=0,
+            staged_record_ids=(),
+            grounded_record_ids=(),
+            promoted_record_ids=(),
+            grounding_failures=(),
+            extraction_error=None,
+            reretrieval_error=None,
+            skipped_reason=("Discovery was not triggered; indexed evidence already met adequacy."),
+        ),
         narrative="Semaglutide reduces body weight [ev-1].",
         narrative_releaseable=True,
         synthesis_error=None,
@@ -1843,6 +1871,134 @@ def test_ask_shows_specific_verification_findings_when_flagged(
         "Qualifying or contradicting evidence records the narrative never cited:" in response.text
     )
     assert "<code>ev-2</code>" in response.text
+
+
+def test_ask_renders_research_coverage_panel_for_a_researched_answer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WEB-GQR-2: provider/acquisition/promotion counts, distinct from citations."""
+
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    result = _copilot_result()
+    result.research_state = SimpleNamespace(
+        schema_version=1,
+        state=SimpleNamespace(value="researched_answer"),
+        reason="grounded_completion_produced_reretrievable_evidence",
+        indexed_evidence_record_count=0,
+        grounded_completion_attempted=True,
+        grounded_completion_completed=True,
+        promoted_evidence_record_count=1,
+        used_reretrieved_evidence=True,
+    )
+    result.discovery = SimpleNamespace(
+        triggered=True,
+        trigger_reason="Evidence-record coverage (0) fell below the configured threshold (1).",
+        evidence_record_coverage=0,
+        federated_discovery=SimpleNamespace(
+            search_run_id="run-creatine-001",
+            completeness="partial",
+            provider_statuses=(
+                SimpleNamespace(provider="pubmed", outcome="success", result_count=6, reason=None),
+                SimpleNamespace(
+                    provider="openalex",
+                    outcome="rate_limited",
+                    result_count=0,
+                    reason="429 from provider",
+                ),
+            ),
+            candidates=(object(), object(), object()),
+            search_run_created_at="2026-08-29T00:00:00Z",
+        ),
+        federated_discovery_attempted=True,
+        federated_discovery_error=None,
+        acquisition_plan_attempted=True,
+        acquisition_plan_skipped_reason=None,
+        acquisition_plan_error=None,
+    )
+    result.grounded_completion = SimpleNamespace(
+        attempted=True,
+        already_indexed_paper_ids=(),
+        acquisition_routes=(
+            SimpleNamespace(
+                route="pmc_oa",
+                attempted=True,
+                candidate_ids=("cand-1", "cand-2"),
+                persisted_count=1,
+                reused_count=0,
+                error=None,
+            ),
+            SimpleNamespace(
+                route="unpaywall",
+                attempted=False,
+                candidate_ids=("cand-3",),
+                persisted_count=0,
+                reused_count=0,
+                error=None,
+            ),
+        ),
+        draft_item_count=2,
+        classified_item_count=2,
+        staged_record_ids=("staged-1", "staged-2"),
+        grounded_record_ids=("staged-1",),
+        promoted_record_ids=("staged-1",),
+        grounding_failures=("staged-2",),
+        extraction_error=None,
+        reretrieval_error=None,
+        skipped_reason=None,
+    )
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: result,
+    )
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does creatine improve maximal strength", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "Research coverage" in response.text
+    assert "run-creatine-001" in response.text
+    assert "(partial)" in response.text
+    assert "Discovery candidates found (leads, not evidence)</dt>" in response.text
+    assert "<td>pubmed</td>" in response.text
+    assert '<span class="discovery-status is-ok">searched</span>' in response.text
+    assert "<td>openalex</td>" in response.text
+    assert "429 from provider" in response.text
+    assert "<td>pmc_oa</td>" in response.text
+    assert "<td>unpaywall</td>" in response.text
+    assert '<span class="discovery-status is-skipped">not attempted</span>' in response.text
+    assert "2 &rarr;" in response.text
+    assert "1 staged record(s) failed grounding verification" in response.text
+
+
+def test_ask_omits_the_coverage_panel_when_discovery_was_never_evaluated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    result = _copilot_result()
+    result.discovery = None
+    result.grounded_completion = None
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: result,
+    )
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "Research coverage" not in response.text
 
 
 def test_ask_omits_verification_findings_when_clean(

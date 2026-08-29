@@ -125,10 +125,24 @@ The autonomous AI research path remains bounded even though the person-invoked d
 - [x] pin AI's grounded-completion + ResearchState v2 contract.
 
 ### WEB-GQR-2 - Coverage panel
-- show provider attempts/outcomes;
-- show candidate/acquisition totals separately from Evidence Record totals;
-- show truncation/budget exhaustion;
-- show freshness/research-run identity.
+- [x] show provider attempts/outcomes;
+- [x] show candidate/acquisition totals separately from Evidence Record totals;
+- [x] show truncation/budget exhaustion (grounded-completion/route skip and error reasons);
+- [x] show freshness/research-run identity (search run ID, timestamp, completeness).
+
+Implemented as a new `research_coverage_presentation.py` module (mirroring
+`discovery_presentation.py`'s presentation-only, Protocol-typed contract) and a
+"Research coverage" `<details>` section on `/ask`, reusing the existing
+`/discover` provider-badge markup/CSS so no new presentation format was
+invented. Reports the full acquisition/extraction funnel (discovered
+candidates -> acquisition routes persisted/reused -> drafted -> classified ->
+staged -> grounded -> promoted) as independent counts rather than one
+collapsed number, so BT-2's conversion-funnel loss stays visible. One field
+from AI's `AcquisitionRouteResult` (a route-level `skipped_reason`) exists on
+AI's current main but not yet on the commit Web has pinned here, so it was
+left out of this slice rather than bumping the pin as an unrelated change;
+picking it up is a small follow-up once Web's pin is next bumped for another
+reason.
 
 ### WEB-GQR-3 - Evidence provenance
 - distinguish `indexed_before_run` and `acquired_during_run` evidence at individual citation level;

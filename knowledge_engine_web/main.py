@@ -54,6 +54,7 @@ from knowledge_engine_web.discovery_orchestration import (
 from knowledge_engine_web.discovery_presentation import (
     build_discovery_presentation,
     provider_outcome_label,
+    provider_status_css_class,
 )
 from knowledge_engine_web.evidence_intelligence import (
     compute_claim_confidence,
@@ -91,6 +92,7 @@ from knowledge_engine_web.report_renderer import (
     render_unconfirmed_claims_report,
     render_whats_changed_report,
 )
+from knowledge_engine_web.research_coverage_presentation import build_research_coverage_panel
 from knowledge_engine_web.research_question import derive_research_question_id
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 from knowledge_engine_web.snapshot_metadata import read_snapshot_metadata
@@ -660,6 +662,7 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
                 "synthesis_unavailable_notice": None,
                 "copilot_result": None,
                 "copilot_error": None,
+                "coverage_panel": None,
             },
         )
 
@@ -702,6 +705,12 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
         except AIOrchestrationError as exc:
             copilot_error = str(exc)
 
+    coverage_panel = (
+        build_research_coverage_panel(copilot_result.discovery, copilot_result.grounded_completion)
+        if copilot_result is not None
+        else None
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="ask.html",
@@ -713,6 +722,7 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
             "synthesis_unavailable_notice": synthesis_unavailable_notice,
             "copilot_result": copilot_result,
             "copilot_error": copilot_error,
+            "coverage_panel": coverage_panel,
         },
     )
 
@@ -919,33 +929,22 @@ def discover_export_json(request: Request, q: str = "") -> Response:
     )
 
 
-_PROVIDER_CSS_CLASSES: dict[str, str] = {
-    "success": "is-ok",
-    "empty": "is-ok",
-    "rate_limited": "is-degraded",
-    "unavailable": "is-degraded",
-    "failed": "is-degraded",
-    "skipped": "is-skipped",
-    "disabled": "is-skipped",
-}
-
-
 def _provider_status_view(status: FederatedProviderStatus) -> dict[str, object]:
     """Map one raw `FederatedProviderStatus` onto a fixed, deterministic label.
 
     Never infers status from `result_count` (WEB-FRD-1) -- the label comes
     only from Core's own recorded `outcome`, including the `success` case
     with zero results ("searched, no matches" is not the same claim as
-    "unavailable"). The label text itself comes from
-    `discovery_presentation.provider_outcome_label`, the same mapping
-    `discovery_export.py` uses for the Markdown/JSON downloads, so the
-    on-screen label and the exported label can never silently drift apart.
+    "unavailable"). The label text and badge CSS class both come from
+    `discovery_presentation`'s shared mappings, the same ones
+    `discovery_export.py` and the WEB-GQR-2 Research Copilot coverage panel
+    use, so the on-screen label/badge can never silently drift apart.
     """
 
     return {
         "provider": status.provider,
         "label": provider_outcome_label(status.outcome),
-        "css_class": _PROVIDER_CSS_CLASSES.get(status.outcome, "is-skipped"),
+        "css_class": provider_status_css_class(status.outcome),
         "reason": status.reason,
         "result_count": status.result_count,
     }
