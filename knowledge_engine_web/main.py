@@ -26,6 +26,7 @@ from sqlalchemy import Engine, create_engine
 from knowledge_engine_web.ai_guardrails import AIAdmissionError
 from knowledge_engine_web.ai_orchestration import (
     AIOrchestrationError,
+    WebResearchResult,
     evaluate_ai_capability,
     result_reached_execution_limit,
     run_guarded_ai_orchestration,
@@ -627,6 +628,57 @@ def _compute_evidence_intelligence(
     }
 
 
+def _citation_entries_for_session_report(
+    engine: Engine, evidence_path: Path | None, copilot_result: WebResearchResult
+) -> list[dict[str, object]]:
+    """Pair each resolved citation with its provenance and Evidence Intelligence, if any.
+
+    WEB-GQR-3 (evidence provenance): a citation is `acquired_during_run`
+    exactly when GQR-4/GQR-5 grounded completion promoted that evidence
+    record during this session (`grounded_completion.promoted_record_ids`);
+    every other resolved citation was already in the corpus before this
+    question was asked (`indexed_before_run`). This is the same distinction
+    `ResearchStateResult.used_reretrieved_evidence` already draws at the
+    whole-answer level -- here it is per citation.
+
+    Evidence Intelligence is the exact same computation
+    `_evidence_entries_for_paper` already uses for stored evidence on this
+    page -- never a new number. It is `None` whenever no graph claim exists
+    for a cited evidence record, which the template renders as an honest
+    "confidence scoring unavailable" rather than inventing a score for a
+    relationship type or domain this project has not built an assessment
+    profile for (this project's only scored profile is
+    `CLINICAL_MEDICINE_V1`; see `evidence_intelligence.py`).
+    """
+
+    session_report = copilot_result.session_report
+    if session_report is None:
+        return []
+
+    grounded_completion = copilot_result.grounded_completion
+    promoted_record_ids = (
+        set(grounded_completion.promoted_record_ids) if grounded_completion is not None else set()
+    )
+
+    entries: list[dict[str, object]] = []
+    for claim in session_report.sourced_claims:
+        intelligence = None
+        if evidence_path is not None:
+            evidence = read_evidence_record(evidence_path, claim.evidence_record_id)
+            detail = read_claim_detail(engine, claim.evidence_record_id)
+            if evidence is not None and detail is not None:
+                intelligence = _compute_evidence_intelligence(
+                    evidence_path, evidence, detail.relationships
+                )
+        provenance = (
+            "acquired_during_run"
+            if claim.evidence_record_id in promoted_record_ids
+            else "indexed_before_run"
+        )
+        entries.append({"claim": claim, "intelligence": intelligence, "provenance": provenance})
+    return entries
+
+
 @app.get("/ask", response_class=HTMLResponse)
 def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse:
     """Answer a natural-language research question: ranked papers, plus per-claim confidence.
@@ -663,6 +715,7 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
                 "copilot_result": None,
                 "copilot_error": None,
                 "coverage_panel": None,
+                "citation_entries": [],
             },
         )
 
@@ -710,6 +763,11 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
         if copilot_result is not None
         else None
     )
+    citation_entries = (
+        _citation_entries_for_session_report(engine, evidence_path, copilot_result)
+        if copilot_result is not None
+        else []
+    )
 
     return templates.TemplateResponse(
         request=request,
@@ -723,6 +781,7 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
             "copilot_result": copilot_result,
             "copilot_error": copilot_error,
             "coverage_panel": coverage_panel,
+            "citation_entries": citation_entries,
         },
     )
 

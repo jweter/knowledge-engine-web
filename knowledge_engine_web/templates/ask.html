@@ -315,16 +315,41 @@
   {% else %}
   <p class="empty-state">No evidence with a stated claim was retrieved to narrate.</p>
   {% endif %}
-  {% if copilot_result.narrative_releaseable and copilot_result.session_report and copilot_result.session_report.sourced_claims %}
+  {% if copilot_result.narrative_releaseable and citation_entries %}
   <h4>Resolved citations</h4>
-  <ul>
-    {% for claim in copilot_result.session_report.sourced_claims %}
-    <li>
-      <strong>{{ claim.evidence_record_id }}</strong> -- {{ claim.paper_citation }}
-      {% if claim.paper_doi %}(DOI: {{ claim.paper_doi }}){% endif %}
-    </li>
+  <div class="ask-evidence">
+    {% for entry in citation_entries %}
+    {% set claim = entry.claim %}
+    {% set intelligence = entry.intelligence %}
+    <div class="ask-evidence-entry">
+      <p class="trust-label">
+        {% if entry.provenance == "acquired_during_run" %}Acquired during this research session
+        {% else %}Indexed before this research session{% endif %}
+      </p>
+      <p><a href="/claims/{{ claim.evidence_record_id }}"><strong>{{ claim.evidence_record_id }}</strong></a> -- {{ claim.paper_citation }}</p>
+      <p class="disclaimer">
+        {% if claim.paper_doi %}DOI: {{ claim.paper_doi }}{% endif %}
+        {% if claim.paper_source_url %} &middot; <a href="{{ claim.paper_source_url }}">Source</a>{% endif %}
+      </p>
+      {% if intelligence %}
+      <p class="trust-label computed">Computed, deterministic</p>
+      <div class="ask-evidence-metrics">
+        <div><strong>{{ intelligence.quality.score }}/100</strong><span>Evidence Quality</span></div>
+        <div>
+          <strong>{% if intelligence.consensus.score is not none %}{{ intelligence.consensus.score }}/100{% else %}not yet assessable{% endif %}</strong>
+          <span>Evidence Consensus{% if intelligence.consensus.score is not none %} ({{ intelligence.consensus.reliability }}){% endif %}</span>
+        </div>
+        <div>
+          <strong>{% if intelligence.confidence.score is not none %}{{ intelligence.confidence.score }}/100{% else %}not yet assessable{% endif %}</strong>
+          <span>Claim Confidence{% if intelligence.confidence.score is not none %} ({{ intelligence.confidence.reliability }}){% endif %}</span>
+        </div>
+      </div>
+      {% else %}
+      <p class="disclaimer">Confidence scoring unavailable: no relationship data is recorded for this evidence record.</p>
+      {% endif %}
+    </div>
     {% endfor %}
-  </ul>
+  </div>
   {% endif %}
   {% if copilot_result.trace and copilot_result.trace.events %}
   <details class="discovery-method-details">

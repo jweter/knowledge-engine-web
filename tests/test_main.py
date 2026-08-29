@@ -1599,6 +1599,7 @@ def _copilot_result() -> SimpleNamespace:
                     evidence_record_id="ev-1",
                     paper_citation="A Trial of Semaglutide. (2026).",
                     paper_doi="10.1000/example",
+                    paper_source_url="https://doi.org/10.1000/example",
                 ),
             )
         ),
@@ -1760,12 +1761,99 @@ def test_ask_synthesize_renders_the_research_copilot_result(
     assert "Verification:</strong>" in response.text
     assert "A Trial of Semaglutide. (2026)." in response.text
     assert "Unresolved close-gate criteria" not in response.text
+    assert "Resolved citations" in response.text
+    assert "Indexed before this research session" in response.text
+    assert 'href="/claims/ev-1"' in response.text
+    assert 'href="https://doi.org/10.1000/example">Source</a>' in response.text
     assert "Research path (session trace)" in response.text
     assert "<strong>retrieval</strong>" in response.text
     assert "<strong>synthesis</strong>" in response.text
     assert "via <code>llama3</code>" in response.text
     assert "2220ms (known-duration steps only)" in response.text
     assert "Evidence records traced to this run" in response.text
+
+
+def test_ask_citation_labels_evidence_promoted_this_session_as_acquired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WEB-GQR-3: a citation GQR-4/5 promoted this session is `acquired_during_run`."""
+
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    result = _copilot_result()
+    result.grounded_completion = SimpleNamespace(
+        attempted=True,
+        already_indexed_paper_ids=(),
+        acquisition_routes=(),
+        draft_item_count=1,
+        classified_item_count=1,
+        staged_record_ids=("ev-1",),
+        grounded_record_ids=("ev-1",),
+        promoted_record_ids=("ev-1",),
+        grounding_failures=(),
+        extraction_error=None,
+        reretrieval_error=None,
+        skipped_reason=None,
+    )
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: result,
+    )
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "Acquired during this research session" in response.text
+    assert "Indexed before this research session" not in response.text
+
+
+def test_ask_citation_confidence_unavailable_without_a_graph_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WEB-GQR-3: an evidence record outside the scored assessment profile is honestly
+    unavailable."""
+
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    result = _copilot_result()
+    result.session_report = SimpleNamespace(
+        sourced_claims=(
+            SimpleNamespace(
+                evidence_record_id="ev-unscored",
+                paper_citation="A Materials Science Paper. (2026).",
+                paper_doi=None,
+                paper_source_url=None,
+            ),
+        )
+    )
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+    monkeypatch.setattr(
+        main,
+        "run_guarded_ai_orchestration",
+        lambda settings, question, **kwargs: result,
+    )
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    assert "Indexed before this research session" in response.text
+    assert (
+        "Confidence scoring unavailable: no relationship data is recorded for this evidence "
+        "record." in response.text
+    )
+    citations_section = response.text.split("Resolved citations")[1].split("Research path")[0]
+    assert "Evidence Quality" not in citations_section
+    assert "ev-unscored" in citations_section
 
 
 def test_ask_copilot_result_marks_an_incomplete_workflow(
