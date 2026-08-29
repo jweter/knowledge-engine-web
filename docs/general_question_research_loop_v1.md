@@ -145,9 +145,25 @@ picking it up is a small follow-up once Web's pin is next bumped for another
 reason.
 
 ### WEB-GQR-3 - Evidence provenance
-- distinguish `indexed_before_run` and `acquired_during_run` evidence at individual citation level;
-- preserve source links/evidence detail navigation;
-- label unsupported domain confidence profiles as unavailable.
+- [x] distinguish `indexed_before_run` and `acquired_during_run` evidence at individual citation level;
+- [x] preserve source links/evidence detail navigation;
+- [x] label unsupported domain confidence profiles as unavailable.
+
+Implemented in `knowledge_engine_web/main.py`'s `_citation_entries_for_session_report()`,
+consumed by `ask.html`'s "Resolved citations" section. Provenance is derived from
+`GroundedCompletionResult.promoted_record_ids` (already computed by AI's GQR-4/5
+grounded completion, reaching Web unused) -- a citation is `acquired_during_run`
+exactly when its `evidence_record_id` was promoted during this session's grounded
+completion, `indexed_before_run` otherwise. Each citation now links to
+`/claims/{evidence_record_id}` (evidence detail navigation) and, when
+`SourcedClaim.paper_source_url` is set, a "Source" link -- that field already
+existed on AI's `SourcedClaim` (AI-O7) but reached no Web template before this.
+Confidence scoring reuses the exact same `_compute_evidence_intelligence()` this
+page already runs for stored evidence, keyed off whether a graph claim exists for
+that evidence record (this project's only scored assessment profile is
+`CLINICAL_MEDICINE_V1`); when none exists, the citation says so explicitly
+("Confidence scoring unavailable: no relationship data is recorded for this
+evidence record") rather than fabricating or omitting a number.
 
 ### WEB-GQR-4 - Long-running research UX
 Move the UI to a durable job/session polling model rather than extending HTTP request timeouts indefinitely. Session identity and live stage progress must survive refresh/redeploy where persistent storage is configured.
