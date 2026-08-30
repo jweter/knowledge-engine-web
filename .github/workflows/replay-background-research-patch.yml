@@ -1,0 +1,58 @@
+name: Replay background research source patch
+
+on:
+  push:
+    branches:
+      - agent/background-research-polling
+    paths:
+      - .github/workflows/replay-background-research-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/background-research-polling
+
+      - name: Replay source patch with deterministic Ruff fix
+        run: |
+          python -m pip install pyyaml
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import yaml
+
+          workflow = yaml.safe_load(
+              Path('.github/workflows/apply-background-research-polling.yml').read_text(encoding='utf-8')
+          )
+          run_steps = [
+              step['run']
+              for step in workflow['jobs']['patch']['steps']
+              if isinstance(step, dict) and 'run' in step
+          ]
+          # Apply production edits and add regression tests exactly as authored.
+          for script in run_steps[:2]:
+              subprocess.run(['bash', '-e', '-c', script], check=True)
+
+          quality = run_steps[2].replace(
+              'poetry run ruff format knowledge_engine_web tests\npoetry run ruff check knowledge_engine_web tests',
+              'poetry run ruff format knowledge_engine_web tests\n'
+              'poetry run ruff check --fix knowledge_engine_web tests\n'
+              'poetry run ruff format knowledge_engine_web tests\n'
+              'poetry run ruff check knowledge_engine_web tests',
+              1,
+          )
+          subprocess.run(['bash', '-e', '-c', quality], check=True)
+          PY
+
+      - name: Commit source only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add knowledge_engine_web tests pyproject.toml poetry.lock
+          git commit -m "Run Research mode in a background durable session"
+          git push origin HEAD:agent/background-research-polling
