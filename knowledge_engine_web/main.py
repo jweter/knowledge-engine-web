@@ -17,7 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from knowledge_engine_ai.ke_client import FederatedProviderStatus
@@ -92,6 +92,11 @@ from knowledge_engine_web.report_renderer import (
     render_relationship_candidates_report,
     render_unconfirmed_claims_report,
     render_whats_changed_report,
+)
+from knowledge_engine_web.research_background import (
+    BackgroundResearchBusy,
+    read_background_memory_state,
+    start_background_research,
 )
 from knowledge_engine_web.research_coverage_presentation import build_research_coverage_panel
 from knowledge_engine_web.research_question import derive_research_question_id
@@ -681,7 +686,13 @@ def _citation_entries_for_session_report(
 
 
 @app.get("/ask", response_class=HTMLResponse)
-def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse:
+def ask(
+    request: Request,
+    q: str = "",
+    synthesize: bool = False,
+    research: bool = False,
+    research_session: str = "",
+) -> HTMLResponse:
     """Answer a natural-language research question: ranked papers, plus per-claim confidence.
 
     Retrieval, via `core`'s own FTS5 index (`retrieval.py`), is always
@@ -717,6 +728,8 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
                 "copilot_error": None,
                 "coverage_panel": None,
                 "citation_entries": [],
+                "research_async_requested": False,
+                "research_session_id": None,
             },
         )
 
@@ -732,10 +745,12 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
         for paper in papers
     ]
 
-    synthesize_requested = synthesize and synthesis_available
+    research_async_requested = research and synthesis_available
+    research_session_id = research_session.strip() or None
+    synthesize_requested = synthesize and synthesis_available and not research_async_requested
     synthesis_unavailable_notice = (
         "Research Copilot is unavailable on this deployment. Retrieval results are shown below."
-        if synthesize and not synthesis_available
+        if (synthesize or research) and not synthesis_available
         else None
     )
     copilot_result = None
@@ -783,6 +798,42 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
             "copilot_error": copilot_error,
             "coverage_panel": coverage_panel,
             "citation_entries": citation_entries,
+            "research_async_requested": research_async_requested,
+            "research_session_id": research_session_id,
+        },
+    )
+
+
+@app.post("/ask/research/start", status_code=202)
+def ask_research_start(request: Request, payload: dict[str, str]) -> JSONResponse:
+    """Start one bounded Research Copilot run without holding the HTTP response open."""
+
+    settings = Settings()
+    capability = evaluate_ai_capability(settings)
+    if not capability.available:
+        raise HTTPException(
+            status_code=503,
+            detail=capability.visitor_message or "Research Copilot is unavailable.",
+        )
+    question = str(payload.get("question", "")).strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="question must be non-blank.")
+    client_key = request.client.host if request.client is not None else "unknown"
+    try:
+        started = start_background_research(
+            settings,
+            question,
+            client_key=client_key,
+        )
+    except BackgroundResearchBusy as exc:
+        raise HTTPException(status_code=429, detail=exc.visitor_message) from exc
+    return JSONResponse(
+        status_code=202,
+        content={
+            "session_id": started.session_id,
+            "question": question,
+            "status_url": started.status_url,
+            "status": "starting",
         },
     )
 
@@ -811,17 +862,43 @@ def ask_session_status(session_id: str) -> Response:
     settings = Settings()
     view = read_session_status(settings.session_db_path, session_id)
     if view is None:
-        raise HTTPException(status_code=404, detail="No research session with that ID.")
+        memory_state = read_background_memory_state(session_id)
+        if memory_state is None:
+            raise HTTPException(status_code=404, detail="No research session with that ID.")
+        payload: dict[str, object] = {
+            "session_id": memory_state.session_id,
+            "question": None,
+            "status": memory_state.status,
+            "last_completed_stage": None,
+            "terminal": memory_state.terminal,
+            "execution_finished": memory_state.terminal,
+            "created_at": None,
+            "updated_at": None,
+            "event_count": 0,
+            "latest_workflow_node": None,
+            "recorded_duration_ms": 0,
+            "released_narrative": None,
+            "released_source_ids": [],
+            "released_source_dois": [],
+            "visitor_message": memory_state.visitor_message,
+        }
+        return Response(content=json.dumps(payload, indent=2) + "\n", media_type="application/json")
     payload = {
         "session_id": view.session_id,
         "question": view.question,
         "status": view.status,
         "last_completed_stage": view.last_completed_stage,
         "terminal": view.terminal,
+        "execution_finished": view.execution_finished,
         "created_at": view.created_at,
         "updated_at": view.updated_at,
         "event_count": view.event_count,
         "latest_workflow_node": view.latest_workflow_node,
+        "recorded_duration_ms": view.recorded_duration_ms,
+        "released_narrative": view.released_narrative,
+        "released_source_ids": list(view.released_source_ids),
+        "released_source_dois": list(view.released_source_dois),
+        "visitor_message": None,
     }
     return Response(content=json.dumps(payload, indent=2) + "\n", media_type="application/json")
 

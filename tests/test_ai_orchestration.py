@@ -351,9 +351,11 @@ def test_guarded_orchestration_passes_deadline_and_attaches_ai_owned_state(
         question: str,
         *,
         timeout_seconds: float | None = None,
+        session_id: str | None = None,
     ) -> object:
         captured["question"] = question
         captured["timeout_seconds"] = timeout_seconds
+        captured["session_id"] = session_id
         return expected
 
     def fake_derive(result: object) -> ResearchStateResult:
@@ -373,7 +375,11 @@ def test_guarded_orchestration_passes_deadline_and_attaches_ai_owned_state(
     assert result.session_id == "session-123"
     assert result.research_state is expected_state
     assert result.research_state.state is ResearchState.RESEARCH_REQUIRED
-    assert captured == {"question": "question", "timeout_seconds": 42.0}
+    assert captured == {
+        "question": "question",
+        "timeout_seconds": 42.0,
+        "session_id": None,
+    }
 
 
 def test_result_detects_a_durable_workflow_timeout() -> None:

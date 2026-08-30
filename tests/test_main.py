@@ -2349,3 +2349,106 @@ def test_ask_session_status_route_returns_durably_recorded_progress(
     )
     assert payload["latest_workflow_node"] == "federated_discovery"
     assert payload["event_count"] == 1
+
+
+def test_background_research_start_returns_polling_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        main,
+        "evaluate_ai_capability",
+        lambda settings: AICapability(available=True),
+    )
+    monkeypatch.setattr(
+        main,
+        "start_background_research",
+        lambda settings, question, *, client_key: SimpleNamespace(
+            session_id="session-bg-1",
+            status_url="/ask/session/session-bg-1",
+        ),
+    )
+
+    response = TestClient(app).post(
+        "/ask/research/start",
+        json={"question": "Does creatine help?"},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["session_id"] == "session-bg-1"
+    assert response.json()["status_url"] == "/ask/session/session-bg-1"
+
+
+def test_background_research_start_rejects_capacity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from knowledge_engine_web.research_background import BackgroundResearchBusy
+
+    monkeypatch.setattr(
+        main,
+        "evaluate_ai_capability",
+        lambda settings: AICapability(available=True),
+    )
+
+    def busy(*args: object, **kwargs: object) -> object:
+        raise BackgroundResearchBusy("busy")
+
+    monkeypatch.setattr(main, "start_background_research", busy)
+
+    response = TestClient(app).post(
+        "/ask/research/start",
+        json={"question": "Does creatine help?"},
+    )
+
+    assert response.status_code == 429
+    assert "capacity" in response.json()["detail"].lower()
+
+
+def test_session_poll_uses_background_handoff_before_durable_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main, "read_session_status", lambda path, session_id: None)
+    monkeypatch.setattr(
+        main,
+        "read_background_memory_state",
+        lambda session_id: SimpleNamespace(
+            session_id=session_id,
+            status="starting",
+            terminal=False,
+            visitor_message=None,
+        ),
+    )
+
+    response = TestClient(app).get("/ask/session/session-starting")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "starting"
+    assert payload["execution_finished"] is False
+    assert payload["released_narrative"] is None
+
+
+def test_async_research_page_contains_resume_polling_hooks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setattr(
+        main,
+        "evaluate_ai_capability",
+        lambda settings: AICapability(available=True),
+    )
+
+    response = TestClient(app).get(
+        "/ask",
+        params={
+            "q": "Does creatine help?",
+            "research": "1",
+            "research_session": "session-resume-1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert 'id="research-live-status"' in response.text
+    assert 'data-session-id="session-resume-1"' in response.text
+    assert "/ask/research/start" in response.text
+    assert "Last completed step" in response.text

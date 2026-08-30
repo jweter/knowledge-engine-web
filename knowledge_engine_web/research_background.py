@@ -164,8 +164,7 @@ def _prune_completed_jobs(now: float) -> None:
     expired = tuple(
         session_id
         for session_id, job in _JOBS.items()
-        if job.future.done()
-        and now - job.created_monotonic >= _COMPLETED_JOB_RETENTION_SECONDS
+        if job.future.done() and now - job.created_monotonic >= _COMPLETED_JOB_RETENTION_SECONDS
     )
     for session_id in expired:
         _JOBS.pop(session_id, None)

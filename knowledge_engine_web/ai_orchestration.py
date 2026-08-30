@@ -251,6 +251,7 @@ def run_ai_orchestration(
     question: str,
     *,
     timeout_seconds: float | None = None,
+    session_id: str | None = None,
 ) -> ResearchQuestionResult:
     """Run one complete durable Research Copilot session.
 
@@ -289,6 +290,7 @@ def run_ai_orchestration(
             grounded_completion_policy=_build_grounded_completion_policy(settings),
             ke_executable=executable,
             timeout_seconds=timeout_seconds,
+            session_id=session_id,
         )
     except Exception as exc:
         # This integration crosses SQLite, subprocess, writable corpus,
@@ -310,6 +312,7 @@ def run_guarded_ai_orchestration(
     *,
     client_key: str,
     guard: AIRequestGuard | None = None,
+    session_id: str | None = None,
 ) -> WebResearchResult:
     """Admit one bounded request and attach AI's deterministic GQR state."""
 
@@ -324,6 +327,7 @@ def run_guarded_ai_orchestration(
             settings,
             question,
             timeout_seconds=settings.ai_request_timeout_seconds,
+            session_id=session_id,
         )
         return WebResearchResult(
             research=research,

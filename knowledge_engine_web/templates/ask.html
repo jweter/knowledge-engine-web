@@ -21,7 +21,7 @@
   />
   {% if synthesis_available %}
   <label class="ask-synthesize-toggle">
-    <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested %}checked{% endif %} />
+    <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested or research_async_requested %}checked{% endif %} />
     Also run Research Copilot — Research mode: broaden thin coverage, ground new evidence, and verify the answer
   </label>
   {% else %}
@@ -40,6 +40,36 @@
 
 {% if synthesis_unavailable_notice %}
 <p class="empty-state">{{ synthesis_unavailable_notice }}</p>
+{% endif %}
+
+{% if research_async_requested %}
+<section
+  class="ask-result-card ask-synthesis"
+  id="research-live-status"
+  data-question="{{ question }}"
+  data-session-id="{{ research_session_id or '' }}"
+>
+  <p class="trust-label computed">Research mode — live durable session</p>
+  <h3>Research progress</h3>
+  <p class="disclaimer">
+    The indexed answer below is available immediately. Research continues separately and this
+    page polls the durable session store for completed stages. “Last completed step” never
+    pretends to be the currently executing step.
+  </p>
+  <p>
+    <strong>Session:</strong> <code id="research-session-id">{{ research_session_id or 'starting…' }}</code><br />
+    <strong>Status:</strong> <span id="research-session-status">starting</span><br />
+    <strong>Last completed step:</strong> <span id="research-session-stage">none yet</span><br />
+    <strong>Completed events:</strong> <span id="research-session-events">0</span>
+  </p>
+  <p class="empty-state" id="research-session-message" hidden></p>
+  <div id="research-final-answer" hidden>
+    <p class="trust-label computed">Grounded researched answer</p>
+    <h3>Final Research Copilot answer</h3>
+    <p id="research-final-narrative"></p>
+    <div id="research-final-citations" class="ask-evidence"></div>
+  </div>
+</section>
 {% endif %}
 
 {% if results is not none %}
@@ -438,15 +468,122 @@
     const form = document.getElementById("ask-form");
     const submit = document.getElementById("ask-submit");
     const status = document.getElementById("ask-running-status");
-    if (!form || !submit || !status) return;
-    form.addEventListener("submit", () => {
-      const copilot = form.querySelector('input[name="synthesize"]:checked');
-      if (!copilot) return;
-      submit.disabled = true;
-      submit.setAttribute("aria-busy", "true");
-      submit.textContent = "Working";
-      status.hidden = false;
-    });
+    if (form && submit && status) {
+      form.addEventListener("submit", (event) => {
+        const copilot = form.querySelector('input[name="synthesize"]:checked');
+        if (!copilot) return;
+        event.preventDefault();
+        const question = form.querySelector('input[name="q"]')?.value?.trim() || "";
+        if (!question) return;
+        submit.disabled = true;
+        submit.setAttribute("aria-busy", "true");
+        submit.textContent = "Starting";
+        status.hidden = false;
+        const params = new URLSearchParams({q: question, research: "1"});
+        window.location.assign(`/ask?${params.toString()}`);
+      });
+    }
+
+    const live = document.getElementById("research-live-status");
+    if (!live) return;
+    const question = live.dataset.question || "";
+    let sessionId = live.dataset.sessionId || "";
+    const sessionNode = document.getElementById("research-session-id");
+    const statusNode = document.getElementById("research-session-status");
+    const stageNode = document.getElementById("research-session-stage");
+    const eventsNode = document.getElementById("research-session-events");
+    const messageNode = document.getElementById("research-session-message");
+    const finalNode = document.getElementById("research-final-answer");
+    const narrativeNode = document.getElementById("research-final-narrative");
+    const citationsNode = document.getElementById("research-final-citations");
+
+    const showMessage = (message) => {
+      if (!messageNode) return;
+      messageNode.textContent = message;
+      messageNode.hidden = false;
+    };
+
+    const renderCitations = (ids, dois) => {
+      if (!citationsNode) return;
+      citationsNode.replaceChildren();
+      ids.forEach((id, index) => {
+        const paragraph = document.createElement("p");
+        const link = document.createElement("a");
+        link.href = `/claims/${encodeURIComponent(id)}`;
+        link.textContent = id;
+        paragraph.appendChild(link);
+        if (dois[index]) paragraph.append(` — DOI ${dois[index]}`);
+        citationsNode.appendChild(paragraph);
+      });
+    };
+
+    const poll = async () => {
+      if (!sessionId) return;
+      try {
+        const response = await fetch(`/ask/session/${encodeURIComponent(sessionId)}`, {
+          headers: {Accept: "application/json"},
+        });
+        if (response.status === 404) {
+          if (stageNode) stageNode.textContent = "Session is starting";
+          window.setTimeout(poll, 1500);
+          return;
+        }
+        if (!response.ok) throw new Error("status request failed");
+        const payload = await response.json();
+        if (statusNode) statusNode.textContent = payload.status || "unknown";
+        if (stageNode) stageNode.textContent = payload.last_completed_stage || "none yet";
+        if (eventsNode) eventsNode.textContent = String(payload.event_count ?? 0);
+
+        if (!payload.execution_finished) {
+          window.setTimeout(poll, 1500);
+          return;
+        }
+
+        if (payload.status === "completed" && payload.released_narrative) {
+          if (narrativeNode) narrativeNode.textContent = payload.released_narrative;
+          renderCitations(payload.released_source_ids || [], payload.released_source_dois || []);
+          if (finalNode) finalNode.hidden = false;
+          return;
+        }
+        showMessage(
+          payload.visitor_message ||
+          `Research execution finished with status “${payload.status}”; no releaseable narrative was exposed.`
+        );
+      } catch (_error) {
+        showMessage("Research status is temporarily unavailable. Retrying…");
+        window.setTimeout(poll, 2500);
+      }
+    };
+
+    const startResearch = async () => {
+      if (!sessionId) {
+        try {
+          const response = await fetch("/ask/research/start", {
+            method: "POST",
+            headers: {"Content-Type": "application/json", Accept: "application/json"},
+            body: JSON.stringify({question}),
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            showMessage(payload.detail || "Research mode could not start.");
+            return;
+          }
+          sessionId = payload.session_id;
+          live.dataset.sessionId = sessionId;
+          if (sessionNode) sessionNode.textContent = sessionId;
+          const url = new URL(window.location.href);
+          url.searchParams.set("research", "1");
+          url.searchParams.set("research_session", sessionId);
+          window.history.replaceState({}, "", url);
+        } catch (_error) {
+          showMessage("Research mode could not start.");
+          return;
+        }
+      }
+      await poll();
+    };
+
+    void startResearch();
   })();
 </script>
 {% endblock %}

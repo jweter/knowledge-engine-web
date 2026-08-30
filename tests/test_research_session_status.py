@@ -169,3 +169,100 @@ def test_corrupt_store_file_is_none_not_a_raised_exception(tmp_path: Path) -> No
     db_path.write_bytes(b"not a sqlite database")
 
     assert read_session_status(str(db_path), "any-session") is None
+
+
+def test_completed_session_releases_persisted_synthesis_and_citations(tmp_path: Path) -> None:
+    db_path = tmp_path / "sessions.sqlite3"
+    connection = new_connection(str(db_path))
+    try:
+        repository = SessionRepository(connection)
+        repository.create_session(
+            ResearchSession(
+                schema_version=1,
+                session_id="session-release",
+                created_at="2026-08-30T00:00:00+00:00",
+                updated_at="2026-08-30T00:00:00+00:00",
+                user_question_original="Does creatine help?",
+                status=SessionStatus.RUNNING,
+            )
+        )
+        repository.append_event(
+            ResearchEvent(
+                event_id="synthesis-release",
+                session_id="session-release",
+                timestamp="2026-08-30T00:00:01+00:00",
+                workflow_node="synthesis",
+                executor_type="local_llm",
+                validation_status="succeeded",
+                notes="Creatine improves repeated high-intensity performance [ev-1].",
+                duration_ms=125,
+                source_ids=("ev-1",),
+                source_dois=("10.1000/creatine",),
+                parent_event_ids=(),
+            )
+        )
+        repository.update_session_status(
+            "session-release",
+            SessionStatus.COMPLETED,
+            updated_at="2026-08-30T00:00:02+00:00",
+        )
+    finally:
+        connection.close()
+
+    view = read_session_status(str(db_path), "session-release")
+
+    assert view is not None
+    assert view.execution_finished is True
+    assert view.released_narrative == (
+        "Creatine improves repeated high-intensity performance [ev-1]."
+    )
+    assert view.released_source_ids == ("ev-1",)
+    assert view.released_source_dois == ("10.1000/creatine",)
+    assert view.recorded_duration_ms == 125
+
+
+def test_blocked_session_never_exposes_synthesis_draft(tmp_path: Path) -> None:
+    db_path = tmp_path / "sessions.sqlite3"
+    connection = new_connection(str(db_path))
+    try:
+        repository = SessionRepository(connection)
+        repository.create_session(
+            ResearchSession(
+                schema_version=1,
+                session_id="session-blocked",
+                created_at="2026-08-30T00:00:00+00:00",
+                updated_at="2026-08-30T00:00:00+00:00",
+                user_question_original="Question?",
+                status=SessionStatus.RUNNING,
+            )
+        )
+        repository.append_event(
+            ResearchEvent(
+                event_id="synthesis-blocked",
+                session_id="session-blocked",
+                timestamp="2026-08-30T00:00:01+00:00",
+                workflow_node="synthesis",
+                executor_type="local_llm",
+                validation_status="succeeded",
+                notes="Draft that failed the close gate [ev-1].",
+                source_ids=("ev-1",),
+                source_dois=("10.1000/draft",),
+                parent_event_ids=(),
+            )
+        )
+        repository.update_session_status(
+            "session-blocked",
+            SessionStatus.BLOCKED,
+            updated_at="2026-08-30T00:00:02+00:00",
+        )
+    finally:
+        connection.close()
+
+    view = read_session_status(str(db_path), "session-blocked")
+
+    assert view is not None
+    assert view.status == "blocked"
+    assert view.terminal is False
+    assert view.execution_finished is True
+    assert view.released_narrative is None
+    assert view.released_source_ids == ()
