@@ -168,6 +168,34 @@ evidence record") rather than fabricating or omitting a number.
 ### WEB-GQR-4 - Long-running research UX
 Move the UI to a durable job/session polling model rather than extending HTTP request timeouts indefinitely. Session identity and live stage progress must survive refresh/redeploy where persistent storage is configured.
 
+**First slice landed (this session):** the durable storage this milestone needs already
+existed and did not need to be rebuilt. `knowledge-engine-ai`'s `SessionRepository`
+(used by `ai_orchestration.run_ai_orchestration` since AI-O13/AI-O14) already persists a
+`ResearchSession` header plus one `ResearchEvent` row per completed workflow step to
+`Settings.session_db_path`, committing each row as the still-synchronous
+`/ask?synthesize=1` request executes -- a real SQLite file, already covered by the
+existing `session_storage_mode`/`session_persistent_root` local/persistent split that
+lets it survive a Render redeploy. This session added a strictly read-only projection of
+that same store (`knowledge_engine_web/research_session_status.py`, opened `mode=ro`) and
+a new `GET /ask/session/{session_id}` route that returns a small JSON payload (session id,
+question, status, a human-readable `current_stage` derived from the latest durably
+recorded `workflow_node` using the exact stage vocabulary in "Recommended visitor-facing
+progression" above, `terminal`, timestamps, and event count). Unknown session id, or no
+session store yet, both 404. Live-verified against a real `uvicorn` process, not just
+unit tests: seeded a session through the real `SessionRepository`, read it back over HTTP
+from that running process, then killed the process and started an entirely new one
+against the same on-disk file to confirm the state survives a process restart the way a
+redeploy would see it.
+
+**What this slice does not do yet:** `/ask`'s existing synchronous request/response shape
+is completely unchanged -- the whole research run still happens inline within one HTTP
+request, so there is nothing to poll *during* that request yet, only afterward (or after a
+redeploy, for a session recorded before it). No frontend JavaScript polls this endpoint.
+No background-task execution model exists; `/ask?synthesize=1` still blocks until the run
+finishes. The `researching` state's live, event-by-event streaming described above is
+still not implemented. This slice is the durable-identity/read-side foundation those later
+slices need, not the complete durable job/session polling model.
+
 ### WEB-GQR-5 - Failure drills
 Test and render:
 - provider rate limit;

@@ -2285,3 +2285,64 @@ def test_dashboard_page_renders_aggregate_evidence_intelligence_when_configured(
     assert "Claims with evidence-record content configured: 1" in response.text
     assert "Evidence Quality Distribution" in response.text
     assert "Claim Confidence Reliability" in response.text
+
+
+def test_ask_session_status_route_404s_for_unknown_session_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KE_WEB_SESSION_DB_PATH", str(tmp_path / "sessions.sqlite3"))
+
+    response = TestClient(app).get("/ask/session/no-such-session")
+
+    assert response.status_code == 404
+
+
+def test_ask_session_status_route_returns_durably_recorded_progress(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from knowledge_engine_ai.sessions.models import ResearchEvent, ResearchSession, SessionStatus
+    from knowledge_engine_ai.sessions.repository import SessionRepository, new_connection
+
+    db_path = tmp_path / "sessions.sqlite3"
+    connection = new_connection(str(db_path))
+    try:
+        repository = SessionRepository(connection)
+        repository.create_session(
+            ResearchSession(
+                schema_version=1,
+                session_id="session-poll-me",
+                created_at="2026-08-30T00:00:00+00:00",
+                updated_at="2026-08-30T00:00:01+00:00",
+                user_question_original="Does creatine improve maximal strength?",
+                status=SessionStatus.RUNNING,
+            )
+        )
+        repository.append_event(
+            ResearchEvent(
+                event_id="event-1",
+                session_id="session-poll-me",
+                timestamp="2026-08-30T00:00:01+00:00",
+                workflow_node="federated_discovery",
+                executor_type="deterministic_tool",
+                validation_status="succeeded",
+                source_ids=(),
+                source_dois=(),
+                parent_event_ids=(),
+            )
+        )
+    finally:
+        connection.close()
+    monkeypatch.setenv("KE_WEB_SESSION_DB_PATH", str(db_path))
+
+    response = TestClient(app).get("/ask/session/session-poll-me")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    payload = response.json()
+    assert payload["session_id"] == "session-poll-me"
+    assert payload["question"] == "Does creatine improve maximal strength?"
+    assert payload["status"] == "running"
+    assert payload["terminal"] is False
+    assert payload["current_stage"] == "Indexed evidence is thin; expanding the literature search"
+    assert payload["latest_workflow_node"] == "federated_discovery"
+    assert payload["event_count"] == 1

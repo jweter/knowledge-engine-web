@@ -95,6 +95,7 @@ from knowledge_engine_web.report_renderer import (
 )
 from knowledge_engine_web.research_coverage_presentation import build_research_coverage_panel
 from knowledge_engine_web.research_question import derive_research_question_id
+from knowledge_engine_web.research_session_status import read_session_status
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 from knowledge_engine_web.snapshot_metadata import read_snapshot_metadata
 from knowledge_engine_web.whats_changed import build_whats_changed_summary
@@ -784,6 +785,39 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
             "citation_entries": citation_entries,
         },
     )
+
+
+@app.get("/ask/session/{session_id}")
+def ask_session_status(session_id: str) -> Response:
+    """Poll one Research Copilot session's durably recorded progress (WEB-GQR-4).
+
+    Read-only projection of knowledge-engine-ai's own `SessionRepository`
+    store at `Settings.session_db_path` (`research_session_status.py`) -- the
+    durable session identity and stage-progress persistence WEB-GQR-4 asks for
+    already exists via that store, including the local/persistent split that
+    lets it survive a Render redeploy. This route is the first slice that lets
+    a caller look a session up independently of the still-synchronous
+    `/ask?synthesize=1` request that created it; `/ask`'s own response is
+    unchanged by this route's existence. No frontend polling loop consumes
+    this yet.
+    """
+
+    settings = Settings()
+    view = read_session_status(settings.session_db_path, session_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail="No research session with that ID.")
+    payload = {
+        "session_id": view.session_id,
+        "question": view.question,
+        "status": view.status,
+        "current_stage": view.current_stage,
+        "terminal": view.terminal,
+        "created_at": view.created_at,
+        "updated_at": view.updated_at,
+        "event_count": view.event_count,
+        "latest_workflow_node": view.latest_workflow_node,
+    }
+    return Response(content=json.dumps(payload, indent=2) + "\n", media_type="application/json")
 
 
 @app.get("/discover", response_class=HTMLResponse)
