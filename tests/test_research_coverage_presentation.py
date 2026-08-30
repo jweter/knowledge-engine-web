@@ -43,6 +43,7 @@ class _AcquisitionRoute:
     persisted_count: int
     reused_count: int
     error: str | None
+    skipped_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,7 @@ def test_acquisition_and_extraction_funnel_counts_stay_independent_of_evidence_c
                 persisted_count=0,
                 reused_count=0,
                 error=None,
+                skipped_reason="max_acquisition_routes budget reached",
             ),
         ),
         draft_item_count=5,
@@ -175,6 +177,8 @@ def test_acquisition_and_extraction_funnel_counts_stay_independent_of_evidence_c
     assert panel.acquisition_routes[0].candidate_count == 3
     assert panel.acquisition_routes[0].persisted_count == 2
     assert panel.acquisition_routes[1].attempted is False
+    assert panel.acquisition_routes[1].skipped_reason == "max_acquisition_routes budget reached"
+    assert panel.acquisition_routes[0].skipped_reason is None
     # The funnel is deliberately reported at every stage, not collapsed to one number.
     assert panel.draft_item_count == 5
     assert panel.classified_item_count == 4

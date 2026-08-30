@@ -24,7 +24,7 @@ sqlalchemy = "^2.0.31"
 # import. The pinned AI revision includes GQR grounded completion plus
 # ResearchState v2 so Web never re-derives whether an answer actually used
 # newly acquired, grounded, re-retrieved evidence.
-knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "6fa7db516cac52afae1e496b3998ce0e28384025" }
+knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "aab9b222a45781d7ce232d1fbe4b5cfef99d9220" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"
