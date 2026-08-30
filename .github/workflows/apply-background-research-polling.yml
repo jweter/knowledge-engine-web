@@ -1,0 +1,435 @@
+name: Apply background research polling patch
+
+on:
+  push:
+    branches:
+      - agent/background-research-polling
+    paths:
+      - .github/workflows/apply-background-research-polling.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/background-research-polling
+
+      - name: Patch Web orchestration and Ask polling UX
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # ---- ai_orchestration.py: pass the caller-owned durable identity into AI.
+          path = Path("knowledge_engine_web/ai_orchestration.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''def run_ai_orchestration(\n    settings: Settings,\n    question: str,\n    *,\n    timeout_seconds: float | None = None,\n) -> ResearchQuestionResult:\n'''
+          new = '''def run_ai_orchestration(\n    settings: Settings,\n    question: str,\n    *,\n    timeout_seconds: float | None = None,\n    session_id: str | None = None,\n) -> ResearchQuestionResult:\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"run_ai signature anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+          old = '''            grounded_completion_policy=_build_grounded_completion_policy(settings),\n            ke_executable=executable,\n            timeout_seconds=timeout_seconds,\n        )\n'''
+          new = '''            grounded_completion_policy=_build_grounded_completion_policy(settings),\n            ke_executable=executable,\n            timeout_seconds=timeout_seconds,\n            session_id=session_id,\n        )\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"run_research call anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+          old = '''def run_guarded_ai_orchestration(\n    settings: Settings,\n    question: str,\n    *,\n    client_key: str,\n    guard: AIRequestGuard | None = None,\n) -> WebResearchResult:\n'''
+          new = '''def run_guarded_ai_orchestration(\n    settings: Settings,\n    question: str,\n    *,\n    client_key: str,\n    guard: AIRequestGuard | None = None,\n    session_id: str | None = None,\n) -> WebResearchResult:\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"guarded signature anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+          old = '''        research = run_ai_orchestration(\n            settings,\n            question,\n            timeout_seconds=settings.ai_request_timeout_seconds,\n        )\n'''
+          new = '''        research = run_ai_orchestration(\n            settings,\n            question,\n            timeout_seconds=settings.ai_request_timeout_seconds,\n            session_id=session_id,\n        )\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"guarded call anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+
+          # ---- main.py: async start API + durable polling result + fast Ask page mode.
+          path = Path("knowledge_engine_web/main.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''from fastapi.responses import HTMLResponse\n'''
+          new = '''from fastapi.responses import HTMLResponse, JSONResponse\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"response import anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+          old = '''from knowledge_engine_web.research_question import derive_research_question_id\nfrom knowledge_engine_web.research_session_status import read_session_status\n'''
+          new = '''from knowledge_engine_web.research_background import (\n    BackgroundResearchBusy,\n    read_background_memory_state,\n    start_background_research,\n)\nfrom knowledge_engine_web.research_question import derive_research_question_id\nfrom knowledge_engine_web.research_session_status import read_session_status\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"research imports anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+
+          old = '''@app.get("/ask", response_class=HTMLResponse)\ndef ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse:\n'''
+          new = '''@app.get("/ask", response_class=HTMLResponse)\ndef ask(\n    request: Request,\n    q: str = "",\n    synthesize: bool = False,\n    research: bool = False,\n    research_session: str = "",\n) -> HTMLResponse:\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"ask signature anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+
+          old = '''                "coverage_panel": None,\n                "citation_entries": [],\n            },\n'''
+          new = '''                "coverage_panel": None,\n                "citation_entries": [],\n                "research_async_requested": False,\n                "research_session_id": None,\n            },\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"empty ask context anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+
+          old = '''    synthesize_requested = synthesize and synthesis_available\n    synthesis_unavailable_notice = (\n        "Research Copilot is unavailable on this deployment. Retrieval results are shown below."\n        if synthesize and not synthesis_available\n        else None\n    )\n'''
+          new = '''    research_async_requested = research and synthesis_available\n    research_session_id = research_session.strip() or None\n    synthesize_requested = synthesize and synthesis_available and not research_async_requested\n    synthesis_unavailable_notice = (\n        "Research Copilot is unavailable on this deployment. Retrieval results are shown below."\n        if (synthesize or research) and not synthesis_available\n        else None\n    )\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"ask mode anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+
+          old = '''            "coverage_panel": coverage_panel,\n            "citation_entries": citation_entries,\n        },\n    )\n\n\n@app.get("/ask/session/{session_id}")\n'''
+          new = '''            "coverage_panel": coverage_panel,\n            "citation_entries": citation_entries,\n            "research_async_requested": research_async_requested,\n            "research_session_id": research_session_id,\n        },\n    )\n\n\n@app.post("/ask/research/start", status_code=202)\ndef ask_research_start(request: Request, payload: dict[str, str]) -> JSONResponse:\n    """Start one bounded Research Copilot run without holding the HTTP response open."""\n\n    settings = Settings()\n    capability = evaluate_ai_capability(settings)\n    if not capability.available:\n        raise HTTPException(\n            status_code=503,\n            detail=capability.visitor_message or "Research Copilot is unavailable.",\n        )\n    question = str(payload.get("question", "")).strip()\n    if not question:\n        raise HTTPException(status_code=422, detail="question must be non-blank.")\n    client_key = request.client.host if request.client is not None else "unknown"\n    try:\n        started = start_background_research(\n            settings,\n            question,\n            client_key=client_key,\n        )\n    except BackgroundResearchBusy as exc:\n        raise HTTPException(status_code=429, detail=exc.visitor_message) from exc\n    return JSONResponse(\n        status_code=202,\n        content={\n            "session_id": started.session_id,\n            "question": question,\n            "status_url": started.status_url,\n            "status": "starting",\n        },\n    )\n\n\n@app.get("/ask/session/{session_id}")\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"start endpoint insertion anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+
+          old = '''    view = read_session_status(settings.session_db_path, session_id)\n    if view is None:\n        raise HTTPException(status_code=404, detail="No research session with that ID.")\n    payload = {\n        "session_id": view.session_id,\n        "question": view.question,\n        "status": view.status,\n        "last_completed_stage": view.last_completed_stage,\n        "terminal": view.terminal,\n        "created_at": view.created_at,\n        "updated_at": view.updated_at,\n        "event_count": view.event_count,\n        "latest_workflow_node": view.latest_workflow_node,\n    }\n'''
+          new = '''    view = read_session_status(settings.session_db_path, session_id)\n    if view is None:\n        memory_state = read_background_memory_state(session_id)\n        if memory_state is None:\n            raise HTTPException(status_code=404, detail="No research session with that ID.")\n        payload = {\n            "session_id": memory_state.session_id,\n            "question": None,\n            "status": memory_state.status,\n            "last_completed_stage": None,\n            "terminal": memory_state.terminal,\n            "execution_finished": memory_state.terminal,\n            "created_at": None,\n            "updated_at": None,\n            "event_count": 0,\n            "latest_workflow_node": None,\n            "recorded_duration_ms": 0,\n            "released_narrative": None,\n            "released_source_ids": [],\n            "released_source_dois": [],\n            "visitor_message": memory_state.visitor_message,\n        }\n        return Response(\n            content=json.dumps(payload, indent=2) + "\\n", media_type="application/json"\n        )\n    payload = {\n        "session_id": view.session_id,\n        "question": view.question,\n        "status": view.status,\n        "last_completed_stage": view.last_completed_stage,\n        "terminal": view.terminal,\n        "execution_finished": view.execution_finished,\n        "created_at": view.created_at,\n        "updated_at": view.updated_at,\n        "event_count": view.event_count,\n        "latest_workflow_node": view.latest_workflow_node,\n        "recorded_duration_ms": view.recorded_duration_ms,\n        "released_narrative": view.released_narrative,\n        "released_source_ids": list(view.released_source_ids),\n        "released_source_dois": list(view.released_source_dois),\n        "visitor_message": None,\n    }\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"poll payload anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+
+          # ---- ask.html: JS-enhanced async mode; no-JS synchronous fallback stays intact.
+          path = Path("knowledge_engine_web/templates/ask.html")
+          text = path.read_text(encoding="utf-8")
+          old = '''    <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested %}checked{% endif %} />\n'''
+          new = '''    <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested or research_async_requested %}checked{% endif %} />\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"checkbox anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+
+          old = '''{% if synthesis_unavailable_notice %}\n<p class="empty-state">{{ synthesis_unavailable_notice }}</p>\n{% endif %}\n\n{% if results is not none %}\n'''
+          new = '''{% if synthesis_unavailable_notice %}\n<p class="empty-state">{{ synthesis_unavailable_notice }}</p>\n{% endif %}\n\n{% if research_async_requested %}\n<section\n  class="ask-result-card ask-synthesis"\n  id="research-live-status"\n  data-question="{{ question }}"\n  data-session-id="{{ research_session_id or '' }}"\n>\n  <p class="trust-label computed">Research mode — live durable session</p>\n  <h3>Research progress</h3>\n  <p class="disclaimer">\n    The indexed answer below is available immediately. Research continues separately and this\n    page polls the durable session store for completed stages. “Last completed step” never\n    pretends to be the currently executing step.\n  </p>\n  <p>\n    <strong>Session:</strong> <code id="research-session-id">{{ research_session_id or 'starting…' }}</code><br />\n    <strong>Status:</strong> <span id="research-session-status">starting</span><br />\n    <strong>Last completed step:</strong> <span id="research-session-stage">none yet</span><br />\n    <strong>Completed events:</strong> <span id="research-session-events">0</span>\n  </p>\n  <p class="empty-state" id="research-session-message" hidden></p>\n  <div id="research-final-answer" hidden>\n    <p class="trust-label computed">Grounded researched answer</p>\n    <h3>Final Research Copilot answer</h3>\n    <p id="research-final-narrative"></p>\n    <div id="research-final-citations" class="ask-evidence"></div>\n  </div>\n</section>\n{% endif %}\n\n{% if results is not none %}\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f"live section anchor={text.count(old)}")
+          text = text.replace(old, new, 1)
+
+          start = text.index("<script>\n  (() => {\n    const form = document.getElementById(\"ask-form\");")
+          end = text.index("</script>", start) + len("</script>")
+          script = '''<script>\n  (() => {\n    const form = document.getElementById("ask-form");\n    const submit = document.getElementById("ask-submit");\n    const status = document.getElementById("ask-running-status");\n    if (form && submit && status) {\n      form.addEventListener("submit", (event) => {\n        const copilot = form.querySelector('input[name="synthesize"]:checked');\n        if (!copilot) return;\n        event.preventDefault();\n        const question = form.querySelector('input[name="q"]')?.value?.trim() || "";\n        if (!question) return;\n        submit.disabled = true;\n        submit.setAttribute("aria-busy", "true");\n        submit.textContent = "Starting";\n        status.hidden = false;\n        const params = new URLSearchParams({q: question, research: "1"});\n        window.location.assign(`/ask?${params.toString()}`);\n      });\n    }\n\n    const live = document.getElementById("research-live-status");\n    if (!live) return;\n    const question = live.dataset.question || "";\n    let sessionId = live.dataset.sessionId || "";\n    const sessionNode = document.getElementById("research-session-id");\n    const statusNode = document.getElementById("research-session-status");\n    const stageNode = document.getElementById("research-session-stage");\n    const eventsNode = document.getElementById("research-session-events");\n    const messageNode = document.getElementById("research-session-message");\n    const finalNode = document.getElementById("research-final-answer");\n    const narrativeNode = document.getElementById("research-final-narrative");\n    const citationsNode = document.getElementById("research-final-citations");\n\n    const showMessage = (message) => {\n      if (!messageNode) return;\n      messageNode.textContent = message;\n      messageNode.hidden = false;\n    };\n\n    const renderCitations = (ids, dois) => {\n      if (!citationsNode) return;\n      citationsNode.replaceChildren();\n      ids.forEach((id, index) => {\n        const paragraph = document.createElement("p");\n        const link = document.createElement("a");\n        link.href = `/claims/${encodeURIComponent(id)}`;\n        link.textContent = id;\n        paragraph.appendChild(link);\n        if (dois[index]) paragraph.append(` — DOI ${dois[index]}`);\n        citationsNode.appendChild(paragraph);\n      });\n    };\n\n    const poll = async () => {\n      if (!sessionId) return;\n      try {\n        const response = await fetch(`/ask/session/${encodeURIComponent(sessionId)}`, {\n          headers: {Accept: "application/json"},\n        });\n        if (response.status === 404) {\n          if (stageNode) stageNode.textContent = "Session is starting";\n          window.setTimeout(poll, 1500);\n          return;\n        }\n        if (!response.ok) throw new Error("status request failed");\n        const payload = await response.json();\n        if (statusNode) statusNode.textContent = payload.status || "unknown";\n        if (stageNode) stageNode.textContent = payload.last_completed_stage || "none yet";\n        if (eventsNode) eventsNode.textContent = String(payload.event_count ?? 0);\n\n        if (!payload.execution_finished) {\n          window.setTimeout(poll, 1500);\n          return;\n        }\n\n        if (payload.status === "completed" && payload.released_narrative) {\n          if (narrativeNode) narrativeNode.textContent = payload.released_narrative;\n          renderCitations(payload.released_source_ids || [], payload.released_source_dois || []);\n          if (finalNode) finalNode.hidden = false;\n          return;\n        }\n        showMessage(\n          payload.visitor_message ||\n          `Research execution finished with status “${payload.status}”; no releaseable narrative was exposed.`\n        );\n      } catch (_error) {\n        showMessage("Research status is temporarily unavailable. Retrying…");\n        window.setTimeout(poll, 2500);\n      }\n    };\n\n    const startResearch = async () => {\n      if (!sessionId) {\n        try {\n          const response = await fetch("/ask/research/start", {\n            method: "POST",\n            headers: {"Content-Type": "application/json", Accept: "application/json"},\n            body: JSON.stringify({question}),\n          });\n          const payload = await response.json();\n          if (!response.ok) {\n            showMessage(payload.detail || "Research mode could not start.");\n            return;\n          }\n          sessionId = payload.session_id;\n          live.dataset.sessionId = sessionId;\n          if (sessionNode) sessionNode.textContent = sessionId;\n          const url = new URL(window.location.href);\n          url.searchParams.set("research", "1");\n          url.searchParams.set("research_session", sessionId);\n          window.history.replaceState({}, "", url);\n        } catch (_error) {\n          showMessage("Research mode could not start.");\n          return;\n        }\n      }\n      await poll();\n    };\n\n    void startResearch();\n  })();\n</script>'''
+          text = text[:start] + script + text[end:]
+          path.write_text(text, encoding="utf-8")
+
+          # ---- pin Web to the exact AI prerequisite commit, then lock below.
+          path = Path("pyproject.toml")
+          text = path.read_text(encoding="utf-8")
+          import re
+          text, count = re.subn(
+              r'knowledge-engine-ai = \{ git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "[0-9a-f]+" \}',
+              'knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "8dfd57c9e49d76f16ba3fc713ac8eae482dd63d5" }',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit(f"AI pin replacement count={count}")
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Add regression tests
+        run: |
+          cat > tests/test_research_background.py <<'PY'
+          from __future__ import annotations
+
+          from concurrent.futures import Future
+          from types import SimpleNamespace
+
+          import pytest
+
+          import knowledge_engine_web.research_background as module
+          from knowledge_engine_web.config import Settings
+          from knowledge_engine_web.research_background import (
+              BackgroundResearchBusy,
+              read_background_memory_state,
+              start_background_research,
+          )
+
+
+          def _settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
+              monkeypatch.setenv("KE_WEB_AI_MAX_CONCURRENT_REQUESTS", "1")
+              return Settings()
+
+
+          def test_start_uses_exact_generated_id_for_runner(monkeypatch: pytest.MonkeyPatch) -> None:
+              settings = _settings(monkeypatch)
+              captured: dict[str, str] = {}
+
+              def runner(settings: Settings, question: str, *, client_key: str, session_id: str):
+                  captured.update(question=question, client_key=client_key, session_id=session_id)
+                  return SimpleNamespace()
+
+              started = start_background_research(
+                  settings,
+                  "  Does creatine help?  ",
+                  client_key="client-1",
+                  runner=runner,
+              )
+              module._JOBS[started.session_id].future.result(timeout=2)
+
+              assert captured["question"] == "Does creatine help?"
+              assert captured["client_key"] == "client-1"
+              assert captured["session_id"] == started.session_id
+              assert started.status_url.endswith(started.session_id)
+
+
+          def test_active_capacity_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+              settings = _settings(monkeypatch)
+              pending: Future[object] = Future()
+              monkeypatch.setattr(
+                  module,
+                  "_JOBS",
+                  {"occupied": module._BackgroundJob(pending, module.time.monotonic())},
+              )
+
+              with pytest.raises(BackgroundResearchBusy):
+                  start_background_research(
+                      settings,
+                      "Question?",
+                      client_key="client-1",
+                      runner=lambda *args, **kwargs: SimpleNamespace(),
+                  )
+
+
+          def test_memory_state_reports_starting_job(monkeypatch: pytest.MonkeyPatch) -> None:
+              pending: Future[object] = Future()
+              monkeypatch.setattr(
+                  module,
+                  "_JOBS",
+                  {"session-1": module._BackgroundJob(pending, module.time.monotonic())},
+              )
+
+              state = read_background_memory_state("session-1")
+
+              assert state is not None
+              assert state.status == "starting"
+              assert state.terminal is False
+          PY
+
+          cat >> tests/test_research_session_status.py <<'PY'
+
+
+          def test_completed_session_releases_persisted_synthesis_and_citations(tmp_path: Path) -> None:
+              db_path = tmp_path / "sessions.sqlite3"
+              connection = new_connection(str(db_path))
+              try:
+                  repository = SessionRepository(connection)
+                  repository.create_session(
+                      ResearchSession(
+                          schema_version=1,
+                          session_id="session-release",
+                          created_at="2026-08-30T00:00:00+00:00",
+                          updated_at="2026-08-30T00:00:00+00:00",
+                          user_question_original="Does creatine help?",
+                          status=SessionStatus.RUNNING,
+                      )
+                  )
+                  repository.append_event(
+                      ResearchEvent(
+                          event_id="synthesis-release",
+                          session_id="session-release",
+                          timestamp="2026-08-30T00:00:01+00:00",
+                          workflow_node="synthesis",
+                          executor_type="local_llm",
+                          validation_status="succeeded",
+                          notes="Creatine improves repeated high-intensity performance [ev-1].",
+                          duration_ms=125,
+                          source_ids=("ev-1",),
+                          source_dois=("10.1000/creatine",),
+                          parent_event_ids=(),
+                      )
+                  )
+                  repository.update_session_status(
+                      "session-release",
+                      SessionStatus.COMPLETED,
+                      updated_at="2026-08-30T00:00:02+00:00",
+                  )
+              finally:
+                  connection.close()
+
+              view = read_session_status(str(db_path), "session-release")
+
+              assert view is not None
+              assert view.execution_finished is True
+              assert view.released_narrative == (
+                  "Creatine improves repeated high-intensity performance [ev-1]."
+              )
+              assert view.released_source_ids == ("ev-1",)
+              assert view.released_source_dois == ("10.1000/creatine",)
+              assert view.recorded_duration_ms == 125
+
+
+          def test_blocked_session_never_exposes_synthesis_draft(tmp_path: Path) -> None:
+              db_path = tmp_path / "sessions.sqlite3"
+              connection = new_connection(str(db_path))
+              try:
+                  repository = SessionRepository(connection)
+                  repository.create_session(
+                      ResearchSession(
+                          schema_version=1,
+                          session_id="session-blocked",
+                          created_at="2026-08-30T00:00:00+00:00",
+                          updated_at="2026-08-30T00:00:00+00:00",
+                          user_question_original="Question?",
+                          status=SessionStatus.RUNNING,
+                      )
+                  )
+                  repository.append_event(
+                      ResearchEvent(
+                          event_id="synthesis-blocked",
+                          session_id="session-blocked",
+                          timestamp="2026-08-30T00:00:01+00:00",
+                          workflow_node="synthesis",
+                          executor_type="local_llm",
+                          validation_status="succeeded",
+                          notes="Draft that failed the close gate [ev-1].",
+                          source_ids=("ev-1",),
+                          source_dois=("10.1000/draft",),
+                          parent_event_ids=(),
+                      )
+                  )
+                  repository.update_session_status(
+                      "session-blocked",
+                      SessionStatus.BLOCKED,
+                      updated_at="2026-08-30T00:00:02+00:00",
+                  )
+              finally:
+                  connection.close()
+
+              view = read_session_status(str(db_path), "session-blocked")
+
+              assert view is not None
+              assert view.status == "blocked"
+              assert view.terminal is False
+              assert view.execution_finished is True
+              assert view.released_narrative is None
+              assert view.released_source_ids == ()
+          PY
+
+          cat >> tests/test_main.py <<'PY'
+
+
+          def test_background_research_start_returns_polling_identity(
+              monkeypatch: pytest.MonkeyPatch,
+          ) -> None:
+              monkeypatch.setattr(
+                  main,
+                  "evaluate_ai_capability",
+                  lambda settings: AICapability(available=True),
+              )
+              monkeypatch.setattr(
+                  main,
+                  "start_background_research",
+                  lambda settings, question, *, client_key: SimpleNamespace(
+                      session_id="session-bg-1",
+                      status_url="/ask/session/session-bg-1",
+                  ),
+              )
+
+              response = TestClient(app).post(
+                  "/ask/research/start",
+                  json={"question": "Does creatine help?"},
+              )
+
+              assert response.status_code == 202
+              assert response.json()["session_id"] == "session-bg-1"
+              assert response.json()["status_url"] == "/ask/session/session-bg-1"
+
+
+          def test_background_research_start_rejects_capacity(
+              monkeypatch: pytest.MonkeyPatch,
+          ) -> None:
+              from knowledge_engine_web.research_background import BackgroundResearchBusy
+
+              monkeypatch.setattr(
+                  main,
+                  "evaluate_ai_capability",
+                  lambda settings: AICapability(available=True),
+              )
+
+              def busy(*args: object, **kwargs: object) -> object:
+                  raise BackgroundResearchBusy("busy")
+
+              monkeypatch.setattr(main, "start_background_research", busy)
+
+              response = TestClient(app).post(
+                  "/ask/research/start",
+                  json={"question": "Does creatine help?"},
+              )
+
+              assert response.status_code == 429
+              assert "capacity" in response.json()["detail"].lower()
+
+
+          def test_session_poll_uses_background_handoff_before_durable_row(
+              monkeypatch: pytest.MonkeyPatch,
+          ) -> None:
+              monkeypatch.setattr(main, "read_session_status", lambda path, session_id: None)
+              monkeypatch.setattr(
+                  main,
+                  "read_background_memory_state",
+                  lambda session_id: SimpleNamespace(
+                      session_id=session_id,
+                      status="starting",
+                      terminal=False,
+                      visitor_message=None,
+                  ),
+              )
+
+              response = TestClient(app).get("/ask/session/session-starting")
+
+              assert response.status_code == 200
+              payload = response.json()
+              assert payload["status"] == "starting"
+              assert payload["execution_finished"] is False
+              assert payload["released_narrative"] is None
+
+
+          def test_async_research_page_contains_resume_polling_hooks(
+              tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+          ) -> None:
+              build_engine(tmp_path)
+              monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+              monkeypatch.setattr(
+                  main,
+                  "evaluate_ai_capability",
+                  lambda settings: AICapability(available=True),
+              )
+
+              response = TestClient(app).get(
+                  "/ask",
+                  params={
+                      "q": "Does creatine help?",
+                      "research": "1",
+                      "research_session": "session-resume-1",
+                  },
+              )
+
+              assert response.status_code == 200
+              assert 'id="research-live-status"' in response.text
+              assert 'data-session-id="session-resume-1"' in response.text
+              assert "/ask/research/start" in response.text
+              assert "Last completed step" in response.text
+          PY
+
+      - name: Update AI lock and run focused quality
+        run: |
+          python -m pip install poetry
+          poetry lock
+          poetry install
+          poetry run ruff format knowledge_engine_web tests
+          poetry run ruff check knowledge_engine_web tests
+          poetry run mypy knowledge_engine_web tests
+          poetry run pytest -q tests/test_research_background.py tests/test_research_session_status.py tests/test_main.py tests/test_ai_orchestration.py
+
+      - name: Commit source changes and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add knowledge_engine_web tests pyproject.toml poetry.lock
+          git commit -m "Run Research mode in a background durable session"
+          git rm .github/workflows/apply-background-research-polling.yml
+          git commit -m "Remove temporary background research patch workflow"
+          git push origin HEAD:agent/background-research-polling
