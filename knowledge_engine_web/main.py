@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 
@@ -743,10 +744,17 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
     if synthesize_requested:
         try:
             client_key = request.client.host if request.client is not None else "unknown"
+            # Generated before the run starts (rather than left to
+            # run_research_question's internal UUID fallback) so this
+            # identity is already known ahead of a future background-task
+            # slice of WEB-GQR-4, which needs to hand a session id back to
+            # the visitor before the run itself completes.
+            session_id = str(uuid.uuid4())
             copilot_result = run_guarded_ai_orchestration(
                 settings,
                 question,
                 client_key=client_key,
+                session_id=session_id,
             )
             if result_reached_execution_limit(copilot_result):
                 copilot_error = (

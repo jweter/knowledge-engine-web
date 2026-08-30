@@ -251,6 +251,7 @@ def run_ai_orchestration(
     question: str,
     *,
     timeout_seconds: float | None = None,
+    session_id: str | None = None,
 ) -> ResearchQuestionResult:
     """Run one complete durable Research Copilot session.
 
@@ -260,6 +261,12 @@ def run_ai_orchestration(
     reretrieved report only when newly promoted grounded evidence exists;
     otherwise AI keeps the original report and records why the research path
     did not produce replacement evidence.
+
+    ``session_id``, when supplied, is the orchestration seam a caller such as
+    `/ask?synthesize=1` uses to know a session's identity before this run
+    starts (see `knowledge_engine_ai.copilot.run_research_question`'s own
+    ``session_id`` parameter). Omitting it preserves existing behavior: a UUID
+    is generated internally.
     """
 
     capability = evaluate_ai_capability(settings)
@@ -289,6 +296,7 @@ def run_ai_orchestration(
             grounded_completion_policy=_build_grounded_completion_policy(settings),
             ke_executable=executable,
             timeout_seconds=timeout_seconds,
+            session_id=session_id,
         )
     except Exception as exc:
         # This integration crosses SQLite, subprocess, writable corpus,
@@ -310,8 +318,14 @@ def run_guarded_ai_orchestration(
     *,
     client_key: str,
     guard: AIRequestGuard | None = None,
+    session_id: str | None = None,
 ) -> WebResearchResult:
-    """Admit one bounded request and attach AI's deterministic GQR state."""
+    """Admit one bounded request and attach AI's deterministic GQR state.
+
+    ``session_id`` is forwarded to `run_ai_orchestration` unchanged -- see its
+    docstring. Passing a caller-generated identity here is what lets a route
+    know a session's id before this call returns.
+    """
 
     request_guard = guard if guard is not None else _GLOBAL_AI_REQUEST_GUARD
     with request_guard.admit(
@@ -324,6 +338,7 @@ def run_guarded_ai_orchestration(
             settings,
             question,
             timeout_seconds=settings.ai_request_timeout_seconds,
+            session_id=session_id,
         )
         return WebResearchResult(
             research=research,

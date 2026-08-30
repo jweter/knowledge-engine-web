@@ -1773,6 +1773,41 @@ def test_ask_synthesize_renders_the_research_copilot_result(
     assert "Evidence records traced to this run" in response.text
 
 
+def test_ask_synthesize_generates_the_session_id_before_the_run_starts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WEB-GQR-4: `/ask?synthesize=1` must know a session's id before the run.
+
+    This is the orchestration seam a later background-task/polling slice
+    needs: the caller, not `run_research_question`'s internal UUID fallback,
+    generates the identity, so a "researching" response can be handed back
+    with a known session id while the run is still in flight.
+    """
+
+    engine = build_engine(tmp_path)
+    evidence_path = _setup_paper_with_evidence(engine, tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+    monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
+    monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
+
+    captured: dict[str, object] = {}
+
+    def fake_run_guarded(settings: object, question: str, **kwargs: object) -> SimpleNamespace:
+        captured["session_id"] = kwargs.get("session_id")
+        return _copilot_result()
+
+    monkeypatch.setattr(main, "run_guarded_ai_orchestration", fake_run_guarded)
+
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "synthesize": "1"}
+    )
+
+    assert response.status_code == 200
+    session_id = captured["session_id"]
+    assert isinstance(session_id, str)
+    assert re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", session_id)
+
+
 def test_ask_citation_labels_evidence_promoted_this_session_as_acquired(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

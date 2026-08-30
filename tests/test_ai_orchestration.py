@@ -310,6 +310,41 @@ def test_run_ai_orchestration_wires_complete_grounded_research_path(
     assert captured["evidence"] == Path(settings.evidence_records_path or "")
     assert captured["ke_executable"] == sys.executable
     assert captured["model"] == "qwen2.5:1.5b"
+    assert captured["session_id"] is None
+
+
+def test_run_ai_orchestration_forwards_a_caller_supplied_session_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A caller-generated session id is known before the run starts (WEB-GQR-4).
+
+    `run_research_question` accepts an optional `session_id` seam so a durable
+    caller can know a session's identity ahead of time rather than only after
+    it returns. This is additive plumbing only -- run_research_question itself
+    still decides whether to accept, generate, or reject that identity.
+    """
+
+    settings = _ready_settings(tmp_path)
+    expected = SimpleNamespace(session_id="caller-chosen-id")
+    captured: dict[str, object] = {}
+
+    class FakeLLM:
+        def __init__(self, *, model: str, host: str) -> None:
+            pass
+
+    def fake_run(question: str, **kwargs: object) -> object:
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(ai_orchestration, "OllamaLLM", FakeLLM)
+    monkeypatch.setattr(ai_orchestration, "run_research_question", fake_run)
+
+    result = run_ai_orchestration(
+        settings, "does semaglutide reduce body weight", session_id="caller-chosen-id"
+    )
+
+    assert result.session_id == "caller-chosen-id"
+    assert captured["session_id"] == "caller-chosen-id"
 
     discovery_policy = cast(FederatedDiscoveryPolicy, captured["discovery_policy"])
     assert discovery_policy.enable_acquisition_plan is True
@@ -351,9 +386,11 @@ def test_guarded_orchestration_passes_deadline_and_attaches_ai_owned_state(
         question: str,
         *,
         timeout_seconds: float | None = None,
+        session_id: str | None = None,
     ) -> object:
         captured["question"] = question
         captured["timeout_seconds"] = timeout_seconds
+        captured["session_id"] = session_id
         return expected
 
     def fake_derive(result: object) -> ResearchStateResult:
@@ -368,12 +405,17 @@ def test_guarded_orchestration_passes_deadline_and_attaches_ai_owned_state(
         "question",
         client_key="client-a",
         guard=AIRequestGuard(),
+        session_id="caller-supplied-session-id",
     )
 
     assert result.session_id == "session-123"
     assert result.research_state is expected_state
     assert result.research_state.state is ResearchState.RESEARCH_REQUIRED
-    assert captured == {"question": "question", "timeout_seconds": 42.0}
+    assert captured == {
+        "question": "question",
+        "timeout_seconds": 42.0,
+        "session_id": "caller-supplied-session-id",
+    }
 
 
 def test_result_detects_a_durable_workflow_timeout() -> None:
