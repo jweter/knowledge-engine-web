@@ -2343,6 +2343,9 @@ def test_ask_session_status_route_returns_durably_recorded_progress(
     assert payload["question"] == "Does creatine improve maximal strength?"
     assert payload["status"] == "running"
     assert payload["terminal"] is False
-    assert payload["current_stage"] == "Indexed evidence is thin; expanding the literature search"
+    assert (
+        payload["last_completed_stage"]
+        == "Indexed evidence is thin; expanding the literature search"
+    )
     assert payload["latest_workflow_node"] == "federated_discovery"
     assert payload["event_count"] == 1

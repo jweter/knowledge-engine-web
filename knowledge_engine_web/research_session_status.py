@@ -52,7 +52,6 @@ _STAGE_LABELS: dict[str, str] = {
     "grounded_reretrieval": "Re-checking the original question against the enlarged evidence base",
     "synthesis": "Preparing and verifying a source-grounded answer",
 }
-_QUEUED_STAGE_LABEL = "Searching indexed evidence"
 
 # Verbatim from knowledge-engine-ai's SessionStatus.is_terminal_status: a
 # status a session cannot resume from. Duplicated as plain strings rather
@@ -63,12 +62,21 @@ _TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "superseded"
 
 @dataclass(frozen=True)
 class SessionStatusView:
-    """One session's durably recorded progress, as of the moment it was read."""
+    """One session's durably recorded progress, as of the moment it was read.
+
+    `last_completed_stage` names the most recent workflow step this store has
+    a *completed* `ResearchEvent` row for -- never a live "currently
+    executing" stage, because nothing durably records a step's start, only
+    its completion. For a non-terminal (still-running) session this is one
+    step behind whatever is actually in flight right now; for a terminal
+    session (`terminal` is True) it is exactly the last step that ran. `None`
+    means no step has completed yet (the session was just created).
+    """
 
     session_id: str
     question: str
     status: str
-    current_stage: str
+    last_completed_stage: str | None
     terminal: bool
     created_at: str
     updated_at: str
@@ -93,7 +101,7 @@ def read_session_status(session_db_path: str, session_id: str) -> SessionStatusV
 
     try:
         connection = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
-    except sqlite3.OperationalError:
+    except sqlite3.DatabaseError:
         return None
 
     try:
@@ -111,26 +119,28 @@ def read_session_status(session_db_path: str, session_id: str) -> SessionStatusV
                 "ORDER BY sequence_number",
                 (session_id,),
             ).fetchall()
-        except sqlite3.OperationalError:
-            # Store exists as a file but does not (yet) have this schema --
-            # e.g. an empty file created out-of-band. Same honest "not found".
+        except sqlite3.DatabaseError:
+            # Store exists as a file but is unreadable as this schema -- e.g.
+            # an empty/out-of-band file, or (SQLite opens lazily, so this can
+            # surface only here rather than at connect() above) a file that
+            # is not a database at all. Same honest "not found" either way.
             return None
     finally:
         connection.close()
 
     latest_workflow_node = str(event_rows[-1]["workflow_node"]) if event_rows else None
     status = str(session_row["status"])
-    current_stage = (
+    last_completed_stage = (
         _STAGE_LABELS.get(latest_workflow_node, f"Researching ({latest_workflow_node})")
         if latest_workflow_node is not None
-        else _QUEUED_STAGE_LABEL
+        else None
     )
 
     return SessionStatusView(
         session_id=str(session_row["session_id"]),
         question=str(session_row["user_question_original"]),
         status=status,
-        current_stage=current_stage,
+        last_completed_stage=last_completed_stage,
         terminal=status in _TERMINAL_STATUSES,
         created_at=str(session_row["created_at"]),
         updated_at=str(session_row["updated_at"]),

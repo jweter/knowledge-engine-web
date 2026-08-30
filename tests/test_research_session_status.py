@@ -66,12 +66,12 @@ def test_known_session_reports_status_and_latest_stage(tmp_path: Path) -> None:
     assert view.question == "Does creatine help?"
     assert view.status == "running"
     assert view.terminal is False
-    assert view.current_stage == "Searching indexed evidence"
+    assert view.last_completed_stage == "Searching indexed evidence"
     assert view.latest_workflow_node == "retrieval_and_evidence_intelligence"
     assert view.event_count == 1
 
 
-def test_session_with_no_events_yet_reports_queued_stage(tmp_path: Path) -> None:
+def test_session_with_no_events_yet_reports_no_completed_stage(tmp_path: Path) -> None:
     db_path = tmp_path / "sessions.sqlite3"
     connection = new_connection(str(db_path))
     try:
@@ -93,7 +93,7 @@ def test_session_with_no_events_yet_reports_queued_stage(tmp_path: Path) -> None
     assert view is not None
     assert view.event_count == 0
     assert view.latest_workflow_node is None
-    assert view.current_stage == "Searching indexed evidence"
+    assert view.last_completed_stage is None
 
 
 def test_terminal_status_survives_process_restart(tmp_path: Path) -> None:
@@ -145,7 +145,7 @@ def test_terminal_status_survives_process_restart(tmp_path: Path) -> None:
     assert view is not None
     assert view.status == "completed"
     assert view.terminal is True
-    assert view.current_stage == "Preparing and verifying a source-grounded answer"
+    assert view.last_completed_stage == "Preparing and verifying a source-grounded answer"
     assert view.updated_at == "2026-08-30T00:00:05+00:00"
 
 
@@ -154,3 +154,18 @@ def test_unknown_session_id_in_existing_store_is_none(tmp_path: Path) -> None:
     _seed_running_session(db_path, session_id="session-1", question="Does creatine help?")
 
     assert read_session_status(str(db_path), "session-does-not-exist") is None
+
+
+def test_corrupt_store_file_is_none_not_a_raised_exception(tmp_path: Path) -> None:
+    """A file that exists but is not a valid SQLite database must 404, not 500.
+
+    SQLite opens lazily, so a non-database file raises `sqlite3.DatabaseError`
+    (e.g. "file is not a database") only once a query actually runs against
+    it -- a narrower `except sqlite3.OperationalError` does not catch this,
+    since `DatabaseError` is not a subclass of `OperationalError`.
+    """
+
+    db_path = tmp_path / "sessions.sqlite3"
+    db_path.write_bytes(b"not a sqlite database")
+
+    assert read_session_status(str(db_path), "any-session") is None
