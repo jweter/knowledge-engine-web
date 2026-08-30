@@ -178,9 +178,10 @@ existing `session_storage_mode`/`session_persistent_root` local/persistent split
 lets it survive a Render redeploy. This session added a strictly read-only projection of
 that same store (`knowledge_engine_web/research_session_status.py`, opened `mode=ro`) and
 a new `GET /ask/session/{session_id}` route that returns a small JSON payload (session id,
-question, status, a human-readable `current_stage` derived from the latest durably
-recorded `workflow_node` using the exact stage vocabulary in "Recommended visitor-facing
-progression" above, `terminal`, timestamps, and event count). Unknown session id, or no
+question, status, a human-readable `last_completed_stage` derived from the latest durably
+recorded *completed* `workflow_node` using the exact stage vocabulary in "Recommended
+visitor-facing progression" above -- never presented as a live in-progress stage, since
+only completions are durably recorded -- `terminal`, timestamps, and event count). Unknown session id, or no
 session store yet, both 404. Live-verified against a real `uvicorn` process, not just
 unit tests: seeded a session through the real `SessionRepository`, read it back over HTTP
 from that running process, then killed the process and started an entirely new one

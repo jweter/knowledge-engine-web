@@ -800,6 +800,12 @@ def ask_session_status(session_id: str) -> Response:
     `/ask?synthesize=1` request that created it; `/ask`'s own response is
     unchanged by this route's existence. No frontend polling loop consumes
     this yet.
+
+    `last_completed_stage` is exactly that -- the last workflow step this
+    store has a *completed* event for, not a live "currently executing"
+    stage (nothing durably records a step's start, only its completion), so
+    for a still-`running` session it can lag one step behind. It is accurate
+    as the final step once `terminal` is true.
     """
 
     settings = Settings()
@@ -810,7 +816,7 @@ def ask_session_status(session_id: str) -> Response:
         "session_id": view.session_id,
         "question": view.question,
         "status": view.status,
-        "current_stage": view.current_stage,
+        "last_completed_stage": view.last_completed_stage,
         "terminal": view.terminal,
         "created_at": view.created_at,
         "updated_at": view.updated_at,
