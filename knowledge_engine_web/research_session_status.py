@@ -5,40 +5,21 @@ toward a durable job/session polling model rather than extending HTTP request
 timeouts indefinitely, with session identity and stage progress surviving
 refresh/redeploy where persistent storage is configured.
 
-That durable storage already exists and does not need to be rebuilt here.
-`knowledge-engine-ai`'s ``SessionRepository`` (see ``ai_orchestration.py``)
-already persists one ``ResearchSession`` header row plus one ``ResearchEvent``
-row per completed workflow step to ``Settings.session_db_path``, committing
-each row as the still-synchronous ``/ask?synthesize=1`` request executes --
-durable (a real SQLite file, not in-memory), and already covered by the
-existing ``session_storage_mode``/``session_persistent_root`` local/persistent
-split that lets it survive a Render redeploy when a persistent disk is
-provisioned. Building a second, Web-owned session store next to that one
-would just create two disagreeing sources of truth for the same identity.
-
-This module is instead a strictly read-only projection of that same store,
-opened ``mode=ro`` so this process can never write into it here -- writes stay
-exactly where they already are, inside ``run_ai_orchestration``'s own guarded
-path. It is the read side a new ``GET /ask/session/{session_id}`` polling
-route can use to look up a session's durably recorded progress independently
-of the request that created it. Wiring a frontend polling loop onto that
-route, and moving execution itself off the request/response cycle and onto a
-background task, remain later WEB-GQR-4 slices.
+The durable source of truth already exists in knowledge-engine-ai's
+``SessionRepository``. This module is a strictly read-only projection of that
+same SQLite store, opened ``mode=ro``. Besides stage/status metadata, it may
+return the final synthesis text and citation identities *only* when the durable
+session status is ``completed``. A blocked or otherwise unreleased session can
+therefore never leak a draft narrative merely because a synthesis event exists.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-# Mirrors docs/general_question_research_loop_v1.md's "Recommended
-# visitor-facing progression" list, keyed by the exact workflow_node values
-# knowledge-engine-ai's ResearchEvent rows already use (see
-# orchestrator/workflow.py, copilot/discovery_policy.py, and
-# copilot/run_research_question.py in the pinned knowledge-engine-ai
-# dependency). Not an independent guess at stage names: this is the same
-# durable vocabulary the session trace already renders on /ask today.
 _STAGE_LABELS: dict[str, str] = {
     "retrieval_and_evidence_intelligence": "Searching indexed evidence",
     "contradiction_oriented_retrieval": "Searching indexed evidence",
@@ -53,24 +34,24 @@ _STAGE_LABELS: dict[str, str] = {
     "synthesis": "Preparing and verifying a source-grounded answer",
 }
 
-# Verbatim from knowledge-engine-ai's SessionStatus.is_terminal_status: a
-# status a session cannot resume from. Duplicated as plain strings rather
-# than importing the enum so this read-only view has no dependency on the
-# rest of that module's write-path machinery.
+# Mirrors knowledge-engine-ai's non-resumable terminal states. BLOCKED is
+# intentionally not terminal there because a durable session may be resumed.
 _TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "superseded"})
+_ACTIVE_STATUSES = frozenset({"pending", "running"})
 
 
 @dataclass(frozen=True)
 class SessionStatusView:
     """One session's durably recorded progress, as of the moment it was read.
 
-    `last_completed_stage` names the most recent workflow step this store has
-    a *completed* `ResearchEvent` row for -- never a live "currently
-    executing" stage, because nothing durably records a step's start, only
-    its completion. For a non-terminal (still-running) session this is one
-    step behind whatever is actually in flight right now; for a terminal
-    session (`terminal` is True) it is exactly the last step that ran. `None`
-    means no step has completed yet (the session was just created).
+    ``last_completed_stage`` names the most recent completed ResearchEvent,
+    never a guessed in-flight stage. ``execution_finished`` is distinct from
+    ``terminal``: a BLOCKED/AWAITING session is resumable in AI's lifecycle,
+    but the HTTP-started execution that produced it is no longer actively
+    running and a browser polling loop should stop spinning.
+
+    ``released_narrative`` and its citation IDs are populated only for a
+    COMPLETED session whose latest synthesis event succeeded.
     """
 
     session_id: str
@@ -78,22 +59,19 @@ class SessionStatusView:
     status: str
     last_completed_stage: str | None
     terminal: bool
+    execution_finished: bool
     created_at: str
     updated_at: str
     event_count: int
     latest_workflow_node: str | None
+    recorded_duration_ms: int
+    released_narrative: str | None = None
+    released_source_ids: tuple[str, ...] = ()
+    released_source_dois: tuple[str, ...] = ()
 
 
 def read_session_status(session_db_path: str, session_id: str) -> SessionStatusView | None:
-    """Return `session_id`'s durably persisted state, or `None` if it is unknown.
-
-    Returns `None` -- never raises -- both when no session with this ID was
-    ever created and when the store itself does not exist yet (a deployment
-    where no research session has ever run, or a session store rolled back to
-    an unreadable state). Both cases render as the same honest "not found" to
-    a caller; a polling client cannot distinguish "never happened" from
-    "durable store currently unreadable" and should not be asked to.
-    """
+    """Return ``session_id``'s durable state, or ``None`` if the store/session is unreadable."""
 
     database_path = Path(session_db_path)
     if not database_path.is_file():
@@ -114,16 +92,24 @@ def read_session_status(session_db_path: str, session_id: str) -> SessionStatusV
             ).fetchone()
             if session_row is None:
                 return None
+
+            event_columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(research_events)").fetchall()
+            }
+            source_dois_expression = (
+                "source_dois" if "source_dois" in event_columns else "'[]' AS source_dois"
+            )
+            duration_expression = (
+                "duration_ms" if "duration_ms" in event_columns else "NULL AS duration_ms"
+            )
             event_rows = connection.execute(
-                "SELECT workflow_node FROM research_events WHERE session_id = ? "
-                "ORDER BY sequence_number",
+                "SELECT workflow_node, validation_status, notes, source_ids, "
+                f"{source_dois_expression}, {duration_expression} "
+                "FROM research_events WHERE session_id = ? ORDER BY sequence_number",
                 (session_id,),
             ).fetchall()
         except sqlite3.DatabaseError:
-            # Store exists as a file but is unreadable as this schema -- e.g.
-            # an empty/out-of-band file, or (SQLite opens lazily, so this can
-            # surface only here rather than at connect() above) a file that
-            # is not a database at all. Same honest "not found" either way.
             return None
     finally:
         connection.close()
@@ -135,6 +121,28 @@ def read_session_status(session_db_path: str, session_id: str) -> SessionStatusV
         if latest_workflow_node is not None
         else None
     )
+    recorded_duration_ms = sum(
+        int(row["duration_ms"])
+        for row in event_rows
+        if row["duration_ms"] is not None and int(row["duration_ms"]) >= 0
+    )
+
+    released_narrative: str | None = None
+    released_source_ids: tuple[str, ...] = ()
+    released_source_dois: tuple[str, ...] = ()
+    if status == "completed":
+        synthesis_rows = tuple(
+            row
+            for row in event_rows
+            if row["workflow_node"] == "synthesis" and row["validation_status"] == "succeeded"
+        )
+        if synthesis_rows:
+            synthesis = synthesis_rows[-1]
+            notes = synthesis["notes"]
+            if isinstance(notes, str) and notes.strip():
+                released_narrative = notes
+                released_source_ids = _json_string_tuple(synthesis["source_ids"])
+                released_source_dois = _json_string_tuple(synthesis["source_dois"])
 
     return SessionStatusView(
         session_id=str(session_row["session_id"]),
@@ -142,11 +150,28 @@ def read_session_status(session_db_path: str, session_id: str) -> SessionStatusV
         status=status,
         last_completed_stage=last_completed_stage,
         terminal=status in _TERMINAL_STATUSES,
+        execution_finished=status not in _ACTIVE_STATUSES,
         created_at=str(session_row["created_at"]),
         updated_at=str(session_row["updated_at"]),
         event_count=len(event_rows),
         latest_workflow_node=latest_workflow_node,
+        recorded_duration_ms=recorded_duration_ms,
+        released_narrative=released_narrative,
+        released_source_ids=released_source_ids,
+        released_source_dois=released_source_dois,
     )
+
+
+def _json_string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, str):
+        return ()
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return ()
+    if not isinstance(payload, list) or not all(isinstance(item, str) for item in payload):
+        return ()
+    return tuple(payload)
 
 
 __all__ = ["SessionStatusView", "read_session_status"]
