@@ -137,12 +137,14 @@ Implemented as a new `research_coverage_presentation.py` module (mirroring
 invented. Reports the full acquisition/extraction funnel (discovered
 candidates -> acquisition routes persisted/reused -> drafted -> classified ->
 staged -> grounded -> promoted) as independent counts rather than one
-collapsed number, so BT-2's conversion-funnel loss stays visible. One field
-from AI's `AcquisitionRouteResult` (a route-level `skipped_reason`) exists on
-AI's current main but not yet on the commit Web has pinned here, so it was
-left out of this slice rather than bumping the pin as an unrelated change;
-picking it up is a small follow-up once Web's pin is next bumped for another
-reason.
+collapsed number, so BT-2's conversion-funnel loss stays visible. One field from AI's `AcquisitionRouteResult` (a route-level `skipped_reason`)
+existed on AI's main but not on the commit Web had pinned at the time, so it
+was left out of that slice rather than bumping the pin as an unrelated
+change. **2026-08-30 follow-up:** Web's pinned `knowledge-engine-ai` commit
+was bumped to `aab9b22` (unrelated reason: picking up PR #126's
+caller-supplied `session_id` seam for a future WEB-GQR-4 slice), so this
+field is now wired into `AcquisitionRouteRow` and rendered in the
+"Acquisition routes" table's "not attempted" badge.
 
 ### WEB-GQR-3 - Evidence provenance
 - [x] distinguish `indexed_before_run` and `acquired_during_run` evidence at individual citation level;
