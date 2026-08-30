@@ -86,6 +86,8 @@ class AcquisitionRouteSource(Protocol):
     def reused_count(self) -> int: ...
     @property
     def error(self) -> str | None: ...
+    @property
+    def skipped_reason(self) -> str | None: ...
 
 
 class GroundedCompletionSource(Protocol):
@@ -139,6 +141,7 @@ class AcquisitionRouteRow:
     persisted_count: int
     reused_count: int
     error: str | None
+    skipped_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -203,6 +206,7 @@ def _acquisition_route_row(route: AcquisitionRouteSource) -> AcquisitionRouteRow
         persisted_count=route.persisted_count,
         reused_count=route.reused_count,
         error=route.error,
+        skipped_reason=route.skipped_reason,
     )
 
 

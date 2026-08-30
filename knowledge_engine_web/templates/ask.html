@@ -235,7 +235,9 @@
               <td>
                 {% if route.error %}<span class="discovery-status is-degraded">failed</span> <span class="disclaimer">({{ route.error }})</span>
                 {% elif route.attempted %}<span class="discovery-status is-ok">attempted</span>
-                {% else %}<span class="discovery-status is-skipped">not attempted</span>{% endif %}
+                {% else %}<span class="discovery-status is-skipped">not attempted</span>
+                {% if route.skipped_reason %} <span class="disclaimer">({{ route.skipped_reason }})</span>{% endif %}
+                {% endif %}
               </td>
             </tr>
             {% endfor %}

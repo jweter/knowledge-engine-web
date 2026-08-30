@@ -2017,6 +2017,7 @@ def test_ask_renders_research_coverage_panel_for_a_researched_answer(
                 persisted_count=1,
                 reused_count=0,
                 error=None,
+                skipped_reason=None,
             ),
             SimpleNamespace(
                 route="unpaywall",
@@ -2025,6 +2026,7 @@ def test_ask_renders_research_coverage_panel_for_a_researched_answer(
                 persisted_count=0,
                 reused_count=0,
                 error=None,
+                skipped_reason="max_acquisition_routes budget reached",
             ),
         ),
         draft_item_count=2,
@@ -2060,6 +2062,7 @@ def test_ask_renders_research_coverage_panel_for_a_researched_answer(
     assert "<td>pmc_oa</td>" in response.text
     assert "<td>unpaywall</td>" in response.text
     assert '<span class="discovery-status is-skipped">not attempted</span>' in response.text
+    assert "max_acquisition_routes budget reached" in response.text
     assert "2 &rarr;" in response.text
     assert "1 staged record(s) failed grounding verification" in response.text
 
