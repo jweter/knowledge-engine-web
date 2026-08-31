@@ -46,7 +46,9 @@ services:
       - key: KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS
         value: "600"
       # WEB-GQR-4: return a durable session immediately, run Research Copilot
-      # in the process-local bounded worker, and let the Ask page poll progress.
+      # in the single-process, process-local bounded worker, and let the Ask
+      # page poll progress. A mid-run process restart is reported as interrupted;
+      # this first slice does not claim distributed/resumable execution.
       - key: KE_WEB_ASYNC_RESEARCH_ENABLED
         value: "true"
       # WEB-FRD-1: process-local safety defaults for the separate, opt-in
