@@ -1,0 +1,27 @@
+name: Temporary lock generation
+
+on:
+  push:
+    branches:
+      - feat/research-report-v1-backend
+
+permissions:
+  contents: read
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Poetry
+        run: pip install "poetry==2.3.3"
+      - name: Regenerate lock
+        run: poetry lock
+      - name: Upload lock
+        uses: actions/upload-artifact@v7
+        with:
+          name: poetry-lock
+          path: poetry.lock
