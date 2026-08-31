@@ -34,6 +34,10 @@ from knowledge_engine_ai.copilot.grounded_completion import (
     GroundedCompletionPolicy,
     GroundedCompletionResult,
 )
+from knowledge_engine_ai.copilot.research_report_integration import (
+    ResearchReportBuildResult,
+    build_research_report_for_result,
+)
 from knowledge_engine_ai.copilot.research_state import ResearchStateResult, derive_research_state
 from knowledge_engine_ai.copilot.run_research_question import (
     ResearchQuestionResult,
@@ -93,15 +97,17 @@ class AICapability:
 
 @dataclass(frozen=True)
 class WebResearchResult:
-    """Web-facing Research Copilot result with AI-owned GQR workflow state.
+    """Web-facing Research Copilot result with AI-owned structured research state.
 
-    Web deliberately does not infer state from narrative text, candidate
-    counts, or provider counts. The state is derived by knowledge-engine-ai
-    from its deterministic workflow facts and carried through unchanged here.
+    Web deliberately does not infer state or Research Report semantics from
+    narrative text, candidate counts, or provider counts. The research state
+    and optional structured report are both produced by knowledge-engine-ai
+    and carried through unchanged here.
     """
 
     research: ResearchQuestionResult
     research_state: ResearchStateResult
+    research_report: ResearchReportBuildResult
 
     @property
     def session_id(self) -> str:
@@ -312,6 +318,38 @@ def run_ai_orchestration(
             connection.close()
 
 
+def _build_research_report_projection(
+    settings: Settings,
+    research: ResearchQuestionResult,
+) -> ResearchReportBuildResult:
+    """Build the optional structured report without weakening the base result.
+
+    The releaseable narrative result remains authoritative. Web never scrapes
+    that prose to reconstruct report fields; it invokes AI's typed integration
+    seam only after the existing release gates say the base answer is safe.
+    Missing releaseability on a legacy/test double is treated fail-closed.
+    """
+
+    if not getattr(research, "narrative_releaseable", False):
+        return ResearchReportBuildResult(report=None, error_code="base_answer_not_releaseable")
+
+    assert settings.llm_model is not None
+    try:
+        return build_research_report_for_result(
+            research,
+            OllamaLLM(model=settings.llm_model.strip(), host=settings.ollama_host),
+            timeout_seconds=settings.ai_request_timeout_seconds,
+        )
+    except Exception:
+        # Report projection is additive. An unexpected integration failure must
+        # not discard an already-verified base answer or expose raw exception
+        # details through the visitor-readable research-job payload.
+        return ResearchReportBuildResult(
+            report=None,
+            error_code="research_report_integration_failed",
+        )
+
+
 def run_guarded_ai_orchestration(
     settings: Settings,
     question: str,
@@ -320,7 +358,7 @@ def run_guarded_ai_orchestration(
     guard: AIRequestGuard | None = None,
     session_id: str | None = None,
 ) -> WebResearchResult:
-    """Admit one bounded request and attach AI's deterministic GQR state.
+    """Admit one bounded request and attach AI-owned research/report state.
 
     ``session_id`` is forwarded to `run_ai_orchestration` unchanged -- see its
     docstring. Passing a caller-generated identity here is what lets a route
@@ -343,6 +381,7 @@ def run_guarded_ai_orchestration(
         return WebResearchResult(
             research=research,
             research_state=derive_research_state(research),
+            research_report=_build_research_report_projection(settings, research),
         )
 
 

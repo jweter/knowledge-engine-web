@@ -253,6 +253,7 @@ def _presentation_payload(result: WebResearchResult) -> dict[str, Any]:
         "research_state_reason": result.research_state.reason,
         "narrative_releaseable": result.narrative_releaseable,
         "narrative": result.narrative if result.narrative_releaseable else None,
+        "research_report": result.research_report.to_dict(),
         "synthesis_failed": result.synthesis_error is not None,
         "execution_limit_reached": result_reached_execution_limit(result),
         "close_gate": result.close_result.status.value,
