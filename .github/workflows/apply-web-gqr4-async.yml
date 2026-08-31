@@ -4,16 +4,12 @@ on:
   push:
     branches:
       - feature/web-gqr-4-async-research
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: write
 
 jobs:
   patch-and-validate:
-    if: github.head_ref == 'feature/web-gqr-4-async-research' || github.ref_name == 'feature/web-gqr-4-async-research'
     runs-on: ubuntu-latest
     steps:
       - name: Check out feature branch
@@ -40,12 +36,10 @@ jobs:
           from pathlib import Path
           path = Path('knowledge_engine_web/main.py')
           text = path.read_text(encoding='utf-8')
-          old = '                copilot_error = "That research session belongs to a different question. Start a new Research run."\n'
+          old = '                    "That research session belongs to a different question. Start a new Research run."\n'
           new = (
-              '                copilot_error = (\n'
               '                    "That research session belongs to a different question. "\n'
               '                    "Start a new Research run."\n'
-              '                )\n'
           )
           if text.count(old) != 1:
               raise RuntimeError('generated lint target missing')
