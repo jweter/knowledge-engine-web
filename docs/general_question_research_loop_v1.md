@@ -199,6 +199,37 @@ finishes. The `researching` state's live, event-by-event streaming described abo
 still not implemented. This slice is the durable-identity/read-side foundation those later
 slices need, not the complete durable job/session polling model.
 
+**Second slice — asynchronous Render execution and polling:** Web now has a durable
+`web_research_jobs` projection in the same configured persistent SQLite file. With
+`KE_WEB_ASYNC_RESEARCH_ENABLED=true`, `/ask?synthesize=1` allocates the caller-owned
+session ID, persists a queued job, submits the existing bounded Research Copilot call to
+a single process-local worker, and returns the Ask page immediately. The page preserves
+the session ID in its URL, polls `GET /ask/session/{session_id}`, renders the latest
+*completed* durable AI stage without inventing a percent-complete estimate, and replaces
+the running state with the verified presentation payload when the job closes. The final
+payload includes AI's BT-6 progress report and BT-2 conversion funnel, so indexed-vs-new
+evidence, provider degradation, citations/limitations, time-to-first-grounded-information,
+and time-to-final-report are visible without scraping narrative prose.
+
+This is intentionally **not** a distributed/resumable workflow engine. The research
+session/events and completed Web presentation survive refresh and a Render redeploy when
+`/var/data` is provisioned. A process restart during the Python call cannot resume that
+in-flight call; the poll endpoint reports the interruption instead of silently restarting
+or pretending the work completed. True execution resume remains a later AI durable-workflow
+engine milestone.
+
+#### Definitive deployment acceptance: Monster #79
+
+After this slice reaches Render, the first full acceptance run is AI golden research case
+`monster-energy-bp-one-year` (issue #79): two 16-fl-oz Monster drinks/day for approximately
+one year, keeping Zero Ultra and Original distinct and preserving acute-vs-chronic BP,
+incident-hypertension, measurement-artifact, direct-vs-indirect evidence, counter-evidence,
+and missing-long-term-evidence boundaries. Record the returned session ID, BT-2 funnel,
+time to first grounded information, time to final report, provider degradation, promoted
+Evidence Records, final research state, and whether every released factual claim resolves
+to a source. The acceptance run must fail honestly rather than manufacture a preferred
+scientific conclusion.
+
 ### WEB-GQR-5 - Failure drills
 Test and render:
 - provider rate limit;
