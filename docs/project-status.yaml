@@ -1,12 +1,12 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-08-31T22:48:00Z"
+updated_at: "2026-08-31T22:49:00Z"
 status_source: "Live GitHub state verified 2026-08-31 plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
 
 product:
   primary_surface: "FastAPI Web/API/frontend layer for Knowledge Engine"
   role_in_family: "consumes knowledge-engine-core validated evidence and knowledge-engine-ai Research Copilot contracts"
-  ask_status: "The deployed Ask path supports deterministic indexed retrieval plus asynchronous Research mode with durable session identity, background execution, polling, grounded-completion/re-retrieval, verified final release, provider/degradation transparency, citation provenance, and BT-2/BT-6 funnel/latency reporting. On feat/research-report-v1-backend, Research Report v1 is now carried as a typed structured payload through Web orchestration and durable async job state, but it is not yet rendered in the Ask UI."
+  ask_status: "The deployed Ask path supports deterministic indexed retrieval plus asynchronous Research mode with durable session identity, background execution, polling, grounded-completion/re-retrieval, verified final release, provider/degradation transparency, citation provenance, and BT-2/BT-6 funnel/latency reporting. On PR #109, Research Report v1 is now carried as a typed structured payload through Web orchestration and durable async job state, but it is not yet rendered in the Ask UI."
 
 current_milestone:
   name: "Research Report v1 — answer-first Web integration and Monster acceptance"
@@ -16,8 +16,8 @@ current_milestone:
   companion_ai_issue: "jweter/knowledge-engine-ai#129"
   acceptance_case: "jweter/knowledge-engine-ai#79 monster-energy-bp-one-year"
   objective: "Render a two-layer research report: Layer 1 answers the question clearly with bottom line plus dimension-specific conclusions/certainty; Layer 2 makes evidence, methodology, provenance, counter-evidence, coverage, and missing evidence inspectable without forcing the user to read pipeline internals first."
-  implementation_state: "WEB-GQR-4 asynchronous Research Sessions with progressive Ask polling is complete and merged as PR #106. knowledge-engine-ai PRs #130 and #131 are merged and provide the structured ResearchReport contract plus safe completed-session integration seam. The current Web backend branch pins that AI revision, carries ResearchReportBuildResult through WebResearchResult, and persists its typed payload in durable async job results. Layer 1/Layer 2 rendering and deployed Monster acceptance remain open."
-  blocking_gap: "Pass fresh Web Quality/Docker CI for the backend slice, render Layer 1 and Layer 2 from the structured payload, then pass the deployed Monster #79 acceptance run."
+  implementation_state: "WEB-GQR-4 asynchronous Research Sessions with progressive Ask polling is complete and merged as PR #106. knowledge-engine-ai PRs #130 and #131 are merged and provide the structured ResearchReport contract plus safe completed-session integration seam. Web PR #109 pins that AI revision, carries ResearchReportBuildResult through WebResearchResult, and persists its typed payload in durable async job results. Layer 1/Layer 2 rendering and deployed Monster acceptance remain open."
+  blocking_gap: "Pass fresh Web Quality/Docker CI for PR #109, render Layer 1 and Layer 2 from the structured payload, then pass the deployed Monster #79 acceptance run."
   priority_rule: "Until Monster #79 passes on the deployed Ask path, Research Report v1 integration outranks decorative UI work and unrelated non-blocking backend abstractions."
 
 research_report_v1_handoff:
@@ -30,7 +30,8 @@ research_report_v1_handoff:
     - "AI PR #131 provides a fail-closed completed-session integration seam that returns a ResearchReportBuildResult without weakening the base verified result."
   current_work_in_progress:
     branch: "feat/research-report-v1-backend"
-    status: "Backend integration slice implemented; PR not yet opened at this snapshot."
+    pr: 109
+    status: "Focused backend PR #109 is open; mergeability resolved true and fresh required CI is pending."
     verified_changes:
       - "The branch is reconciled with current main without discarding the prior WIP history."
       - "pyproject.toml pins knowledge-engine-ai to merged AI commit 2eee4cc9ba76f99e669d2e52669e84d8b5199a41, which includes PRs #130 and #131."
@@ -38,13 +39,13 @@ research_report_v1_handoff:
       - "knowledge_engine_web/ai_orchestration.py carries ResearchReportBuildResult on WebResearchResult, invokes AI's typed report builder only after a releaseable base result, never scrapes narrative prose, and degrades an unexpected report-projection failure to a sanitized report-unavailable state without discarding the verified base answer."
       - "knowledge_engine_web/research_jobs.py persists ResearchReportBuildResult.to_dict() in the durable async result payload so polling/rendering can consume structured fields directly."
       - "tests/test_research_report_backend.py covers release-gate behavior, typed AI seam use, additive failure behavior, and durable transport of structured report fields independently of narrative prose."
-    required_cleanup_before_pr:
+    required_cleanup_before_merge:
       - "No temporary workflow scaffolding remains."
-      - "Open a focused PR to trigger the repository's pull_request-only Quality and Docker jobs, then repair any verified CI failure on this same branch."
+      - "PR #109 must receive fresh successful Quality and Docker jobs on its inspected head SHA before it can be classified GREEN."
   exact_next_sequence:
-    - "1. Open the focused backend PR from feat/research-report-v1-backend and wait for fresh independent Quality + Docker CI; do not merge it in the same run merely because it was just opened."
+    - "1. Inspect PR #109's fresh independent Quality + Docker CI; do not merge while checks are missing, pending, failed, or materially uncertain."
     - "2. If CI fails, inspect the actual failing gate/log, make the smallest safe correction on the existing branch, and leave it for fresh CI."
-    - "3. After the backend PR is independently green and merged, implement Layer 1 on Ask: render the ResearchReport bottom_line prominently, then render conclusion_rows as question dimension + conclusion + certainty, with certainty rationale inspectable and missing_direct_evidence visible as a first-class limitation."
+    - "3. After PR #109 is independently green and merged, implement Layer 1 on Ask: render the ResearchReport bottom_line prominently, then render conclusion_rows as question dimension + conclusion + certainty, with certainty rationale inspectable and missing_direct_evidence visible as a first-class limitation."
     - "4. Layer 2 on Ask: render supporting vs contradicting/null evidence IDs, directness, source/evidence links, direct vs class-level vs indirect distinctions, provider coverage/degradation, indexed-before-run vs acquired-during-run provenance, acquisition/extraction funnel, limitations, and session state. Reuse existing provenance/coverage components where possible instead of inventing parallel truth."
     - "5. Preserve the existing asynchronous session/polling behavior from PR #106; structured-report rendering must not regress immediate indexed retrieval or truthful durable progress."
     - "6. If structured report generation is unavailable or fails, preserve the already-verified base result and show an honest structured-report-unavailable state; never replace a valid grounded answer with a fabricated report."
@@ -86,9 +87,9 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-08-31T22:48:00Z"
+  checked_at: "2026-08-31T22:49:00Z"
   note: "Live PR/check/branch state must be queried before acting; cached counts here are only a handoff snapshot."
-  open_prs: 0
+  open_prs: 1
   recently_merged_prs:
     - number: 106
       title: "WEB-GQR-4: asynchronous Research Sessions with progressive Ask polling"
@@ -98,7 +99,8 @@ verified_repository_state:
       title: "Bump pinned knowledge-engine-ai commit; surface acquisition-route skipped_reason"
   active_research_report_issue: "#107"
   wip_branch: "feat/research-report-v1-backend"
-  wip_branch_has_open_pr: false
+  wip_branch_has_open_pr: true
+  open_research_report_pr: 109
   ci_workflows:
     - ".github/workflows/quality.yml"
 
@@ -110,7 +112,7 @@ secondary_track:
 
 next_continuation:
   priority: "P1-research-report-v1"
-  action: "Open the focused backend PR from feat/research-report-v1-backend to trigger fresh Quality and Docker CI. Repair verified failures on that branch only. After independent green CI and merge, continue with the two-layer Ask rendering over the now-durable structured report payload. The first deployment acceptance run after the UI is complete is Monster #79; do not declare the milestone complete before that run passes."
+  action: "Inspect PR #109's required Quality and Docker CI. Repair verified failures on that branch only; otherwise leave a newly opened/pending PR unmerged for fresh independent verification. After independent green CI and merge, continue with the two-layer Ask rendering over the now-durable structured report payload. The first deployment acceptance run after the UI is complete is Monster #79; do not declare the milestone complete before that run passes."
   selection_rule: "Before beginning work, query live PR/CI/branch state. Existing failed, pending, conflicted, blocked, or merge-ready work takes priority. Never merge failed, pending, conflicted, blocked, or materially uncertain work."
 
 human_decision_required: null
