@@ -1,35 +1,76 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-08-30T23:45:00Z"
-status_source: "Verified repository state plus docs/web_design.md, docs/general_question_research_loop_v1.md, and docs/federated_discovery_transparency_roadmap.md; this file is a continuity cache and never overrides higher-authority evidence."
+updated_at: "2026-08-31T20:45:00Z"
+status_source: "Live GitHub state verified 2026-08-31 plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
 
 product:
-  primary_surface: "Read-only FastAPI web front end over knowledge-engine-core's SQLite database"
-  role_in_family: "consumer of knowledge-engine-core (direct SQLite reflection) and knowledge-engine-ai (ke_client.py subprocess boundary)"
-  opt_in_ai_features:
-    - route: "/ask"
-      capability: "Research Copilot synthesis via knowledge-engine-ai's run_research_question"
-      guard: "own AIRequestGuard instance, KE_WEB_AI_* settings"
-    - route: "/discover"
-      capability: "Live federated discovery via knowledge-engine-ai's federated_discover() -> Core's ke federated-discover"
-      guard: "own AIRequestGuard instance, KE_WEB_DISCOVERY_* settings"
+  primary_surface: "FastAPI Web/API/frontend layer for Knowledge Engine"
+  role_in_family: "consumes knowledge-engine-core validated evidence and knowledge-engine-ai Research Copilot contracts"
+  ask_status: "The deployed Ask path supports deterministic indexed retrieval plus asynchronous Research mode with durable session identity, background execution, polling, grounded-completion/re-retrieval, verified final release, provider/degradation transparency, citation provenance, and BT-2/BT-6 funnel/latency reporting. Research Report v1's structured answer-first contract is not yet rendered."
 
 current_milestone:
-  name: "General Question Research Loop v1 (GQR), WEB-GQR sub-sequence"
-  roadmap_file: "docs/general_question_research_loop_v1.md"
+  name: "Research Report v1 — answer-first Web integration and Monster acceptance"
+  roadmap_file: "docs/research_report_v1.md"
   state: "active"
-  latest_update: "WEB-GQR-0, WEB-GQR-1, WEB-GQR-1B, WEB-GQR-2, and WEB-GQR-3 are all complete and merged to main (PRs #87, #90, #94, #96, #97 respectively -- verified directly from this checkout's git history, not from a cached count). This session (2026-08-30) implements the first WEB-GQR-4 slice (durable research-session polling foundation). Discovered that the durable, redeploy-surviving session store WEB-GQR-4 asks for already exists: knowledge-engine-ai's SessionRepository already persists a ResearchSession header plus one ResearchEvent row per completed workflow step to Settings.session_db_path as /ask?synthesize=1 executes, and session_storage_mode/session_persistent_root already give it the local/persistent redeploy-survival split. Rather than building a second, duplicate Web-owned session store (the originally recommended shape for this run), this session added a strictly read-only projection of that same store -- new module knowledge_engine_web/research_session_status.py (opens the store mode=ro, derives a last_completed_stage label from the latest durably recorded *completed* workflow_node using the exact stage vocabulary docs/general_question_research_loop_v1.md's WEB-GQR-4 section documents) -- and a new GET /ask/session/{session_id} route returning that state as small JSON (session id, question, status, last_completed_stage, terminal, timestamps, event count); unknown session id or no store yet both 404. /ask's own synchronous request/response shape is completely unchanged. Live-verified against a real uvicorn process (not just fake-transport tests): seeded a session through the real SessionRepository, read it back over HTTP, then started an entirely new server process against the same on-disk SQLite file to confirm the state survives a process restart the way a redeploy would see it. Same-run follow-up PR #103 (after #102 merged): chatgpt-codex-connector's automated review found the field was originally named current_stage despite only ever reflecting the latest *completed* step (renamed to last_completed_stage, documented as stale-by-one-step during an in-flight run, exact once terminal), and that a corrupt/non-database session-store file raised an uncaught sqlite3.DatabaseError instead of 404ing (the narrower except sqlite3.OperationalError didn't catch it; broadened to sqlite3.DatabaseError, added a regression test). quality_preflight.py green after the fix (400 tests). PR #104 (merged, verified via git log): bumped the pinned knowledge-engine-ai commit to aab9b22 (PR #126, caller-supplied session_id seam) and wired AcquisitionRouteResult.skipped_reason through to the 'not attempted' badge. This session (2026-08-30, hourly run): used that seam. /ask?synthesize=1 now generates the session id (uuid.uuid4()) itself before calling run_guarded_ai_orchestration, instead of leaving run_research_question to generate one internally -- ai_orchestration.run_ai_orchestration/run_guarded_ai_orchestration both gained an optional session_id keyword (default None, existing behavior preserved for any other caller). WebResearchResult.session_id's value/format is unchanged (still a UUID4 string) so this is not user-visible yet; the request/response cycle is still fully synchronous. This is the concrete precondition the next WEB-GQR-4 slice (background task, immediate 'researching' response, frontend polling) needs and could not do until now. 402 tests pass (400 plus 2 new: test_ai_orchestration.py::test_run_ai_orchestration_forwards_a_caller_supplied_session_id and test_main.py::test_ask_synthesize_generates_the_session_id_before_the_run_starts); full local gate (ruff format --check, ruff check, mypy, pytest, pip-audit) green; TestClient smoke-check of GET / and GET /ask both returned 200. See docs/web_design.md's matching WEB-GQR-4 follow-up entry. Not done yet: no frontend polls the existing GET /ask/session/{session_id} endpoint, and /ask?synthesize=1 still runs the whole research session inline within one HTTP request rather than as a background task, so there is still nothing to poll *during* an in-flight run. See docs/general_question_research_loop_v1.md's WEB-GQR-4 entry and docs/web_design.md's matching 'Implemented' section for the full account. The underlying WEB-FRD (federated discovery transparency) sequence referenced by an earlier version of this file is complete (WEB-FRD-1 through WEB-FRD-6, all in docs/federated_discovery_transparency_roadmap.md) and is no longer the active milestone -- GQR is."
-  sub_milestone_status:
-    WEB-FRD-1_provider_coverage: "complete -- /discover page renders provider status from Core's own recorded outcome, never inferred from result count"
-    WEB-FRD-2_search_provenance_details: "complete -- all 5 exit criteria met. knowledge-engine-ai PR #51 parsed Core's coverage.created_at into FederatedDiscoveryResult.search_run_created_at; this session bumped Web's pinned knowledge-engine-ai commit to fd5964c0f9632d4622224b5d2608d32bc7b34989 (was f4715d32a62748ec1ff395ee57402d192362c1a5) and rendered the field in discover.html's 'Run timestamp' row, with an explicit 'not recorded' disclosure when the value is None."
-    WEB-FRD-3_work_identity_provider_observations: "complete and merged to main. /discover calls build_discovery_presentation() and discover.html renders per-candidate disagreement state."
-    WEB-FRD-4_publication_status_warnings: "complete -- PR #77 merged on 2026-08-21. Web pins AI commit 58c21b1 and independently renders retraction, correction, expression-of-concern, withdrawal, and preprint state while preserving every provider's raw observation and keeping unreported distinct from explicit false. 2026-08-22 CSS fix (this session): the 'Corrected'/'newly corrected' banner's is-degraded class had no stylesheet rule and rendered unstyled; added .publication-status-banner.is-degraded plus a --status-degraded-bg token so it gets the same visible-banner treatment as the is-critical warnings. See docs/federated_discovery_transparency_roadmap.md's WEB-FRD-4 section and docs/web_design.md's matching entry."
-    WEB-FRD-5_research_freshness_history: "complete this session. Core's second FRD-6 follow-up (PR #394, commit 96d30ac: candidate-snapshot persistence plus 'federated-coverage-report --output') and knowledge-engine-ai's matching ke_client.federated_coverage_report() point-lookup wrapper (PR #55, commit 2cab16b) had both merged; this session bumped Web's pinned knowledge-engine-ai commit to 2cab16b47bb9d3f42d777e989bf2637e8310fb4d (was f65e340d4d280840a49f3c10a8693dd5aadcc340) and closed the candidate-level slice of item 7 that a prior session left deliberately deferred. discovery_orchestration.py gained run_discovery_candidate_snapshot(); discovery_presentation.py's publication-status rollup was made public (build_publication_status()) for reuse; discovery_freshness.py gained build_candidate_freshness(), diffing the current run's candidates against one past run's full snapshot by canonical_id to report specific newly discovered works and specific candidates whose retraction status flipped ('was clear/not checked, now retracted'). main.py composes this as a second, best-effort, additive lookup over the existing run-level freshness view (dataclasses.replace, no change to the existing build_discovery_freshness() function or its tests). discover.html renders 'Newly discovered works' and 'Newly flagged as retracted' sections reusing WEB-FRD-3's candidate-card markup (extracted into a local Jinja macro) and WEB-FRD-4's retraction banner -- no new presentation format invented, per the design doc's own instruction. All four WEB-FRD-5 exit criteria are now resolved: 'newly discovered works are visible' and 'new corrections/retractions are highlighted' (retraction half) are met; 'provider-coverage changes are shown' was already met; 'old synthesis is versioned' is not applicable to /discover (no synthesis step exists there). Live-verified against the real ke binary end to end (not just fake-transport tests): a knowledge-engine-core checkout at the PR #394 commit was installed, a ledger was seeded via Core's own FederatedSearchLedger.record() with two runs for one tracked question, and a local server driven through the real ke federated-discover-history and ke federated-coverage-report --output subprocess calls rendered the expected newly-discovered/newly-retracted sections. 332 tests pass (318 pre-existing plus 14 new); full local quality_preflight.py passed. Docker's CI job was not run locally (no Docker daemon available in this session); CI remains the first real check of the built image for this pyproject.toml/poetry.lock change. See docs/roadmap/web_frd5_freshness_history_design.md section 10 for the full account. Correction/expression-of-concern/withdrawal states were out of scope at the time, same as WEB-FRD-4; that Core-side block has since cleared -- see the WEB-FRD-4 entry above. 2026-08-20 PR #75 review follow-up: a P1 review comment identified that a prior run recorded before Core PR #394's candidate-snapshot persistence existed (nonzero candidate_count, empty candidates tuple) was wrongly trusted as a valid zero-candidate baseline, misreporting every current candidate as newly discovered; fixed via discovery_freshness.candidate_snapshot_is_usable(), which falls back to the existing run-level-only comparison when the snapshot's candidate_count is inconsistent with its returned candidates. See docs/roadmap/web_frd5_freshness_history_design.md section 11. 333 tests pass (332 plus the new regression test, confirmed fail-before/pass-after)."
-    WEB-FRD-6_inspectable_research_path: "implemented for the /ask Research Copilot session path. ask.html renders knowledge-engine-ai's already-computed SessionTrace (per-step tool/model/duration/notes, evidence-record IDs touched) in a closed-by-default 'Research path (session trace)' <details> section, and the specific unresolved required Research ISA close-gate criteria (close_result.validation.unresolved_required_criteria) instead of only the aggregate status enum. 2026-08-19 follow-up (PR #72, merged): the Skeptic verification artifact itself is now inspectable too -- ask.html renders a visible-by-default 'Verification findings' list naming the specific hallucinated citations, ungrounded numbers, and missed qualifying/contradicting evidence records (VerificationResult.hallucinated_citations/.ungrounded_numbers/.missed_qualifiers) whenever verification ran and is not clean, instead of only the one-word 'flagged for review' summary. All fields already existed on ResearchQuestionResult/VerificationResult (since AI-O6/AI-O9) and reached ask.html's context unused -- the same built-but-unreachable pattern already fixed for WEB-FRD-1/WEB-FRD-3. No Core or AI change needed; Web-only template/test addition. Does not cover /discover's federated-discovery search context (already served by WEB-FRD-2/WEB-FRD-3). 2026-08-23 visual-polish follow-up (this session, branch claude/kind-brahmagupta-i9bkun): picked up the first of the two discretionary candidates the 2026-08-22 session recorded below -- the 'Research path (session trace)' <details> block's '.discovery-method-details'/'.ask-trace-events' classes had no stylesheet rule at all and rendered as a bare unstyled <details>. Added .discovery-method-details (card border/background/radius matching .ask-evidence-entry's existing card-in-card convention, styled <summary>, and spacing for its <dl>/<dt>/<dd> provenance fields) and .ask-trace-events (each trace event rendered as its own bordered row) to static/style.css, reusing existing --border/--bg/--bg-alt/--text-muted/--accent tokens -- no new token, no new visual language, matching the pattern already used for the WEB-FRD-4 and verification-findings styling fixes. Note: '.discovery-method-details' is shared with discover.html's four existing disclosure sections (search-method-and-provenance, publication-status observations, provider-disagreement, and freshness), so this fix also gives those their first real styling rather than only touching ask.html's usage -- styling-only, no markup or data change on either page. Added tests/test_main.py::test_discovery_method_details_has_visible_styling (stylesheet-rule assertion, mirrors test_trust_warning_is_critical_has_visible_styling's pattern). Full local quality_preflight.py passed: ruff format --check, ruff check, mypy (55 source files), pytest (362 passed, 361 pre-existing plus 1 new test function), pip-audit (no known vulnerabilities), git diff --check. Docker's CI job was not run locally (no Docker daemon available in this session, same limitation prior sessions recorded). No Core or knowledge-engine-ai change, no pinned-commit change. This session ran under externally-supplied one-shot instructions (same as the 2026-08-22 session that opened PR #84) rather than this repository's own automation_contract, so the opened PR (#85) is intentionally a DRAFT left for independent CI and human/next-session merge, per the PR #84 precedent recorded in the prior next_continuation entry below."
+  tracking_issue: "#107"
+  companion_ai_issue: "jweter/knowledge-engine-ai#129"
+  acceptance_case: "jweter/knowledge-engine-ai#79 monster-energy-bp-one-year"
+  objective: "Render a two-layer research report: Layer 1 answers the question clearly with bottom line plus dimension-specific conclusions/certainty; Layer 2 makes evidence, methodology, provenance, counter-evidence, coverage, and missing evidence inspectable without forcing the user to read pipeline internals first."
+  implementation_state: "WEB-GQR-4 asynchronous Research Sessions with progressive Ask polling is complete and merged as PR #106. knowledge-engine-ai PRs #130 and #131 are merged and provide the structured ResearchReport contract plus safe completed-session integration seam. Web has not yet consumed/rendered that contract."
+  blocking_gap: "Finish Web's AI dependency/lock update, carry the structured report through Web orchestration, render Layer 1 and Layer 2, then pass the deployed Monster #79 acceptance run."
+  priority_rule: "Until Monster #79 passes on the deployed Ask path, Research Report v1 integration outranks decorative UI work and unrelated non-blocking backend abstractions."
+
+research_report_v1_handoff:
+  completed_foundation:
+    - "PR #106 — asynchronous Research Sessions with progressive Ask polling — merged to main and validated with Quality, Docker, container smoke, and TruffleHog checks."
+    - "Ask returns immediately with deterministic indexed retrieval while Research mode continues in the background."
+    - "The page polls durable session state and renders only verified/releaseable final research output."
+    - "Current Ask already exposes provider coverage/degradation, indexed-vs-new evidence provenance, acquisition/extraction funnel facts, limitations, resolved citations, and research latency."
+    - "AI PR #130 provides the typed ResearchReport contract and deterministic validation."
+    - "AI PR #131 provides a fail-closed completed-session integration seam that returns a ResearchReportBuildResult without weakening the base verified result."
+  current_work_in_progress:
+    branch: "feat/research-report-v1-backend"
+    status: "WIP branch exists; no PR is open for it yet."
+    verified_changes:
+      - "pyproject.toml pins knowledge-engine-ai to merged AI commit 2eee4cc9ba76f99e669d2e52669e84d8b5199a41, which includes PRs #130 and #131."
+      - "A temporary .github/workflows/generate-lock-temp.yml workflow was added only to regenerate poetry.lock with Poetry 2.3.3. Its workflow run succeeded and produced the poetry-lock artifact."
+    required_cleanup_before_pr:
+      - "Commit the regenerated poetry.lock corresponding to the new AI pin."
+      - "Remove the temporary generate-lock-temp.yml workflow; it is scaffolding, not a permanent project workflow."
+      - "Run the normal Web quality gate after the real implementation changes are complete."
+  exact_next_sequence:
+    - "1. Resume feat/research-report-v1-backend; reconcile it against current main before editing."
+    - "2. Finish the knowledge-engine-ai pin/poetry.lock update and delete the temporary lock-generation workflow."
+    - "3. In knowledge_engine_web/ai_orchestration.py, call AI's build_research_report_for_result() only from a releaseable completed ResearchQuestionResult and carry ResearchReportBuildResult through the Web-facing result contract. Do not scrape narrative prose to recover report semantics."
+    - "4. Preserve the existing asynchronous session/polling behavior from PR #106; structured-report generation must not regress immediate indexed retrieval or truthful durable progress."
+    - "5. Layer 1 on Ask: render the ResearchReport bottom_line prominently, then render conclusion_rows as question dimension + conclusion + certainty, with certainty rationale inspectable and missing_direct_evidence visible as a first-class limitation."
+    - "6. Layer 2 on Ask: render supporting vs contradicting/null evidence IDs, directness, source/evidence links, direct vs class-level vs indirect distinctions, provider coverage/degradation, indexed-before-run vs acquired-during-run provenance, acquisition/extraction funnel, limitations, and session state. Reuse existing provenance/coverage components where possible instead of inventing parallel truth."
+    - "7. If structured report generation is unavailable or fails, preserve the already-verified base result and show an honest structured-report-unavailable state; never replace a valid grounded answer with a fabricated report."
+    - "8. Add focused tests proving the Web consumes structured fields, renders direct/indirect and null/counter-evidence distinctly, exposes missing one-year evidence, and does not infer report semantics from narrative text."
+    - "9. Open the Web PR only after normal Quality + Docker checks are green; remove all temporary workflow scaffolding first."
+    - "10. Deploy and run Monster #79 end to end. Record session ID, BT-2 funnel, time to first grounded information, time to final report, provider coverage/degradation, promoted Evidence Records, final ResearchState, every conclusion row, missing evidence, and resolved citations."
+    - "11. Fail acceptance honestly on any unsupported claim, missing dimension, collapsed evidence boundary, omitted counter-evidence, hidden missing-one-year-evidence gap, or materially worse readability than the scholarly-assistant baseline. Fix and rerun until it passes."
+  layer_1_required_dimensions_for_monster:
+    - "acute post-consumption blood-pressure effect"
+    - "persistent habitual/baseline/resting/ambulatory BP evidence"
+    - "incident hypertension risk over longer follow-up"
+    - "BP measurement artifact from recent caffeine intake"
+    - "Zero Ultra vs Original Monster long-term context"
+    - "whether direct approximately one-year Monster/energy-drink evidence was actually found"
+    - "certainty and missing evidence for each conclusion"
+  nonnegotiable_invariants:
+    - "The main answer must be understandable without opening methodology."
+    - "Web consumes structured AI report fields; it does not scrape narrative prose for conclusions, certainty, provenance, or evidence classifications."
+    - "Direct Monster evidence, class-level energy-drink evidence, and indirect caffeine/coffee/soda evidence remain distinguishable."
+    - "Positive and null/contradictory evidence remain inspectable."
+    - "Missing direct long-duration evidence cannot be buried inside generic limitations."
+    - "Provider degradation, provenance, and source links are never hidden merely to simplify the page."
+    - "Research progress never claims a stage succeeded before durable state says it did."
+    - "Existing deterministic verification and Research ISA release gates remain authoritative."
+  done_when: "Research Report v1 is not complete until the deployed Monster #79 Ask report is at least as readable/useful as the scholarly-assistant baseline while satisfying every evidence/provenance/missing-evidence acceptance requirement."
 
 automation_contract:
-  schedule_role: "repository participant in an hourly portfolio-development loop (owner-managed; not created by this session)"
-  new_roadmap_pr_budget_per_run: 1
+  schedule_role: "repository participant in an hourly portfolio-development loop (owner-managed)"
   query_live_github_state_every_run: true
   newly_opened_pr_requires_fresh_ci_before_merge: true
   draft_prs: "never"
@@ -38,60 +79,38 @@ automation_contract:
     - name: "Quality"
       file: ".github/workflows/quality.yml"
       job: "checks"
-      note: "ruff format --check, ruff check, mypy, pytest"
     - name: "Docker build"
       file: ".github/workflows/quality.yml"
       job: "docker"
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-08-30T23:30:00Z"
-  note: "Live PR/check/issue state is intentionally not cached as authoritative counts here. Scheduled runs must query GitHub directly before acting. As of this timestamp, #104 is confirmed merged (verified via git log on main) and no PR is open; this run opens one new PR (session_id-generated-up-front, see next_continuation) and leaves it for fresh CI."
+  checked_at: "2026-08-31T20:45:00Z"
+  note: "Live PR/check/branch state must be queried before acting; cached counts here are only a handoff snapshot."
   open_prs: 0
-  recently_merged_prs_seen_in_git_log:
+  recently_merged_prs:
+    - number: 106
+      title: "WEB-GQR-4: asynchronous Research Sessions with progressive Ask polling"
+    - number: 105
+      title: "WEB-GQR-4: generate the research session id before the run starts"
     - number: 104
       title: "Bump pinned knowledge-engine-ai commit; surface acquisition-route skipped_reason"
-    - number: 103
-      title: "fix: report last_completed_stage honestly, survive corrupt session store"
-    - number: 102
-      title: "feat: WEB-GQR-4 durable research-session store and polling endpoint"
-    - number: 101
-      title: "docs: route development agents through reality check"
-    - number: 100
-      title: "docs: add industry reality check"
-    - number: 99
-      title: "ci: add scheduled TruffleHog deep-history secret audit"
-    - number: 98
-      title: "chore(deps-dev): bump ruff in the python-development group"
-    - number: 97
-      title: "WEB-GQR-3: evidence provenance on Resolved citations"
-    - number: 96
-      title: "WEB-GQR-2: research coverage panel on Ask"
-    - number: 95
-      title: "Prepare persistent alpha research workspace"
-    - number: 94
-      title: "Run grounded research completion from Web Research mode (WEB-GQR-1B)"
-    - number: 91
-      title: "ci: add pinned TruffleHog secret scan"
-    - number: 90
-      title: "Render deterministic GQR research state on Ask (WEB-GQR-1)"
-    - number: 89
-      title: "Make Ask answer the submitted question"
-    - number: 88
-      title: "Harden web quality preflight with autofix and Docker mode"
-    - number: 87
-      title: "Enable bounded discovery for general Research Copilot questions (WEB-GQR-0)"
+  active_research_report_issue: "#107"
+  wip_branch: "feat/research-report-v1-backend"
+  wip_branch_has_open_pr: false
   ci_workflows:
     - ".github/workflows/quality.yml"
-  local_quality_preflight:
-    script: "scripts/quality_preflight.py"
-    note: "This session (2026-08-30, hourly run, session_id-generated-up-front slice) ran the equivalent gate directly (poetry run ruff format --check/ruff check/mypy knowledge_engine_web tests/pytest/pip-audit) and it passed end to end at 402 tests (400 pre-existing plus 2 new), against a fresh poetry install pinned to knowledge-engine-ai commit aab9b22 (unchanged from PR #104). Also live-smoke-tested via TestClient: GET / and GET /ask both returned 200."
+
+secondary_track:
+  name: "General Question Research Loop v1"
+  roadmap_file: "docs/general_question_research_loop_v1.md"
+  tracking_issue: "#93"
+  note: "WEB-GQR-0 through WEB-GQR-4 are the execution/progress foundation beneath Research Report v1. Continue GQR work when it directly blocks the report or Monster acceptance. Do not re-open already-completed async/polling work unless a concrete regression is found."
 
 next_continuation:
-  priority: "P4-incomplete-current-milestone"
-  current_action: "This run (2026-08-30, hourly) used the session_id orchestration seam PR #104 exposed but did not yet consume: /ask?synthesize=1 now generates the session id up front (uuid.uuid4()) and passes it into run_guarded_ai_orchestration -> run_ai_orchestration -> run_research_question, instead of leaving that last function to generate one internally. ai_orchestration.run_ai_orchestration/run_guarded_ai_orchestration both gained an optional session_id keyword (default None, backward compatible). Not yet user-visible (WebResearchResult.session_id's value/format is unchanged, still a UUID4 string) and the request/response cycle is still fully synchronous -- this is plumbing only. 402 tests pass; full local gate green. PR opened, CI pending -- see verified_repository_state above for the authoritative count once this run ends."
-  action: "The remaining WEB-GQR-4 steps, now unblocked: (1) move the /ask?synthesize=1 run off the request/response cycle onto a background task, returning a 'researching' page immediately with the now-known session_id; (2) wire GET /ask/session/{session_id} into a frontend polling loop on that page so there is something to poll *during* an in-flight run, not only after it finishes or after a redeploy; (3) emit the 'researching' stage live rather than only as a post-hoc trace -- this is also where an explicit active-stage signal (distinct from last_completed_stage) belongs. Note this is a real /ask response-contract change (synchronous HTML response -> immediate 'researching' response plus a later polled result), not just an additive route -- verify it against a real uvicorn process end to end (kick off a run, poll while in flight, confirm the terminal render) before opening the PR, and check whether the final rendered result (narrative, citations, coverage panel) needs anything durably persisted beyond the existing SessionRepository event log to reconstruct after the background task completes, since read_session_status today only exposes stage/status, not the full ResearchQuestionResult -- resolve that gap as part of this slice, not by inventing a second store. This is a substantial architecture change; a future run should treat it as its own single coherent unit rather than combining it with unrelated work."
-  selection_rule: "Before beginning roadmap work, query live PR state. Handle failed, green, blocked, conflicted, or pending existing work according to docs/agent-development-policy.md and knowledge-engine-core's shared policy document."
+  priority: "P1-research-report-v1"
+  action: "Resume the existing feat/research-report-v1-backend branch rather than starting another parallel implementation. First reconcile it with live main and verify the temporary lock-generation workflow/artifact state. Finish the AI pin/lock cleanup, then wire ResearchReportBuildResult through Web orchestration and implement the two-layer Ask report. Open/merge only after normal CI is green. The first deployment acceptance run after that is Monster #79; do not declare the milestone complete before that run passes."
+  selection_rule: "Before beginning work, query live PR/CI/branch state. Existing failed, pending, conflicted, blocked, or merge-ready work takes priority. Never merge failed, pending, conflicted, blocked, or materially uncertain work."
 
 human_decision_required: null
 
