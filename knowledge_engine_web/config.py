@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     ai_max_concurrent_requests: int = Field(default=1, gt=0)
     ai_rate_limit_requests: int = Field(default=3, gt=0)
     ai_rate_limit_window_seconds: float = Field(default=600.0, gt=0)
+    # WEB-GQR-4: hosted Research mode can return a durable session identity
+    # immediately and move the bounded AI run off the request/response cycle.
+    # Default false preserves the existing synchronous local/test seam; Render
+    # opts in explicitly once persistent session storage is configured.
+    async_research_enabled: bool = False
     # GQR-4/GQR-5: Research mode may acquire accessible full text before
     # grounded extraction. This directory is a durable product input/output,
     # not a cache: an acquired Paper may be reused by later research runs.

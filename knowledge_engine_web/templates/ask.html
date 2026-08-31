@@ -62,15 +62,57 @@
   </p>
   {% endif %}
   {% else %}
+  {% if research_job_session_id %}
+  <p>Indexed evidence is thin; Research mode is continuing the bounded literature search for this question.</p>
+  <p class="disclaimer">
+    An indexed-corpus miss is not the final scientific conclusion. Only validated Evidence Records
+    can enter the researched answer, and the final result will update below when verification closes.
+  </p>
+  {% else %}
   <p>I could not find evidence in the indexed corpus that directly answers &ldquo;{{ question }}&rdquo;.</p>
   <p class="disclaimer">
     Papers that only share the broad topic are not treated as answers. They are labelled
     background below.
   </p>
   {% endif %}
+  {% endif %}
 </section>
 
-{% if synthesize_requested %}
+{% if research_job_session_id %}
+<section class="ask-result-card ask-synthesis" id="async-research-session" data-session-id="{{ research_job_session_id }}">
+  <p class="trust-label computed">Research session running</p>
+  <h3>Research Copilot</h3>
+  <p class="disclaimer">
+    This page returned without waiting for the full research loop. It is polling the durable session
+    while indexed retrieval, scholarly discovery, acquisition, grounded extraction, re-retrieval,
+    synthesis, and verification proceed under the configured budgets.
+  </p>
+  <p><strong>Session:</strong> <code>{{ research_job_session_id }}</code></p>
+  <p id="async-research-progress" role="status" aria-live="polite">Starting bounded research...</p>
+  <p class="empty-state" id="async-research-error" hidden></p>
+  <div id="async-research-result" hidden>
+    <p class="trust-label computed">Verified research result</p>
+    <h4>Researched answer</h4>
+    <p id="async-research-narrative"></p>
+    <dl>
+      <dt>Research state</dt><dd id="async-research-state"></dd>
+      <dt>Evidence used</dt><dd id="async-research-evidence-counts"></dd>
+      <dt>Provider coverage</dt><dd id="async-research-provider-coverage"></dd>
+      <dt>Measured research latency</dt><dd id="async-research-latency"></dd>
+    </dl>
+    <div id="async-research-limitations-wrap" hidden>
+      <h4>Limitations</h4>
+      <ul id="async-research-limitations"></ul>
+    </div>
+    <div id="async-research-citations-wrap" hidden>
+      <h4>Resolved citations</h4>
+      <ul id="async-research-citations"></ul>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if synthesize_requested and not research_job_session_id %}
 <section class="ask-result-card ask-synthesis">
   <p class="trust-label reviewed">AI-generated, not reviewed</p>
   <h3>Research Copilot result</h3>
@@ -440,15 +482,167 @@
     const form = document.getElementById("ask-form");
     const submit = document.getElementById("ask-submit");
     const status = document.getElementById("ask-running-status");
-    if (!form || !submit || !status) return;
-    form.addEventListener("submit", () => {
-      const copilot = form.querySelector('input[name="synthesize"]:checked');
-      if (!copilot) return;
-      submit.disabled = true;
-      submit.setAttribute("aria-busy", "true");
-      submit.textContent = "Working";
-      status.hidden = false;
-    });
+    if (form && submit && status) {
+      form.addEventListener("submit", () => {
+        const copilot = form.querySelector('input[name="synthesize"]:checked');
+        if (!copilot) return;
+        submit.disabled = true;
+        submit.setAttribute("aria-busy", "true");
+        submit.textContent = "Working";
+        status.hidden = false;
+      });
+    }
+
+    const session = document.getElementById("async-research-session");
+    if (!session) return;
+    const sessionId = session.dataset.sessionId;
+    if (!sessionId) return;
+
+    const currentUrl = new URL(window.location.href);
+    if (!currentUrl.searchParams.get("session_id")) {
+      currentUrl.searchParams.set("session_id", sessionId);
+      window.history.replaceState({}, "", currentUrl);
+    }
+
+    const progressNode = document.getElementById("async-research-progress");
+    const errorNode = document.getElementById("async-research-error");
+    const resultNode = document.getElementById("async-research-result");
+    const narrativeNode = document.getElementById("async-research-narrative");
+    const stateNode = document.getElementById("async-research-state");
+    const evidenceNode = document.getElementById("async-research-evidence-counts");
+    const providerNode = document.getElementById("async-research-provider-coverage");
+    const latencyNode = document.getElementById("async-research-latency");
+    const limitationsWrap = document.getElementById("async-research-limitations-wrap");
+    const limitationsNode = document.getElementById("async-research-limitations");
+    const citationsWrap = document.getElementById("async-research-citations-wrap");
+    const citationsNode = document.getElementById("async-research-citations");
+
+    const milliseconds = (value) => {
+      if (value === null || value === undefined) return "not recorded";
+      return value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${value}ms`;
+    };
+
+    const renderList = (wrap, list, values) => {
+      if (!wrap || !list || !values || values.length === 0) return;
+      list.replaceChildren();
+      values.forEach((value) => {
+        const item = document.createElement("li");
+        item.textContent = String(value);
+        list.appendChild(item);
+      });
+      wrap.hidden = false;
+    };
+
+    const renderCitations = (citations) => {
+      if (!citationsWrap || !citationsNode || !citations || citations.length === 0) return;
+      citationsNode.replaceChildren();
+      citations.forEach((citation) => {
+        const item = document.createElement("li");
+        const evidenceId = citation.evidence_record_id || "evidence record";
+        const local = document.createElement("a");
+        local.href = `/claims/${encodeURIComponent(evidenceId)}`;
+        local.textContent = evidenceId;
+        item.appendChild(local);
+        if (citation.paper_citation) {
+          item.appendChild(document.createTextNode(` — ${citation.paper_citation}`));
+        }
+        if (citation.paper_source_url) {
+          try {
+            const sourceUrl = new URL(citation.paper_source_url);
+            if (sourceUrl.protocol === "http:" || sourceUrl.protocol === "https:") {
+              const source = document.createElement("a");
+              source.href = sourceUrl.href;
+              source.textContent = " source";
+              source.rel = "noopener noreferrer";
+              item.appendChild(source);
+            }
+          } catch (_error) {
+            // Invalid provider URL stays unlinked rather than becoming markup.
+          }
+        }
+        citationsNode.appendChild(item);
+      });
+      citationsWrap.hidden = false;
+    };
+
+    const renderResult = (result) => {
+      if (!resultNode || !result) return;
+      const progress = result.progress || {};
+      const funnel = result.conversion_funnel || {};
+      if (narrativeNode) {
+        narrativeNode.textContent = result.narrative_releaseable && result.narrative
+          ? result.narrative
+          : "Research completed, but deterministic verification or the Research ISA close gate did not permit a narrative to be released.";
+      }
+      if (stateNode) stateNode.textContent = result.research_state || "unknown";
+      if (evidenceNode) {
+        const indexed = (progress.indexed_evidence_record_ids || []).length;
+        const acquired = (progress.newly_acquired_evidence_record_ids || []).length;
+        evidenceNode.textContent = `${indexed} indexed before the run; ${acquired} newly grounded and promoted during the run`;
+      }
+      if (providerNode) {
+        const providers = progress.provider_statuses || [];
+        const attempted = providers.filter((provider) => provider.attempted).length;
+        const degraded = providers.filter((provider) => provider.outcome && provider.outcome !== "success").length;
+        const completeness = progress.provider_coverage_completeness || "not recorded";
+        providerNode.textContent = `${attempted} provider(s) attempted; ${degraded} degraded; coverage ${completeness}`;
+      }
+      if (latencyNode) {
+        latencyNode.textContent = `first grounded information: ${milliseconds(funnel.time_to_first_grounded_information_ms)}; final report: ${milliseconds(funnel.time_to_final_report_ms)}`;
+      }
+      renderList(limitationsWrap, limitationsNode, progress.limitations || []);
+      renderCitations(progress.citations || []);
+      resultNode.hidden = false;
+    };
+
+    let delayMs = 1000;
+    const poll = async () => {
+      try {
+        const response = await fetch(`/ask/session/${encodeURIComponent(sessionId)}`, {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error(`status ${response.status}`);
+        const data = await response.json();
+        const created = Date.parse(data.created_at);
+        const elapsed = Number.isNaN(created) ? null : Math.max(0, Date.now() - created);
+        if (progressNode) {
+          if (data.job_status === "queued") {
+            progressNode.textContent = `Queued for bounded research${elapsed === null ? "" : ` — ${milliseconds(elapsed)} elapsed`}.`;
+          } else if (data.last_completed_stage) {
+            progressNode.textContent = `Last completed: ${data.last_completed_stage}. Research continues${elapsed === null ? "" : ` — ${milliseconds(elapsed)} elapsed`}.`;
+          } else {
+            progressNode.textContent = `Research session is running${elapsed === null ? "" : ` — ${milliseconds(elapsed)} elapsed`}.`;
+          }
+        }
+        if (data.interrupted) {
+          if (errorNode) {
+            errorNode.textContent = data.visitor_error || "The research worker was interrupted.";
+            errorNode.hidden = false;
+          }
+          return;
+        }
+        if (data.terminal) {
+          if (data.job_status === "completed" && data.result) {
+            if (progressNode) progressNode.textContent = "Bounded research completed.";
+            renderResult(data.result);
+          } else if (errorNode) {
+            errorNode.textContent = data.visitor_error || "Research mode did not complete this session.";
+            errorNode.hidden = false;
+          }
+          return;
+        }
+        delayMs = Math.min(5000, Math.round(delayMs * 1.35));
+        window.setTimeout(poll, delayMs);
+      } catch (_error) {
+        if (progressNode) {
+          progressNode.textContent = "The session is still pending; the progress endpoint is temporarily unavailable. Retrying...";
+        }
+        delayMs = Math.min(5000, Math.round(delayMs * 1.5));
+        window.setTimeout(poll, delayMs);
+      }
+    };
+    window.setTimeout(poll, 250);
   })();
 </script>
 {% endblock %}

@@ -95,6 +95,11 @@ from knowledge_engine_web.report_renderer import (
     render_whats_changed_report,
 )
 from knowledge_engine_web.research_coverage_presentation import build_research_coverage_panel
+from knowledge_engine_web.research_jobs import (
+    is_research_job_active,
+    read_research_job,
+    submit_research_job,
+)
 from knowledge_engine_web.research_question import derive_research_question_id
 from knowledge_engine_web.research_session_status import read_session_status
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
@@ -682,7 +687,9 @@ def _citation_entries_for_session_report(
 
 
 @app.get("/ask", response_class=HTMLResponse)
-def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse:
+def ask(
+    request: Request, q: str = "", synthesize: bool = False, session_id: str = ""
+) -> HTMLResponse:
     """Answer a natural-language research question: ranked papers, plus per-claim confidence.
 
     Retrieval, via `core`'s own FTS5 index (`retrieval.py`), is always
@@ -703,6 +710,7 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
     settings = Settings()
     ai_capability = evaluate_ai_capability(settings)
     synthesis_available = ai_capability.available
+    async_research_enabled = settings.async_research_enabled
     question = q.strip()
     if not question:
         return templates.TemplateResponse(
@@ -718,6 +726,9 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
                 "copilot_error": None,
                 "coverage_panel": None,
                 "citation_entries": [],
+                "async_research_enabled": async_research_enabled,
+                "research_job_session_id": None,
+                "research_job": None,
             },
         )
 
@@ -741,20 +752,45 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
     )
     copilot_result = None
     copilot_error: str | None = None
-    if synthesize_requested:
+    research_job_session_id = session_id.strip() or None
+    research_job = None
+
+    if synthesize_requested and async_research_enabled:
+        if research_job_session_id is not None:
+            research_job = read_research_job(settings.session_db_path, research_job_session_id)
+            if research_job is not None and research_job.question != question:
+                copilot_error = (
+                    "That research session belongs to a different question. "
+                    "Start a new Research run."
+                )
+                research_job_session_id = None
+                research_job = None
+        else:
+            client_key = request.client.host if request.client is not None else "unknown"
+            research_job_session_id = str(uuid.uuid4())
+            try:
+                research_job = submit_research_job(
+                    settings,
+                    question=question,
+                    client_key=client_key,
+                    session_id=research_job_session_id,
+                    research_question_id=derive_research_question_id(question),
+                )
+            except RuntimeError:
+                research_job_session_id = None
+                copilot_error = (
+                    "Research mode could not start its background worker. Retrieval results are "
+                    "still shown below."
+                )
+    elif synthesize_requested:
         try:
             client_key = request.client.host if request.client is not None else "unknown"
-            # Generated before the run starts (rather than left to
-            # run_research_question's internal UUID fallback) so this
-            # identity is already known ahead of a future background-task
-            # slice of WEB-GQR-4, which needs to hand a session id back to
-            # the visitor before the run itself completes.
-            session_id = str(uuid.uuid4())
+            synchronous_session_id = str(uuid.uuid4())
             copilot_result = run_guarded_ai_orchestration(
                 settings,
                 question,
                 client_key=client_key,
-                session_id=session_id,
+                session_id=synchronous_session_id,
             )
             if result_reached_execution_limit(copilot_result):
                 copilot_error = (
@@ -791,35 +827,57 @@ def ask(request: Request, q: str = "", synthesize: bool = False) -> HTMLResponse
             "copilot_error": copilot_error,
             "coverage_panel": coverage_panel,
             "citation_entries": citation_entries,
+            "async_research_enabled": async_research_enabled,
+            "research_job_session_id": research_job_session_id,
+            "research_job": research_job,
         },
     )
 
 
 @app.get("/ask/session/{session_id}")
 def ask_session_status(session_id: str) -> Response:
-    """Poll one Research Copilot session's durably recorded progress (WEB-GQR-4).
+    """Poll durable Research Copilot progress and the Web job presentation result.
 
-    Read-only projection of knowledge-engine-ai's own `SessionRepository`
-    store at `Settings.session_db_path` (`research_session_status.py`) -- the
-    durable session identity and stage-progress persistence WEB-GQR-4 asks for
-    already exists via that store, including the local/persistent split that
-    lets it survive a Render redeploy. This route is the first slice that lets
-    a caller look a session up independently of the still-synchronous
-    `/ask?synthesize=1` request that created it; `/ask`'s own response is
-    unchanged by this route's existence. No frontend polling loop consumes
-    this yet.
-
-    `last_completed_stage` is exactly that -- the last workflow step this
-    store has a *completed* event for, not a live "currently executing"
-    stage (nothing durably records a step's start, only its completion), so
-    for a still-`running` session it can lag one step behind. It is accurate
-    as the final step once `terminal` is true.
+    AI's ``research_sessions`` / ``research_events`` remain the workflow source
+    of truth. WEB-GQR-4 adds a small Web job projection in the same persistent
+    SQLite file so a session can be queued before AI creates its first row and a
+    verified final presentation payload can survive the request that launched it.
+    No provider candidate is promoted to evidence by this endpoint.
     """
 
     settings = Settings()
+    job = read_research_job(settings.session_db_path, session_id)
     view = read_session_status(settings.session_db_path, session_id)
-    if view is None:
+    if job is None and view is None:
         raise HTTPException(status_code=404, detail="No research session with that ID.")
+
+    if job is not None:
+        interrupted = not job.terminal and not is_research_job_active(session_id)
+        visitor_error = job.visitor_error
+        if interrupted and visitor_error is None:
+            visitor_error = (
+                "This in-flight research worker was interrupted by a process restart. "
+                "Its durable session trace remains available; start a new Research run to continue."
+            )
+        payload = {
+            "session_id": job.session_id,
+            "research_question_id": job.research_question_id,
+            "question": job.question,
+            "job_status": job.status,
+            "status": view.status if view is not None else job.status,
+            "last_completed_stage": view.last_completed_stage if view is not None else None,
+            "latest_workflow_node": view.latest_workflow_node if view is not None else None,
+            "event_count": view.event_count if view is not None else 0,
+            "terminal": job.terminal,
+            "interrupted": interrupted,
+            "created_at": job.created_at,
+            "updated_at": job.updated_at,
+            "visitor_error": visitor_error,
+            "result": job.result,
+        }
+        return Response(content=json.dumps(payload, indent=2) + "\n", media_type="application/json")
+
+    assert view is not None
     payload = {
         "session_id": view.session_id,
         "question": view.question,
