@@ -34,6 +34,24 @@ jobs:
       - name: Apply deterministic patch
         run: python scripts/apply_web_gqr4_async_patch.py
 
+      - name: Repair generated lint width
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('knowledge_engine_web/main.py')
+          text = path.read_text(encoding='utf-8')
+          old = '                copilot_error = "That research session belongs to a different question. Start a new Research run."\n'
+          new = (
+              '                copilot_error = (\n'
+              '                    "That research session belongs to a different question. "\n'
+              '                    "Start a new Research run."\n'
+              '                )\n'
+          )
+          if text.count(old) != 1:
+              raise RuntimeError('generated lint target missing')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
       - name: Remove one-shot patch machinery
         run: |
           rm scripts/apply_web_gqr4_async_patch.py
