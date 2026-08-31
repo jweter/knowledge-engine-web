@@ -21,6 +21,16 @@ jobs:
         with:
           ref: feature/web-gqr-4-async-research
 
+      - name: Repair generated string escaping
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_web_gqr4_async_patch.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('+ "\\n", media_type=', '+ "\\\\n", media_type=')
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Apply deterministic patch
         run: python scripts/apply_web_gqr4_async_patch.py
 
