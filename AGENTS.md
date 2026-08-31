@@ -9,7 +9,14 @@ Before selecting or implementing substantial work, read:
 1. `docs/agent-development-policy.md` — repository-specific autonomous development rules and the shared Knowledge Engine family policy it references.
 2. `docs/project-status.yaml` — continuity snapshot; reconcile it with live PR, CI, issue, and code state before trusting it.
 3. The active roadmap/design document named by `docs/project-status.yaml`.
-4. `docs/INDUSTRY_REALITY_CHECK.md` — the current repo-specific gap analysis versus production web/research-software expectations.
+4. `docs/research_report_v1.md` — adopted answer-first, two-layer research-report experience and Monster acceptance contract.
+5. `docs/INDUSTRY_REALITY_CHECK.md` — the current repo-specific gap analysis versus production web/research-software expectations.
+
+## Research Report v1 priority
+
+Until the Monster Energy / one-year blood-pressure acceptance case passes on the deployed Ask path, treat Research Report v1 as a standing product constraint. Prefer work that directly improves answer-first presentation, conclusion/certainty rendering, evidence/methodology inspection, provenance, counter-evidence visibility, missing-evidence disclosure, or durable research progress over purely decorative UI work.
+
+Do not hide provider degradation, missing evidence, or source provenance to make the page look cleaner.
 
 ## How to use the reality check
 
@@ -29,7 +36,7 @@ This repository is the Web/API/frontend layer of one coordinated three-repositor
 - `jweter/knowledge-engine-core`
 - `jweter/knowledge-engine-ai`
 
-Do not assume cross-repository compatibility. Verify shared schemas, CLI/output contracts, persistence assumptions, and orchestration boundaries before changing them.
+Do not assume cross-repository compatibility. Verify shared schemas, CLI/output contracts, persistence assumptions, Research Report v1 semantics, and orchestration boundaries before changing them.
 
 ## Execution rule
 
