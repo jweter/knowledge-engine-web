@@ -30,6 +30,25 @@
     parent.appendChild(list);
   };
 
+  const appendEvidenceLinks = (parent, values, emptyText, className) => {
+    const items = Array.isArray(values) ? values.filter((value) => value !== null && value !== undefined && value !== "") : [];
+    if (items.length === 0) {
+      appendText(parent, "p", emptyText, "disclaimer");
+      return;
+    }
+    const list = element("ul", className);
+    items.forEach((value) => {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = `/claims/${encodeURIComponent(String(value))}`;
+      link.textContent = String(value);
+      link.setAttribute("aria-label", `Open evidence detail for ${String(value)}`);
+      item.appendChild(link);
+      list.appendChild(item);
+    });
+    parent.appendChild(list);
+  };
+
   const renderConclusionRow = (tbody, row) => {
     const tr = document.createElement("tr");
     appendText(tr, "td", row.question_dimension, "research-report-dimension");
@@ -70,7 +89,7 @@
     appendText(section, "p", `Directness: ${text(row.directness)}`, "trust-label computed");
 
     appendText(section, "h6", "Supporting evidence IDs");
-    appendList(
+    appendEvidenceLinks(
       section,
       row.supporting_evidence_ids,
       "No supporting EvidenceRecord IDs were reported for this conclusion.",
@@ -78,7 +97,7 @@
     );
 
     appendText(section, "h6", "Null / contradictory evidence IDs");
-    appendList(
+    appendEvidenceLinks(
       section,
       row.contradicting_or_null_evidence_ids,
       "No null or contradictory EvidenceRecord IDs were reported for this conclusion.",
@@ -158,14 +177,14 @@
 
     appendText(details, "h4", "Evidence provenance");
     appendText(details, "h5", "Indexed before this research run");
-    appendList(
+    appendEvidenceLinks(
       details,
       report.indexed_before_run_evidence_ids,
       "No previously indexed EvidenceRecord IDs were reported.",
       "research-report-evidence-ids indexed"
     );
     appendText(details, "h5", "Acquired during this research run");
-    appendList(
+    appendEvidenceLinks(
       details,
       report.acquired_during_run_evidence_ids,
       "No newly acquired EvidenceRecord IDs were reported.",
