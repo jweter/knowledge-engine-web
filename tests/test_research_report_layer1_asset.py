@@ -31,7 +31,7 @@ def test_layer1_renderer_consumes_structured_report_fields_without_html_injectio
     assert "textContent" in script
 
 
-def test_layer2_renderer_exposes_structured_evidence_and_methodology_without_reinterpreting_it() -> None:
+def test_layer2_renderer_exposes_structured_evidence_and_methodology() -> None:
     script = LAYER1_SCRIPT.read_text(encoding="utf-8")
 
     for field in (
