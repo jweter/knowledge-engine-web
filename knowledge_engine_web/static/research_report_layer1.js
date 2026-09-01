@@ -53,9 +53,18 @@
     tbody.appendChild(tr);
   };
 
+  const hideCompletedPipelineMetadata = (resultNode) => {
+    let sibling = resultNode.previousElementSibling;
+    while (sibling) {
+      sibling.hidden = true;
+      sibling = sibling.previousElementSibling;
+    }
+  };
+
   const renderLayer1 = (resultNode, researchReport) => {
     if (!resultNode || document.getElementById("research-report-layer1")) return;
 
+    hideCompletedPipelineMetadata(resultNode);
     const block = element("section", "research-report-layer1");
     block.id = "research-report-layer1";
     block.setAttribute("aria-label", "Research Report summary");
@@ -106,23 +115,35 @@
     resultNode.prepend(block);
   };
 
-  const hydrate = async (sessionId, resultNode) => {
+  const MAX_HYDRATE_ATTEMPTS = 4;
+  const HYDRATE_RETRY_MS = 1000;
+
+  const hydrate = async (sessionId, resultNode, attempt = 1) => {
     if (!sessionId || !resultNode || resultNode.dataset.reportLayer1Hydrating === "1") return;
     resultNode.dataset.reportLayer1Hydrating = "1";
+    let shouldRetry = false;
     try {
       const response = await fetch(`/ask/session/${encodeURIComponent(sessionId)}`, {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        shouldRetry = true;
+        return;
+      }
       const payload = await response.json();
-      if (!payload.terminal || payload.job_status !== "completed" || !payload.result) return;
+      if (!payload.terminal || payload.job_status !== "completed" || !payload.result) {
+        shouldRetry = true;
+        return;
+      }
       renderLayer1(resultNode, payload.result.research_report);
     } catch (_error) {
-      // The existing Ask polling surface remains authoritative for transport errors.
-      // Layer 1 is additive and must never replace or hide a verified base result.
+      shouldRetry = true;
     } finally {
       delete resultNode.dataset.reportLayer1Hydrating;
+      if (shouldRetry && attempt < MAX_HYDRATE_ATTEMPTS) {
+        window.setTimeout(() => hydrate(sessionId, resultNode, attempt + 1), HYDRATE_RETRY_MS);
+      }
     }
   };
 
