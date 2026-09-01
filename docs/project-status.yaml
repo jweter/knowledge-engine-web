@@ -1,12 +1,12 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-09-01T20:30:00Z"
+updated_at: "2026-09-01T21:42:00Z"
 status_source: "Live GitHub state verified 2026-09-01 plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
 
 product:
   primary_surface: "FastAPI Web/API/frontend layer for Knowledge Engine"
   role_in_family: "consumes knowledge-engine-core validated evidence and knowledge-engine-ai Research Copilot contracts"
-  ask_status: "The deployed Ask path supports deterministic indexed retrieval plus asynchronous Research mode with durable session identity, background execution, polling, grounded-completion/re-retrieval, verified final release, provider/degradation transparency, citation provenance, and BT-2/BT-6 funnel/latency reporting. PR #109 carried the structured ResearchReport payload through Web orchestration and durable async job state, PR #110 merged answer-first Layer 1 rendering (bottom line, conclusion rows, certainty, missing_direct_evidence), and PR #111 (open, CI green) adds the expandable Layer 2 researcher audit trail (evidence relationships, provenance, provider coverage/degradation, limitations, session identity) from the same structured contract, with no narrative scraping. Source-level citation/study-detail resolution is not yet rendered and remains follow-up work. Deployed Monster #79 acceptance has not yet run."
+  ask_status: "The deployed Ask path supports deterministic indexed retrieval plus asynchronous Research mode with durable session identity, background execution, polling, grounded-completion/re-retrieval, verified final release, provider/degradation transparency, citation provenance, and BT-2/BT-6 funnel/latency reporting. PR #109 carried the structured ResearchReport payload through Web orchestration and durable async job state, PR #110 merged answer-first Layer 1 rendering, and PR #111 merged the expandable Layer 2 researcher audit trail. PR #112 is open to make the Layer 2 EvidenceRecord IDs resolve through the existing authoritative /claims/{evidence_record_id} evidence/source-detail surface. Deployed Monster #79 acceptance has not yet run."
 
 current_milestone:
   name: "Research Report v1 — answer-first Web integration and Monster acceptance"
@@ -16,8 +16,8 @@ current_milestone:
   companion_ai_issue: "jweter/knowledge-engine-ai#129"
   acceptance_case: "jweter/knowledge-engine-ai#79 monster-energy-bp-one-year"
   objective: "Render a two-layer research report: Layer 1 answers the question clearly with bottom line plus dimension-specific conclusions/certainty; Layer 2 makes evidence, methodology, provenance, counter-evidence, coverage, and missing evidence inspectable without forcing the user to read pipeline internals first."
-  implementation_state: "WEB-GQR-4 asynchronous Research Sessions with progressive Ask polling is complete and merged as PR #106. knowledge-engine-ai PRs #130 and #131 are merged and provide the structured ResearchReport contract plus safe completed-session integration seam. Web PR #109 (merged) pins that AI revision, carries ResearchReportBuildResult through WebResearchResult, and persists its typed payload in durable async job results. Web PR #110 (merged) renders Layer 1. Web PR #111 (open, CI green) renders the Layer 2 audit trail: conclusion-level supporting/null-or-contradictory evidence IDs, directness, direct/indirect summaries, indexed-vs-acquired-during-run provenance, provider coverage/degradation/status, limitations/missing evidence, and session/state identity. Source-level citation and study-detail resolution are not yet rendered (documented follow-up, not fabricated from IDs). Deployed Monster #79 acceptance remains open."
-  blocking_gap: "Merge PR #111 after independent green CI, then pass the deployed Monster #79 acceptance run against the Layer 1 + Layer 2 UI."
+  implementation_state: "WEB-GQR-4 asynchronous Research Sessions with progressive Ask polling is complete and merged as PR #106. knowledge-engine-ai PRs #130 and #131 are merged and provide the structured ResearchReport contract plus safe completed-session integration seam. Web PR #109 (merged) pins that AI revision, carries ResearchReportBuildResult through WebResearchResult, and persists its typed payload in durable async job results. Web PR #110 (merged) renders Layer 1. Web PR #111 (merged) renders the Layer 2 audit trail: conclusion-level supporting/null-or-contradictory evidence IDs, directness, direct/indirect summaries, indexed-vs-acquired-during-run provenance, provider coverage/degradation/status, limitations/missing evidence, and session/state identity. PR #112 is open to turn those structured EvidenceRecord IDs into safe navigation to the existing authoritative claim/evidence/source-detail route without duplicating or fabricating source metadata. Deployed Monster #79 acceptance remains open."
+  blocking_gap: "Verify and merge PR #112 after fresh independent CI, then pass the deployed Monster #79 acceptance run against the complete Layer 1 + Layer 2 UI."
   priority_rule: "Until Monster #79 passes on the deployed Ask path, Research Report v1 integration outranks decorative UI work and unrelated non-blocking backend abstractions."
 
 research_report_v1_handoff:
@@ -30,23 +30,24 @@ research_report_v1_handoff:
     - "AI PR #131 provides a fail-closed completed-session integration seam that returns a ResearchReportBuildResult without weakening the base verified result."
     - "PR #109 (merged) pinned the AI revision, carried ResearchReportBuildResult through WebResearchResult, and persisted its typed payload in durable async job results."
     - "PR #110 (merged) renders Layer 1 on Ask: bottom_line, conclusion_rows (dimension/conclusion/certainty/rationale), and missing_direct_evidence as a first-class limitation."
+    - "PR #111 (merged) renders the structured Layer 2 audit trail for evidence relationships, directness, provenance, provider coverage/degradation, limitations, and session identity."
   current_work_in_progress:
-    branch: "agent/research-report-layer2-audit"
-    pr: 111
-    status: "Layer 2 audit-trail PR #111 is open; independent Quality/Docker CI is green on the current head; mergeable_state is clean, awaiting merge decision."
+    branch: "agent/research-report-source-detail-links"
+    pr: 112
+    status: "PR #112 is newly opened and awaits fresh independent Quality/Docker and TruffleHog verification before any merge decision."
     verified_changes:
-      - "knowledge_engine_web/static/research_report_layer1.js adds an expandable Layer 2 <details> section rendering conclusion-level evidence relationships (supporting/null-or-contradictory EvidenceRecord IDs, directness), direct/indirect evidence summaries, indexed-before-run vs acquired-during-run provenance, provider coverage/degradation/status table, missing evidence and source-carried limitations, and session id/research state -- using textContent only, no innerHTML/narrative scraping."
-      - "docs/research_report_v1.md records the Layer 2 implementation status and the explicit remaining boundary: source-level citation/study-detail resolution is follow-up work and must not be fabricated from EvidenceRecord IDs."
-      - "tests/test_research_report_layer1_asset.py adds regression coverage asserting the structured fields/labels are present and provider rows read only contract fields (no innerHTML, no JSON.stringify of raw provider objects)."
+      - "knowledge_engine_web/static/research_report_layer1.js renders supporting, null/contradictory, indexed-before-run, and acquired-during-run EvidenceRecord IDs as encoded links to /claims/{evidence_record_id}."
+      - "The claim-detail route remains the authoritative evidence/source inspection surface; the report renderer does not copy or invent citation metadata."
+      - "tests/test_research_report_layer1_asset.py adds source-contract regression coverage for the evidence-detail link path and retains the no-innerHTML boundary."
+      - "docs/research_report_v1.md records the source-detail navigation boundary and the remaining richer inline study-detail follow-up where authoritative detail is unavailable."
     required_cleanup_before_merge:
-      - "None outstanding: Quality, Docker build, and Secret leak scan all report success on the current head."
+      - "Fresh independent CI is required because PR #112 is newly opened."
   exact_next_sequence:
-    - "1. Merge PR #111 once Jeremy confirms the merge decision (CI is green and mergeable_state is clean)."
-    - "2. Render source-level citation/study-detail resolution for Layer 2 (currently exposed only as EvidenceRecord IDs, not resolved source details), or explicitly scope it out of Monster #79 acceptance if not required."
-    - "3. Preserve the existing asynchronous session/polling behavior from PR #106; structured-report rendering must not regress immediate indexed retrieval or truthful durable progress."
-    - "4. If structured report generation is unavailable or fails, preserve the already-verified base result and show an honest structured-report-unavailable state; never replace a valid grounded answer with a fabricated report (already covered by existing tests; keep true through further Layer 2 work)."
-    - "5. Deploy and run Monster #79 end to end. Record session ID, BT-2 funnel, time to first grounded information, time to final report, provider coverage/degradation, promoted Evidence Records, final ResearchState, every conclusion row, missing evidence, and resolved citations."
-    - "6. Fail acceptance honestly on any unsupported claim, missing dimension, collapsed evidence boundary, omitted counter-evidence, hidden missing-one-year-evidence gap, or materially worse readability than the scholarly-assistant baseline. Fix and rerun until it passes."
+    - "1. Service PR #112 first. If Quality/Docker or TruffleHog fails, inspect the actual failing gate and repair the existing branch; otherwise merge only when fully green, mergeable, and review-clear."
+    - "2. Preserve the existing asynchronous session/polling behavior from PR #106; structured-report rendering must not regress immediate indexed retrieval or truthful durable progress."
+    - "3. If structured report generation is unavailable or fails, preserve the already-verified base result and show an honest structured-report-unavailable state; never replace a valid grounded answer with a fabricated report."
+    - "4. Deploy and run Monster #79 end to end. Record session ID, BT-2 funnel, time to first grounded information, time to final report, provider coverage/degradation, promoted Evidence Records, final ResearchState, every conclusion row, missing evidence, and resolved citations/source-detail navigation."
+    - "5. Fail acceptance honestly on any unsupported claim, missing dimension, collapsed evidence boundary, omitted counter-evidence, hidden missing-one-year-evidence gap, broken evidence-detail navigation, or materially worse readability than the scholarly-assistant baseline. Fix and rerun until it passes."
   layer_1_required_dimensions_for_monster:
     - "acute post-consumption blood-pressure effect"
     - "persistent habitual/baseline/resting/ambulatory BP evidence"
@@ -82,20 +83,20 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-09-01T20:30:00Z"
+  checked_at: "2026-09-01T21:42:00Z"
   note: "Live PR/check/branch state must be queried before acting; cached counts here are only a handoff snapshot."
   open_prs: 1
   recently_merged_prs:
+    - number: 111
+      title: "Research Report v1: add Layer 2 evidence audit trail"
     - number: 110
       title: "Research Report v1: render answer-first Layer 1"
     - number: 109
       title: "Research Report v1: carry structured report through Web backend"
-    - number: 106
-      title: "WEB-GQR-4: asynchronous Research Sessions with progressive Ask polling"
   active_research_report_issue: "#107"
-  wip_branch: "agent/research-report-layer2-audit"
+  wip_branch: "agent/research-report-source-detail-links"
   wip_branch_has_open_pr: true
-  open_research_report_pr: 111
+  open_research_report_pr: 112
   ci_workflows:
     - ".github/workflows/quality.yml"
 
@@ -107,7 +108,7 @@ secondary_track:
 
 next_continuation:
   priority: "P1-research-report-v1"
-  action: "PR #111 (Layer 2 audit trail) has independent green CI and mergeable_state clean; it awaits a human merge decision. After merge, the remaining gap before Monster #79 acceptance is source-level citation/study-detail resolution for Layer 2 (currently EvidenceRecord IDs only). The first deployment acceptance run after the UI is complete is Monster #79; do not declare the milestone complete before that run passes."
+  action: "PR #112 is the active source-detail navigation slice and requires fresh independent CI before merge. After it is green, mergeable, and review-clear, the first deployment acceptance run is Monster #79; do not declare the milestone complete before that run passes."
   selection_rule: "Before beginning work, query live PR/CI/branch state. Existing failed, pending, conflicted, blocked, or merge-ready work takes priority. Never merge failed, pending, conflicted, blocked, or materially uncertain work."
 
 human_decision_required: null

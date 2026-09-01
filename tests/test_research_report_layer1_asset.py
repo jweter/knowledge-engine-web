@@ -68,6 +68,19 @@ def test_layer2_renderer_exposes_structured_evidence_and_methodology() -> None:
     assert "innerHTML" not in script
 
 
+def test_layer2_evidence_ids_link_to_authoritative_claim_detail() -> None:
+    script = LAYER1_SCRIPT.read_text(encoding="utf-8")
+
+    assert "appendEvidenceLinks" in script
+    assert "`/claims/${encodeURIComponent(String(value))}`" in script
+    assert "Open evidence detail for" in script
+    assert "supporting_evidence_ids" in script
+    assert "contradicting_or_null_evidence_ids" in script
+    assert "indexed_before_run_evidence_ids" in script
+    assert "acquired_during_run_evidence_ids" in script
+    assert "innerHTML" not in script
+
+
 def test_layer2_provider_rows_use_only_contract_fields() -> None:
     script = LAYER1_SCRIPT.read_text(encoding="utf-8")
 
