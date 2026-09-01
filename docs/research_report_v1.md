@@ -46,6 +46,8 @@ An expandable or secondary view should expose:
 
 This layer is not a debug console. It is the researcher's audit trail.
 
+Implementation status: the Web renderer now has an expandable Layer-2 audit surface driven only by the existing structured `ResearchReport` contract. It exposes conclusion-level supporting and null/contradictory EvidenceRecord IDs, directness, direct/indirect summaries, indexed-vs-new provenance, provider coverage/degradation/status, limitations/missing evidence, and durable session/state identity. Source-level citation resolution and detailed study/acquisition records remain follow-up work because those details are not fabricated from IDs or narrative prose.
+
 ## Progressive research behavior
 
 Long research runs must remain useful while work continues.

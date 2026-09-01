@@ -31,6 +31,52 @@ def test_layer1_renderer_consumes_structured_report_fields_without_html_injectio
     assert "textContent" in script
 
 
+def test_layer2_renderer_exposes_structured_evidence_and_methodology() -> None:
+    script = LAYER1_SCRIPT.read_text(encoding="utf-8")
+
+    for field in (
+        "supporting_evidence_ids",
+        "contradicting_or_null_evidence_ids",
+        "directness",
+        "direct_evidence_summary",
+        "indirect_evidence_summary",
+        "indexed_before_run_evidence_ids",
+        "acquired_during_run_evidence_ids",
+        "provider_coverage_completeness",
+        "degraded_providers",
+        "provider_statuses",
+        "missing_evidence",
+        "limitations",
+        "session_id",
+        "research_state",
+    ):
+        assert field in script
+
+    for label in (
+        "Evidence and methodology",
+        "Supporting evidence IDs",
+        "Null / contradictory evidence IDs",
+        "Evidence provenance",
+        "Provider coverage and degradation",
+        "Limitations and missing evidence",
+        "Research session identity",
+    ):
+        assert label in script
+
+    assert 'details.id = "research-report-layer2"' in script
+    assert "renderLayer2(block, report)" in script
+    assert "innerHTML" not in script
+
+
+def test_layer2_provider_rows_use_only_contract_fields() -> None:
+    script = LAYER1_SCRIPT.read_text(encoding="utf-8")
+
+    for field in ("provider", "attempted", "outcome", "reason"):
+        assert f"status.{field}" in script
+
+    assert "JSON.stringify(status" not in script
+
+
 def test_layer1_renderer_preserves_verified_base_result_when_report_is_unavailable() -> None:
     script = LAYER1_SCRIPT.read_text(encoding="utf-8")
 
