@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 BASE_TEMPLATE = ROOT / "knowledge_engine_web" / "templates" / "base.html"
 LAYER1_SCRIPT = ROOT / "knowledge_engine_web" / "static" / "research_report_layer1.js"
