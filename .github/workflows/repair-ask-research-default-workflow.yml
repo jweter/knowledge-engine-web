@@ -1,0 +1,38 @@
+name: Repair Ask research-default patch workflow
+
+on:
+  push:
+    branches:
+      - fix/ask-research-default
+    paths:
+      - .github/workflows/repair-ask-research-default-workflow.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/ask-research-default
+          fetch-depth: 0
+      - name: Correct status anchor and self-delete
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/apply-ask-research-default.yml')
+          text = path.read_text(encoding='utf-8')
+          old = "          old = '    action: \"PR #112 is the active source-detail navigation slice and requires fresh independent CI before merge. After it is green, mergeable, and review-clear, the first deployment acceptance run is Monster #79; do not declare the milestone complete before that run passes.\"\\n'"
+          new = "          old = '  action: \"PR #112 is the active source-detail navigation slice and requires fresh independent CI before merge. After it is green, mergeable, and review-clear, the first deployment acceptance run is Monster #79; do not declare the milestone complete before that run passes.\"\\n'"
+          if old not in text:
+              raise SystemExit('workflow anchor line not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          rm .github/workflows/repair-ask-research-default-workflow.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Repair Ask research-default patch runner"
+          git push origin HEAD:fix/ask-research-default
