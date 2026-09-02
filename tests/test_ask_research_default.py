@@ -1,12 +1,14 @@
+from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from knowledge_engine_web import main
 from knowledge_engine_web.ai_orchestration import AICapability
 
 
-def _configure_available_research(tmp_path, monkeypatch):
+def _configure_available_research(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("KE_WEB_DATABASE_URL", f"sqlite:///{tmp_path / 'ask.sqlite3'}")
     monkeypatch.setenv("KE_WEB_ASYNC_RESEARCH_ENABLED", "true")
     monkeypatch.setattr(
@@ -17,11 +19,13 @@ def _configure_available_research(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "answer_retrieval", lambda *args, **kwargs: [])
 
 
-def test_plain_ask_starts_bounded_research_by_default(tmp_path, monkeypatch):
+def test_plain_ask_starts_bounded_research_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _configure_available_research(tmp_path, monkeypatch)
-    calls = []
+    calls: list[dict[str, object]] = []
 
-    def submit(settings, **kwargs):
+    def submit(_settings: object, **kwargs: object) -> SimpleNamespace:
         calls.append(kwargs)
         return SimpleNamespace(question=kwargs["question"])
 
@@ -36,9 +40,11 @@ def test_plain_ask_starts_bounded_research_by_default(tmp_path, monkeypatch):
     assert "Fast indexed search only" in response.text
 
 
-def test_quick_mode_explicitly_skips_broader_research(tmp_path, monkeypatch):
+def test_quick_mode_explicitly_skips_broader_research(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _configure_available_research(tmp_path, monkeypatch)
-    calls = []
+    calls: list[dict[str, object]] = []
     monkeypatch.setattr(
         main, "submit_research_job", lambda settings, **kwargs: calls.append(kwargs)
     )
@@ -52,9 +58,11 @@ def test_quick_mode_explicitly_skips_broader_research(tmp_path, monkeypatch):
     assert 'name="quick" value="1" checked' in response.text
 
 
-def test_legacy_explicit_synthesize_false_remains_retrieval_only(tmp_path, monkeypatch):
+def test_legacy_explicit_synthesize_false_remains_retrieval_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _configure_available_research(tmp_path, monkeypatch)
-    calls = []
+    calls: list[dict[str, object]] = []
     monkeypatch.setattr(
         main, "submit_research_job", lambda settings, **kwargs: calls.append(kwargs)
     )
@@ -67,7 +75,9 @@ def test_legacy_explicit_synthesize_false_remains_retrieval_only(tmp_path, monke
     assert "Research session running" not in response.text
 
 
-def test_plain_ask_falls_back_honestly_when_research_is_unavailable(tmp_path, monkeypatch):
+def test_plain_ask_falls_back_honestly_when_research_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("KE_WEB_DATABASE_URL", f"sqlite:///{tmp_path / 'ask.sqlite3'}")
     monkeypatch.setattr(
         main,
