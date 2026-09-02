@@ -1,6 +1,6 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-09-01T21:42:00Z"
+updated_at: "2026-09-02T01:10:00Z"
 status_source: "Live GitHub state verified 2026-09-01 plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
 
 product:
@@ -17,7 +17,7 @@ current_milestone:
   acceptance_case: "jweter/knowledge-engine-ai#79 monster-energy-bp-one-year"
   objective: "Render a two-layer research report: Layer 1 answers the question clearly with bottom line plus dimension-specific conclusions/certainty; Layer 2 makes evidence, methodology, provenance, counter-evidence, coverage, and missing evidence inspectable without forcing the user to read pipeline internals first."
   implementation_state: "WEB-GQR-4 asynchronous Research Sessions with progressive Ask polling is complete and merged as PR #106. knowledge-engine-ai PRs #130 and #131 are merged and provide the structured ResearchReport contract plus safe completed-session integration seam. Web PR #109 (merged) pins that AI revision, carries ResearchReportBuildResult through WebResearchResult, and persists its typed payload in durable async job results. Web PR #110 (merged) renders Layer 1. Web PR #111 (merged) renders the Layer 2 audit trail: conclusion-level supporting/null-or-contradictory evidence IDs, directness, direct/indirect summaries, indexed-vs-acquired-during-run provenance, provider coverage/degradation/status, limitations/missing evidence, and session/state identity. PR #112 is open to turn those structured EvidenceRecord IDs into safe navigation to the existing authoritative claim/evidence/source-detail route without duplicating or fabricating source metadata. Deployed Monster #79 acceptance remains open."
-  blocking_gap: "Verify and merge PR #112 after fresh independent CI, then pass the deployed Monster #79 acceptance run against the complete Layer 1 + Layer 2 UI."
+  blocking_gap: "PR #112 is merged. Manual website testing then exposed a product-routing defect: ordinary Ask requests still defaulted to retrieval-only unless the user explicitly enabled Research. The active fix makes bounded Research the default whenever capability is available, with retrieval-only as an explicit fast-mode opt-out; deployed Monster #79 acceptance remains required after this correction."
   priority_rule: "Until Monster #79 passes on the deployed Ask path, Research Report v1 integration outranks decorative UI work and unrelated non-blocking backend abstractions."
 
 research_report_v1_handoff:
@@ -107,8 +107,8 @@ secondary_track:
   note: "WEB-GQR-0 through WEB-GQR-4 are the execution/progress foundation beneath Research Report v1. Continue GQR work when it directly blocks the report or Monster acceptance. Do not re-open already-completed async/polling work unless a concrete regression is found."
 
 next_continuation:
-  priority: "P1-research-report-v1"
-  action: "PR #112 is the active source-detail navigation slice and requires fresh independent CI before merge. After it is green, mergeable, and review-clear, the first deployment acceptance run is Monster #79; do not declare the milestone complete before that run passes."
+  priority: "P1-ask-research-default"
+  action: "Repair the user-tested Ask routing defect so an ordinary question automatically enters bounded Research when capability is available. Preserve immediate indexed retrieval, async polling, verification gates, and the explicit fast indexed-search opt-out. After the fix is green and deployed, rerun Monster #79 and a fresh unseen question through the normal Ask form."
   selection_rule: "Before beginning work, query live PR/CI/branch state. Existing failed, pending, conflicted, blocked, or merge-ready work takes priority. Never merge failed, pending, conflicted, blocked, or materially uncertain work."
 
 human_decision_required: null

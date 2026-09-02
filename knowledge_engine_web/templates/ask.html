@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Knowledge Engine -- Ask{% endblock %}
 {% block content %}
-<h1>Experimental retrieval</h1>
+<h1>Ask Knowledge Engine</h1>
 <p class="disclaimer">
-  Ask searches the indexed evidence for the question you actually typed, qualifies whether
-  sources directly address that question, and puts an answer summary before the source list.
-  Related-but-incomplete papers remain visible as background rather than being presented as
-  direct answers.
+  Ask starts with the indexed evidence for the question you actually typed. When that evidence
+  is thin and Research is available, Knowledge Engine automatically broadens the literature
+  search, acquires accessible sources, grounds new Evidence Records, re-runs the question, and
+  releases only an answer that passes the verification gates. Sources stay visible for inspection.
 </p>
 
 <form method="get" action="/ask" class="ask-form" id="ask-form">
@@ -16,19 +16,19 @@
     id="q"
     name="q"
     value="{{ question }}"
-    placeholder="does semaglutide increase IQ?"
+    placeholder="What does the evidence say about...?"
     autofocus
   />
   {% if synthesis_available %}
+  <p class="disclaimer"><strong>Research is on by default.</strong> Ask will broaden beyond the local index when the evidence is thin.</p>
   <label class="ask-synthesize-toggle">
-    <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested %}checked{% endif %} />
-    Also run Research Copilot — Research mode: broaden thin coverage, ground new evidence, and verify the answer
+    <input type="checkbox" name="quick" value="1" {% if quick_requested %}checked{% endif %} />
+    Fast indexed search only — skip broader research
   </label>
   {% else %}
-  <label class="ask-synthesize-toggle is-unavailable">
-    <input type="checkbox" disabled aria-disabled="true" />
-    Research Copilot unavailable on this deployment; Ask is retrieval-only.
-  </label>
+  <p class="ask-synthesize-toggle is-unavailable">
+    Broader Research is unavailable on this deployment; Ask will use indexed retrieval only.
+  </p>
   {% endif %}
   <button type="submit" id="ask-submit">Ask</button>
   <p class="ask-running-status" id="ask-running-status" role="status" aria-live="polite" hidden>
@@ -484,8 +484,8 @@
     const status = document.getElementById("ask-running-status");
     if (form && submit && status) {
       form.addEventListener("submit", () => {
-        const copilot = form.querySelector('input[name="synthesize"]:checked');
-        if (!copilot) return;
+        const quick = form.querySelector('input[name="quick"]:checked');
+        if (quick) return;
         submit.disabled = true;
         submit.setAttribute("aria-busy", "true");
         submit.textContent = "Working";

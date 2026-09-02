@@ -11,7 +11,11 @@ For every submitted question, the product must:
 5. never imply that a related paper answers an outcome it did not study;
 6. say clearly when the indexed evidence cannot answer the question;
 7. keep source papers and stored evidence visible underneath the response for inspection;
-8. use Research Copilot synthesis when available, but remain useful and honest when AI synthesis is unavailable.
+8. automatically use the bounded Research Copilot path when it is available; retrieval-only behavior is an explicit fast-mode choice or an honest capability fallback, not the normal Ask default.
+
+When the complete Research capability is available, submitting an ordinary `/ask?q=...` request starts Research automatically. The product may show indexed evidence immediately, but thin indexed coverage is a transition into broader research rather than an invitation for the user to discover and enable a second mode.
+
+`quick=1` is the explicit retrieval-only user choice. The legacy `synthesize=1` and `synthesize=0` query parameters remain compatible, but the absence of either parameter means Research-first behavior.
 
 A successful Ask result therefore follows:
 
