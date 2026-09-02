@@ -688,7 +688,11 @@ def _citation_entries_for_session_report(
 
 @app.get("/ask", response_class=HTMLResponse)
 def ask(
-    request: Request, q: str = "", synthesize: bool = False, session_id: str = ""
+    request: Request,
+    q: str = "",
+    synthesize: bool | None = None,
+    quick: bool = False,
+    session_id: str = "",
 ) -> HTMLResponse:
     """Answer a natural-language research question: ranked papers, plus per-claim confidence.
 
@@ -700,11 +704,12 @@ def ask(
     claim exists for them -- never a new number, never a judgment this
     project invents for the occasion.
 
-    `synthesize=1` is the one opt-in exception: when the complete local
-    Research Copilot runtime is available, `knowledge-engine-ai` runs its
-    durable retrieval, narration, verification, and close-gate workflow.
-    This page still shows its own deterministic retrieval independently,
-    including whenever the optional AI runtime is unavailable.
+    Research is the default Ask behavior whenever the complete local Research
+    Copilot runtime is available. Indexed retrieval still renders immediately,
+    then bounded research continues when coverage is thin. `quick=1` (or the
+    legacy explicit `synthesize=0`) is the deliberate retrieval-only opt-out.
+    When Research capability is unavailable, Ask fails honestly back to
+    deterministic indexed retrieval rather than pretending broader research ran.
     """
 
     settings = Settings()
@@ -721,6 +726,7 @@ def ask(
                 "results": None,
                 "synthesis_available": synthesis_available,
                 "synthesize_requested": False,
+                "quick_requested": False,
                 "synthesis_unavailable_notice": None,
                 "copilot_result": None,
                 "copilot_error": None,
@@ -744,10 +750,17 @@ def ask(
         for paper in papers
     ]
 
-    synthesize_requested = synthesize and synthesis_available
+    # Research is the normal Ask product. `synthesize` remains a backward-
+    # compatible tri-state query parameter: absent means the Research-first
+    # default, explicit true preserves old Research links, and explicit false
+    # remains a retrieval-only escape hatch. `quick=1` is the human-readable
+    # retrieval-only control exposed by the current UI.
+    research_requested = not quick and synthesize is not False
+    synthesize_requested = research_requested and synthesis_available
     synthesis_unavailable_notice = (
-        "Research Copilot is unavailable on this deployment. Retrieval results are shown below."
-        if synthesize and not synthesis_available
+        "Broader Research is unavailable on this deployment. Indexed retrieval results are "
+        "shown below."
+        if research_requested and not synthesis_available
         else None
     )
     copilot_result = None
@@ -822,6 +835,7 @@ def ask(
             "results": results,
             "synthesis_available": synthesis_available,
             "synthesize_requested": synthesize_requested,
+            "quick_requested": quick or synthesize is False,
             "synthesis_unavailable_notice": synthesis_unavailable_notice,
             "copilot_result": copilot_result,
             "copilot_error": copilot_error,

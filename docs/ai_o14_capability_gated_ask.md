@@ -77,8 +77,10 @@ for local development where core and web use separate virtual environments.
 
 ## Request Behavior
 
-Without `synthesize=1`, `/ask` performs no Research Copilot work and creates no
-session. With `synthesize=1`:
+Historical note: AI-O14 originally made Research Copilot opt-in with `synthesize=1`.
+The current Ask product has since adopted Research-first behavior: an ordinary `/ask?q=...`
+request runs Research automatically when the complete capability is available. `quick=1`
+(or legacy explicit `synthesize=0`) is the retrieval-only opt-out. With Research requested:
 
 - an unavailable capability safely downgrades to retrieval-only output;
 - an available capability creates one durable Research Session and renders its
