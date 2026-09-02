@@ -1,0 +1,250 @@
+name: Apply Ask research-default patch
+
+on:
+  push:
+    branches:
+      - fix/ask-research-default
+    paths:
+      - .github/workflows/apply-ask-research-default.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/ask-research-default
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Make Research the default Ask behavior
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("knowledge_engine_web/main.py")
+          text = path.read_text(encoding="utf-8")
+
+          old = '''@app.get("/ask", response_class=HTMLResponse)\ndef ask(\n    request: Request, q: str = "", synthesize: bool = False, session_id: str = ""\n) -> HTMLResponse:\n'''
+          new = '''@app.get("/ask", response_class=HTMLResponse)\ndef ask(\n    request: Request,\n    q: str = "",\n    synthesize: bool | None = None,\n    quick: bool = False,\n    session_id: str = "",\n) -> HTMLResponse:\n'''
+          if old not in text:
+              raise SystemExit("ask signature anchor not found")
+          text = text.replace(old, new, 1)
+
+          old = '''    `synthesize=1` is the one opt-in exception: when the complete local\n    Research Copilot runtime is available, `knowledge-engine-ai` runs its\n    durable retrieval, narration, verification, and close-gate workflow.\n    This page still shows its own deterministic retrieval independently,\n    including whenever the optional AI runtime is unavailable.\n'''
+          new = '''    Research is the default Ask behavior whenever the complete local Research\n    Copilot runtime is available. Indexed retrieval still renders immediately,\n    then bounded research continues when coverage is thin. `quick=1` (or the\n    legacy explicit `synthesize=0`) is the deliberate retrieval-only opt-out.\n    When Research capability is unavailable, Ask fails honestly back to\n    deterministic indexed retrieval rather than pretending broader research ran.\n'''
+          if old not in text:
+              raise SystemExit("ask docstring anchor not found")
+          text = text.replace(old, new, 1)
+
+          old = '''                "synthesize_requested": False,\n                "synthesis_unavailable_notice": None,\n'''
+          new = '''                "synthesize_requested": False,\n                "quick_requested": False,\n                "synthesis_unavailable_notice": None,\n'''
+          if old not in text:
+              raise SystemExit("blank context anchor not found")
+          text = text.replace(old, new, 1)
+
+          old = '''    synthesize_requested = synthesize and synthesis_available\n    synthesis_unavailable_notice = (\n        "Research Copilot is unavailable on this deployment. Retrieval results are shown below."\n        if synthesize and not synthesis_available\n        else None\n    )\n'''
+          new = '''    # Research is the normal Ask product. `synthesize` remains a backward-\n    # compatible tri-state query parameter: absent means the Research-first\n    # default, explicit true preserves old Research links, and explicit false\n    # remains a retrieval-only escape hatch. `quick=1` is the human-readable\n    # retrieval-only control exposed by the current UI.\n    research_requested = not quick and synthesize is not False\n    synthesize_requested = research_requested and synthesis_available\n    synthesis_unavailable_notice = (\n        "Broader Research is unavailable on this deployment. Indexed retrieval results are "\n        "shown below."\n        if research_requested and not synthesis_available\n        else None\n    )\n'''
+          if old not in text:
+              raise SystemExit("request logic anchor not found")
+          text = text.replace(old, new, 1)
+
+          old = '''            "synthesis_available": synthesis_available,\n            "synthesize_requested": synthesize_requested,\n            "synthesis_unavailable_notice": synthesis_unavailable_notice,\n'''
+          new = '''            "synthesis_available": synthesis_available,\n            "synthesize_requested": synthesize_requested,\n            "quick_requested": quick or synthesize is False,\n            "synthesis_unavailable_notice": synthesis_unavailable_notice,\n'''
+          if old not in text:
+              raise SystemExit("result context anchor not found")
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+
+          path = Path("knowledge_engine_web/templates/ask.html")
+          text = path.read_text(encoding="utf-8")
+          old = '''<h1>Experimental retrieval</h1>\n<p class="disclaimer">\n  Ask searches the indexed evidence for the question you actually typed, qualifies whether\n  sources directly address that question, and puts an answer summary before the source list.\n  Related-but-incomplete papers remain visible as background rather than being presented as\n  direct answers.\n</p>\n'''
+          new = '''<h1>Ask Knowledge Engine</h1>\n<p class="disclaimer">\n  Ask starts with the indexed evidence for the question you actually typed. When that evidence\n  is thin and Research is available, Knowledge Engine automatically broadens the literature\n  search, acquires accessible sources, grounds new Evidence Records, re-runs the question, and\n  releases only an answer that passes the verification gates. Sources stay visible for inspection.\n</p>\n'''
+          if old not in text:
+              raise SystemExit("template heading anchor not found")
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              'placeholder="does semaglutide increase IQ?"',
+              'placeholder="What does the evidence say about...?"',
+              1,
+          )
+
+          old = '''  {% if synthesis_available %}\n  <label class="ask-synthesize-toggle">\n    <input type="checkbox" name="synthesize" value="1" {% if synthesize_requested %}checked{% endif %} />\n    Also run Research Copilot — Research mode: broaden thin coverage, ground new evidence, and verify the answer\n  </label>\n  {% else %}\n  <label class="ask-synthesize-toggle is-unavailable">\n    <input type="checkbox" disabled aria-disabled="true" />\n    Research Copilot unavailable on this deployment; Ask is retrieval-only.\n  </label>\n  {% endif %}\n'''
+          new = '''  {% if synthesis_available %}\n  <p class="disclaimer"><strong>Research is on by default.</strong> Ask will broaden beyond the local index when the evidence is thin.</p>\n  <label class="ask-synthesize-toggle">\n    <input type="checkbox" name="quick" value="1" {% if quick_requested %}checked{% endif %} />\n    Fast indexed search only — skip broader research\n  </label>\n  {% else %}\n  <p class="ask-synthesize-toggle is-unavailable">\n    Broader Research is unavailable on this deployment; Ask will use indexed retrieval only.\n  </p>\n  {% endif %}\n'''
+          if old not in text:
+              raise SystemExit("template research-toggle anchor not found")
+          text = text.replace(old, new, 1)
+
+          old = '''      form.addEventListener("submit", () => {\n        const copilot = form.querySelector('input[name="synthesize"]:checked');\n        if (!copilot) return;\n        submit.disabled = true;\n'''
+          new = '''      form.addEventListener("submit", () => {\n        const quick = form.querySelector('input[name="quick"]:checked');\n        if (quick) return;\n        submit.disabled = true;\n'''
+          if old not in text:
+              raise SystemExit("template submit JS anchor not found")
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+
+          path = Path("docs/ASK_PRODUCT_CONTRACT.md")
+          text = path.read_text(encoding="utf-8")
+          old = '''8. use Research Copilot synthesis when available, but remain useful and honest when AI synthesis is unavailable.\n'''
+          new = '''8. automatically use the bounded Research Copilot path when it is available; retrieval-only behavior is an explicit fast-mode choice or an honest capability fallback, not the normal Ask default.\n'''
+          if old not in text:
+              raise SystemExit("Ask contract anchor not found")
+          text = text.replace(old, new, 1)
+          marker = '''A successful Ask result therefore follows:\n'''
+          addition = '''When the complete Research capability is available, submitting an ordinary `/ask?q=...` request starts Research automatically. The product may show indexed evidence immediately, but thin indexed coverage is a transition into broader research rather than an invitation for the user to discover and enable a second mode.\n\n`quick=1` is the explicit retrieval-only user choice. The legacy `synthesize=1` and `synthesize=0` query parameters remain compatible, but the absence of either parameter means Research-first behavior.\n\n'''
+          if marker not in text:
+              raise SystemExit("Ask contract insertion marker not found")
+          text = text.replace(marker, addition + marker, 1)
+          path.write_text(text, encoding="utf-8")
+
+          path = Path("docs/ai_o14_capability_gated_ask.md")
+          text = path.read_text(encoding="utf-8")
+          old = '''Without `synthesize=1`, `/ask` performs no Research Copilot work and creates no\nsession. With `synthesize=1`:\n'''
+          new = '''Historical note: AI-O14 originally made Research Copilot opt-in with `synthesize=1`.\nThe current Ask product has since adopted Research-first behavior: an ordinary `/ask?q=...`\nrequest runs Research automatically when the complete capability is available. `quick=1`\n(or legacy explicit `synthesize=0`) is the retrieval-only opt-out. With Research requested:\n'''
+          if old not in text:
+              raise SystemExit("AI-O14 request-behavior anchor not found")
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+
+          path = Path("docs/project-status.yaml")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              'updated_at: "2026-09-01T21:42:00Z"',
+              'updated_at: "2026-09-02T01:10:00Z"',
+              1,
+          )
+          old = '  blocking_gap: "Verify and merge PR #112 after fresh independent CI, then pass the deployed Monster #79 acceptance run against the complete Layer 1 + Layer 2 UI."\n'
+          new = '  blocking_gap: "PR #112 is merged. Manual website testing then exposed a product-routing defect: ordinary Ask requests still defaulted to retrieval-only unless the user explicitly enabled Research. The active fix makes bounded Research the default whenever capability is available, with retrieval-only as an explicit fast-mode opt-out; deployed Monster #79 acceptance remains required after this correction."\n'
+          if old not in text:
+              raise SystemExit("project status blocking-gap anchor not found")
+          text = text.replace(old, new, 1)
+          old = '    action: "PR #112 is the active source-detail navigation slice and requires fresh independent CI before merge. After it is green, mergeable, and review-clear, the first deployment acceptance run is Monster #79; do not declare the milestone complete before that run passes."\n'
+          new = '    action: "Repair the user-tested Ask routing defect so an ordinary question automatically enters bounded Research when capability is available. Preserve immediate indexed retrieval, async polling, verification gates, and the explicit fast indexed-search opt-out. After the fix is green and deployed, rerun Monster #79 and a fresh unseen question through the normal Ask form."\n'
+          if old not in text:
+              raise SystemExit("project status continuation anchor not found")
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Add default-research regression tests
+        run: |
+          cat > tests/test_ask_research_default.py <<'PY'
+          from types import SimpleNamespace
+
+          from fastapi.testclient import TestClient
+
+          from knowledge_engine_web import main
+          from knowledge_engine_web.ai_orchestration import AICapability
+
+
+          def _configure_available_research(tmp_path, monkeypatch):
+              monkeypatch.setenv("KE_WEB_DATABASE_URL", f"sqlite:///{tmp_path / 'ask.sqlite3'}")
+              monkeypatch.setenv("KE_WEB_ASYNC_RESEARCH_ENABLED", "true")
+              monkeypatch.setattr(
+                  main,
+                  "evaluate_ai_capability",
+                  lambda settings: AICapability(available=True),
+              )
+              monkeypatch.setattr(main, "answer_retrieval", lambda *args, **kwargs: [])
+
+
+          def test_plain_ask_starts_bounded_research_by_default(tmp_path, monkeypatch):
+              _configure_available_research(tmp_path, monkeypatch)
+              calls = []
+
+              def submit(settings, **kwargs):
+                  calls.append(kwargs)
+                  return SimpleNamespace(question=kwargs["question"])
+
+              monkeypatch.setattr(main, "submit_research_job", submit)
+
+              response = TestClient(main.app).get("/ask", params={"q": "a fresh unseen question"})
+
+              assert response.status_code == 200
+              assert len(calls) == 1
+              assert calls[0]["question"] == "a fresh unseen question"
+              assert "Research is on by default." in response.text
+              assert "Research session running" in response.text
+              assert "Fast indexed search only" in response.text
+
+
+          def test_quick_mode_explicitly_skips_broader_research(tmp_path, monkeypatch):
+              _configure_available_research(tmp_path, monkeypatch)
+              calls = []
+              monkeypatch.setattr(
+                  main,
+                  "submit_research_job",
+                  lambda settings, **kwargs: calls.append(kwargs),
+              )
+
+              response = TestClient(main.app).get(
+                  "/ask",
+                  params={"q": "a fresh unseen question", "quick": "1"},
+              )
+
+              assert response.status_code == 200
+              assert calls == []
+              assert "Research session running" not in response.text
+              assert 'name="quick" value="1" checked' in response.text
+
+
+          def test_legacy_explicit_synthesize_false_remains_retrieval_only(tmp_path, monkeypatch):
+              _configure_available_research(tmp_path, monkeypatch)
+              calls = []
+              monkeypatch.setattr(
+                  main,
+                  "submit_research_job",
+                  lambda settings, **kwargs: calls.append(kwargs),
+              )
+
+              response = TestClient(main.app).get(
+                  "/ask",
+                  params={"q": "a fresh unseen question", "synthesize": "false"},
+              )
+
+              assert response.status_code == 200
+              assert calls == []
+              assert "Research session running" not in response.text
+
+
+          def test_plain_ask_falls_back_honestly_when_research_is_unavailable(tmp_path, monkeypatch):
+              monkeypatch.setenv("KE_WEB_DATABASE_URL", f"sqlite:///{tmp_path / 'ask.sqlite3'}")
+              monkeypatch.setattr(
+                  main,
+                  "evaluate_ai_capability",
+                  lambda settings: AICapability(
+                      available=False,
+                      reason_code="model_not_configured",
+                      visitor_message="unavailable",
+                  ),
+              )
+              monkeypatch.setattr(main, "answer_retrieval", lambda *args, **kwargs: [])
+
+              response = TestClient(main.app).get("/ask", params={"q": "a fresh unseen question"})
+
+              assert response.status_code == 200
+              assert "Broader Research is unavailable on this deployment" in response.text
+              assert "Indexed retrieval results are shown below" in response.text
+          PY
+
+      - name: Focused validation
+        run: |
+          python -m pip install poetry
+          poetry install
+          poetry run ruff format knowledge_engine_web/main.py tests/test_ask_research_default.py
+          poetry run ruff check knowledge_engine_web/main.py tests/test_ask_research_default.py
+          poetry run pytest -q tests/test_ask_research_default.py
+
+      - name: Commit source changes
+        run: |
+          rm .github/workflows/apply-ask-research-default.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Make Research the default Ask behavior"
+          git push origin HEAD:fix/ask-research-default
