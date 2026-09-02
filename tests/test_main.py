@@ -1428,7 +1428,7 @@ def test_ask_page_renders_the_empty_state_with_no_question(
     response = TestClient(app).get("/ask")
 
     assert response.status_code == 200
-    assert "Experimental retrieval" in response.text
+    assert "Ask Knowledge Engine" in response.text
     assert "Results for" not in response.text
 
 
@@ -1663,7 +1663,7 @@ def _setup_paper_with_evidence(engine: Engine, tmp_path: Path) -> Path:
     return evidence_path
 
 
-def test_ask_without_synthesize_shows_no_synthesis_block(
+def test_ask_quick_mode_shows_no_synthesis_block(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = build_engine(tmp_path)
@@ -1672,10 +1672,13 @@ def test_ask_without_synthesize_shows_no_synthesis_block(
     monkeypatch.setenv("KE_WEB_EVIDENCE_RECORDS_PATH", str(evidence_path))
     monkeypatch.setattr(main, "evaluate_ai_capability", lambda settings: _available_capability())
 
-    response = TestClient(app).get("/ask", params={"q": "does semaglutide reduce body weight"})
+    response = TestClient(app).get(
+        "/ask", params={"q": "does semaglutide reduce body weight", "quick": "1"}
+    )
 
     assert response.status_code == 200
     assert "Research Copilot result" not in response.text
+    assert 'name="quick" value="1" checked' in response.text
 
 
 def test_ask_form_disables_copilot_when_runtime_is_not_available(
@@ -1686,10 +1689,9 @@ def test_ask_form_disables_copilot_when_runtime_is_not_available(
     response = TestClient(app).get("/ask")
 
     assert response.status_code == 200
-    assert 'type="checkbox" disabled aria-disabled="true"' in response.text
-    assert (
-        "Research Copilot unavailable on this deployment; Ask is retrieval-only." in response.text
-    )
+    assert 'name="quick" value="1"' not in response.text
+    assert "Broader Research is unavailable on this deployment" in response.text
+    assert "Ask will use indexed retrieval only." in response.text
     assert "KE_WEB_LLM_MODEL" not in response.text
 
 
@@ -1701,9 +1703,9 @@ def test_ask_form_enables_copilot_when_runtime_is_available(
     response = TestClient(app).get("/ask")
 
     assert response.status_code == 200
-    assert 'name="synthesize" value="1"' in response.text
-    assert 'type="checkbox" disabled' not in response.text
-    assert "Also run Research Copilot" in response.text
+    assert 'name="quick" value="1"' in response.text
+    assert "Research is on by default." in response.text
+    assert "Fast indexed search only" in response.text
     assert 'id="ask-running-status"' in response.text
     assert 'aria-busy", "true"' in response.text
 
@@ -1728,8 +1730,8 @@ def test_ask_unconfigured_synthesis_request_degrades_to_retrieval_only(
 
     assert response.status_code == 200
     assert "AI-generated synthesis" not in response.text
-    assert "Research Copilot is unavailable on this deployment." in response.text
-    assert "Retrieval results are shown below." in response.text
+    assert "Broader Research is unavailable on this deployment." in response.text
+    assert "Indexed retrieval results are shown below." in response.text
     assert "KE_WEB_LLM_MODEL" not in response.text
     assert "A Trial of Semaglutide for Body Weight Reduction" in response.text
 
