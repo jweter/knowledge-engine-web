@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "portfolio_project": "Knowledge Engine",
+  "repository": "jweter/knowledge-engine-web",
+  "repository_role": "web",
+  "source_of_truth": "GitHub repository state plus authoritative documents listed below",
+  "authoritative_documents": [
+    "docs/web_design.md",
+    "docs/project_status.md",
+    "CLAUDE.md"
+  ],
+  "definition_of_done": {
+    "implementation_complete": true,
+    "tests_required_for_change_scope": true,
+    "current_required_ci_green": true,
+    "mergeability_resolved": true,
+    "blocking_reviews_and_comments_resolved": true,
+    "architecture_security_licensing_provenance_privacy_clear": true,
+    "documentation_updated_when_project_reality_changes": true,
+    "regression_protection_for_reproduced_bugs": "when practical",
+    "product_reality": "pre-merge only when explicitly documented; otherwise track as post-merge acceptance debt"
+  },
+  "invariants": [
+    "answer_first_ui",
+    "inspectable_evidence",
+    "no_fabricated_backend_state",
+    "web_does_not_become_core_or_ai"
+  ],
+  "verification": {
+    "automated_lanes": [
+      "quality",
+      "security",
+      "unit_integration",
+      "contract_compatibility",
+      "rendering_regression"
+    ],
+    "product_reality_lanes": [
+      "monster_79_rendered_report_acceptance"
+    ],
+    "rule": "never convert missing human evidence into PASS; keep implementation status separate from Product Reality acceptance"
+  },
+  "work_ownership": {
+    "authority": "GitHub",
+    "active_work_sources": [
+      "open pull requests",
+      "open issues with active implementation evidence",
+      "recent focused branches/commits when attributable"
+    ],
+    "rule": "do not duplicate or compete with active work; prefer finishing existing work"
+  },
+  "regression_memory": {
+    "rule": "a reproduced correctness defect should gain regression protection before closure when practical",
+    "authoritative_history": "repository tests plus issue/PR/error-resolution history"
+  },
+  "readiness_scoring": {
+    "mode": "evidence-derived",
+    "prohibit_guessed_percent_complete": true,
+    "dimensions": [
+      "implementation",
+      "automated_verification",
+      "integration",
+      "product_reality",
+      "documentation",
+      "security_and_policy"
+    ],
+    "rule": "report unknown when evidence is insufficient"
+  },
+  "continuation": "derive from current Web roadmap/status and Knowledge Engine dependency-safe continuation"
+}
