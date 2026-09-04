@@ -8,10 +8,10 @@
       "root_cause": "Generated control-plane utilities did not exactly match the repository's Ruff formatter.",
       "fix": "Applied the exact Ruff formatting diff on the existing PR branch.",
       "verification": "Quality formatting gate passed on the repaired exact head before merge.",
-      "protection": [
+      "residual_risk": "Low; future engineering Python files remain covered by repository-wide Ruff format checking.",
+      "regression_protection": [
         ".github/workflows/quality.yml"
-      ],
-      "residual_risk": "Low; future engineering Python files remain covered by repository-wide Ruff format checking."
+      ]
     }
   ]
 }
