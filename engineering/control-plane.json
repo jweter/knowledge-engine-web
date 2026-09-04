@@ -1,12 +1,16 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "portfolio_project": "Knowledge Engine",
   "repository": "jweter/knowledge-engine-web",
   "repository_role": "web",
   "source_of_truth": "GitHub repository state plus authoritative documents listed below",
   "authoritative_documents": [
+    "docs/project-status.yaml",
+    "docs/agent-development-policy.md",
     "docs/web_design.md",
-    "docs/project_status.md",
+    "docs/research_report_v1.md",
+    "docs/INDUSTRY_REALITY_CHECK.md",
+    "AGENTS.md",
     "CLAUDE.md"
   ],
   "definition_of_done": {
@@ -37,7 +41,23 @@
     "product_reality_lanes": [
       "monster_79_rendered_report_acceptance"
     ],
-    "rule": "never convert missing human evidence into PASS; keep implementation status separate from Product Reality acceptance"
+    "rule": "never convert missing human evidence into PASS; keep implementation status separate from Product Reality acceptance",
+    "executable_lanes": [
+      {
+        "id": "research_report_rendering",
+        "steps": [
+          [
+            "poetry",
+            "run",
+            "pytest",
+            "tests/test_main.py::test_ask_withholds_a_narrative_when_the_close_gate_blocks",
+            "tests/test_main.py::test_ask_shows_specific_verification_findings_when_flagged",
+            "-q"
+          ]
+        ],
+        "evidence": "Web research-report trust/rendering regression"
+      }
+    ]
   },
   "work_ownership": {
     "authority": "GitHub",
@@ -65,5 +85,12 @@
     ],
     "rule": "report unknown when evidence is insufficient"
   },
-  "continuation": "derive from current Web roadmap/status and Knowledge Engine dependency-safe continuation"
+  "continuation": "derive from current Web roadmap/status and Knowledge Engine dependency-safe continuation",
+  "cross_repo_authorities": [
+    {
+      "repository": "jweter/knowledge-engine-core",
+      "path": "docs/roadmap/research_report_v1.md",
+      "purpose": "family Research Report v1 authority"
+    }
+  ]
 }
