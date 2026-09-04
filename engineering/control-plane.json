@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "portfolio_project": "Knowledge Engine",
   "repository": "jweter/knowledge-engine-web",
   "repository_role": "web",
@@ -44,18 +44,19 @@
     "rule": "never convert missing human evidence into PASS; keep implementation status separate from Product Reality acceptance",
     "executable_lanes": [
       {
-        "id": "research_report_rendering",
+        "id": "research_report_web_golden",
         "steps": [
           [
             "poetry",
             "run",
             "pytest",
+            "tests/test_general_question_research_loop.py",
             "tests/test_main.py::test_ask_withholds_a_narrative_when_the_close_gate_blocks",
             "tests/test_main.py::test_ask_shows_specific_verification_findings_when_flagged",
             "-q"
           ]
         ],
-        "evidence": "Web research-report trust/rendering regression"
+        "evidence": "Web GQR state mapping and Research Report trust/rendering regression"
       }
     ]
   },
@@ -69,8 +70,8 @@
     "rule": "do not duplicate or compete with active work; prefer finishing existing work"
   },
   "regression_memory": {
-    "rule": "a reproduced correctness defect should gain regression protection before closure when practical",
-    "authoritative_history": "repository tests plus issue/PR/error-resolution history"
+    "path": "engineering/regression-memory.json",
+    "rule": "record significant or recurring reproduced failures with root cause, fix, verification, regression protection, and residual risk"
   },
   "readiness_scoring": {
     "mode": "evidence-derived",
@@ -91,6 +92,25 @@
       "repository": "jweter/knowledge-engine-core",
       "path": "docs/roadmap/research_report_v1.md",
       "purpose": "family Research Report v1 authority"
+    }
+  ],
+  "portfolio_aggregation": {
+    "project_key": "knowledge-engine",
+    "component_role": "web",
+    "required_components": [
+      "core",
+      "web",
+      "ai"
+    ],
+    "authority": "hourly portfolio orchestrator",
+    "rule": "aggregate only verified repository evidence; never infer missing component state"
+  },
+  "golden_scenarios": [
+    {
+      "id": "research-report-v1",
+      "component": "web",
+      "lane": "research_report_web_golden",
+      "rule": "portfolio scenario is VERIFIED only when core, web, and ai component lanes are green on their current exact heads"
     }
   ]
 }
