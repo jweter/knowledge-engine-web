@@ -43,5 +43,11 @@ jobs:
           git push --force-with-lease origin "$BRANCH"
           PR_NUMBER="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
           if [ -z "$PR_NUMBER" ]; then
-            gh pr create               --base main               --head "$BRANCH"               --title "chore: reconcile live control-plane status"               --body "Generated from live GitHub PR/issue state and committed Product Reality evidence. UNKNOWN readiness dimensions are intentional when evidence is insufficient."
+            if ! gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore: reconcile live control-plane status" \
+              --body "Generated from live GitHub PR/issue state and committed Product Reality evidence. UNKNOWN readiness dimensions are intentional when evidence is insufficient."; then
+              echo "::warning::GitHub Actions cannot create pull requests in this repository. The reconciled branch was pushed successfully; the portfolio orchestrator must promote it after live-state revalidation."
+            fi
           fi
