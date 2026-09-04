@@ -37,3 +37,6 @@ Thumbs.db
 !/data/
 !/data/knowledge_engine.sqlite3
 !/data/evidence_records.jsonl
+
+# Private Product Reality source evidence
+private/product-reality-inbox/
