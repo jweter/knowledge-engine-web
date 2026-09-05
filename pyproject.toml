@@ -29,7 +29,7 @@ knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"
 pytest = "^9.1.1"
-ruff = "0.16.4"
+ruff = "0.16.5"
 httpx = "^0.28.0"
 pip-audit = "^2.10.1"
 
