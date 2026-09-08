@@ -33,7 +33,7 @@ ARG KE_CORE_RESEARCH_REV=54b61988e31206cb2acbbd5fd3f53bb129c3b062
 RUN git clone https://github.com/jweter/knowledge-engine-core.git /opt/knowledge-engine-core \
     && cd /opt/knowledge-engine-core \
     && git checkout "$KE_CORE_RESEARCH_REV" \
-    && python scripts/render-research-runtime-requirements.py > /tmp/ke-research-requirements.txt \
+    && PYTHONPATH=/opt/knowledge-engine-core python scripts/render-research-runtime-requirements.py > /tmp/ke-research-requirements.txt \
     && python -m venv /opt/ke-research \
     && /opt/ke-research/bin/pip install -r /tmp/ke-research-requirements.txt \
     && /opt/ke-research/bin/pip install --no-deps . \
