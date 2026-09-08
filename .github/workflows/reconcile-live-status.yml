@@ -43,11 +43,18 @@ jobs:
           git push --force-with-lease origin "$BRANCH"
           PR_NUMBER="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
           if [ -z "$PR_NUMBER" ]; then
+            PR_ERROR="$(mktemp)"
             if ! gh pr create \
               --base main \
               --head "$BRANCH" \
               --title "chore: reconcile live control-plane status" \
-              --body "Generated from live GitHub PR/issue state and committed Product Reality evidence. UNKNOWN readiness dimensions are intentional when evidence is insufficient."; then
-              echo "::warning::GitHub Actions cannot create pull requests in this repository. The reconciled branch was pushed successfully; the portfolio orchestrator must promote it after live-state revalidation."
+              --body "Generated from live GitHub PR/issue state and committed Product Reality evidence. UNKNOWN readiness dimensions are intentional when evidence is insufficient." \
+              2> >(tee "$PR_ERROR" >&2); then
+              if grep -Eqi "GitHub Actions.*(not permitted|not allowed|cannot|can't).*pull request|pull request.*(not permitted|not allowed|cannot|can't).*GitHub Actions|workflow.*(not permitted|not allowed).*pull request" "$PR_ERROR"; then
+                echo "::warning::GitHub Actions cannot create pull requests in this repository. The reconciled branch was pushed successfully; the portfolio orchestrator must promote it after live-state revalidation."
+              else
+                echo "::error::Failed to create reconciliation PR for a reason other than the known GitHub Actions PR-creation permission restriction."
+                exit 1
+              fi
             fi
           fi
