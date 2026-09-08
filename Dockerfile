@@ -25,6 +25,20 @@ RUN poetry install --only main --no-root
 COPY knowledge_engine_web ./knowledge_engine_web
 RUN poetry install --only main
 
+# Install Core's tested slim Research runtime at the exact revision that
+# introduced the persistent workspace contract. Core's own CI proves this
+# surface omits the Phase-3 vector stack while retaining the complete
+# Research command manifest.
+ARG KE_CORE_RESEARCH_REV=54b61988e31206cb2acbbd5fd3f53bb129c3b062
+RUN git clone https://github.com/jweter/knowledge-engine-core.git /opt/knowledge-engine-core \
+    && cd /opt/knowledge-engine-core \
+    && git checkout "$KE_CORE_RESEARCH_REV" \
+    && PYTHONPATH=/opt/knowledge-engine-core python scripts/render-research-runtime-requirements.py > /tmp/ke-research-requirements.txt \
+    && python -m venv /opt/ke-research \
+    && /opt/ke-research/bin/pip install -r /tmp/ke-research-requirements.txt \
+    && /opt/ke-research/bin/pip install --no-deps . \
+    && /opt/ke-research/bin/ke-research research-runtime-capabilities
+
 # Snapshot data, refreshed with scripts/refresh-alpha-snapshot.sh and
 # committed to the repo -- Render's Docker build clones straight from
 # GitHub, so this must already be in the repo, not populated locally
@@ -47,6 +61,7 @@ ENV KE_WEB_DATABASE_URL=sqlite:////app/data/knowledge_engine.sqlite3 \
     KE_WEB_SOURCES_PATH=/app/data/sources.csv \
     KE_WEB_SNAPSHOT_METADATA_PATH=/app/data/snapshot_metadata.json \
     KE_WEB_WHATS_CHANGED_BASELINE_PATH=/app/data/whats_changed_baseline.json \
+    KE_WEB_KE_EXECUTABLE=/opt/ke-research/bin/ke-research \
     KE_WEB_HOST=0.0.0.0
 
 EXPOSE 8000

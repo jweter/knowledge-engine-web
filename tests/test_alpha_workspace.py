@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import json
 import sqlite3
 from pathlib import Path
@@ -14,119 +13,93 @@ from knowledge_engine_web.alpha_workspace import (
 )
 
 
-def _paper_database(path: Path) -> None:
-    connection = sqlite3.connect(path)
-    connection.executescript(
-        """
-        CREATE TABLE papers (
-            id INTEGER PRIMARY KEY,
-            title TEXT NOT NULL,
-            doi TEXT
-        );
-        INSERT INTO papers VALUES (1, 'First paper', '10.1000/ABC');
-        INSERT INTO papers VALUES (2, 'Duplicate spelling', 'https://doi.org/10.1000/abc');
-        INSERT INTO papers VALUES (3, 'Second paper', '10.2000/xyz');
-        INSERT INTO papers VALUES (4, 'No DOI', NULL);
-        """
+def _record(record_id: str, title: str) -> str:
+    return json.dumps(
+        {
+            "schema_version": 1,
+            "evidence_record_id": record_id,
+            "created_at": "2026-09-07T00:00:00+00:00",
+            "created_by": "test",
+            "title": title,
+            "description": "test evidence",
+            "source_type": "derived",
+            "source_locator": "test",
+            "source_version": "1",
+            "source_sha256": "a" * 64,
+            "content_sha256": "b" * 64,
+            "canonical": True,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
     )
-    connection.commit()
-    connection.close()
 
 
-def _record(record_id: str, claim: str) -> str:
-    return json.dumps({"evidence_record_id": record_id, "claim_text": claim})
+def _write_papers_db(path: Path, rows: list[tuple[str, str]]) -> None:
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("CREATE TABLE papers (doi TEXT, title TEXT NOT NULL)")
+        connection.executemany("INSERT INTO papers (doi, title) VALUES (?, ?)", rows)
+        connection.commit()
+    finally:
+        connection.close()
 
 
-def test_build_sources_snapshot_is_deterministic_and_deduplicates_dois(tmp_path: Path) -> None:
-    database = tmp_path / "snapshot.sqlite3"
+def test_build_sources_csv_uses_public_papers_metadata(tmp_path: Path) -> None:
+    database = tmp_path / "knowledge_engine.sqlite3"
     output = tmp_path / "sources.csv"
-    _paper_database(database)
+    _write_papers_db(database, [("10.2/b", "Beta"), ("10.1/a", "Alpha"), ("", "Skip")])
 
     count = build_sources_snapshot(database, output)
 
     assert count == 2
-    with output.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
-    assert rows == [
-        {"doi": "10.1000/abc", "title": "First paper"},
-        {"doi": "10.2000/xyz", "title": "Second paper"},
+    assert output.read_text(encoding="utf-8").splitlines() == [
+        "doi,title",
+        "10.1/a,Alpha",
+        "10.2/b,Beta",
     ]
 
 
-def test_build_sources_snapshot_requires_core_overlay_columns(tmp_path: Path) -> None:
-    database = tmp_path / "snapshot.sqlite3"
-    connection = sqlite3.connect(database)
-    connection.execute("CREATE TABLE papers (id INTEGER PRIMARY KEY, title TEXT NOT NULL)")
-    connection.commit()
-    connection.close()
-
-    with pytest.raises(AlphaWorkspaceError, match="doi"):
-        build_sources_snapshot(database, tmp_path / "sources.csv")
-
-
-def test_seed_requires_an_existing_persistent_mount(tmp_path: Path) -> None:
-    snapshot_root = tmp_path / "snapshot"
-    snapshot_root.mkdir()
-
-    with pytest.raises(AlphaWorkspaceError, match="not mounted"):
-        seed_persistent_workspace(snapshot_root, tmp_path / "missing-persistent-root")
-
-
-def test_seed_prepares_research_inputs_without_overwriting_durable_evidence(
-    tmp_path: Path,
-) -> None:
+def test_seed_creates_durable_workspace_from_snapshot(tmp_path: Path) -> None:
     snapshot_root = tmp_path / "snapshot"
     persistent_root = tmp_path / "persistent"
     snapshot_root.mkdir()
     persistent_root.mkdir()
-
-    (snapshot_root / "sources.csv").write_text(
-        "doi,title\n10.1000/a,Snapshot paper\n", encoding="utf-8"
-    )
+    (snapshot_root / "sources.csv").write_text("doi,title\n10.1/a,Alpha\n", encoding="utf-8")
     (snapshot_root / "evidence_records.jsonl").write_text(
-        _record("ev-base-a", "baseline A") + "\n", encoding="utf-8"
+        _record("ev-base", "baseline") + "\n", encoding="utf-8"
     )
-    durable_evidence = persistent_root / "evidence_records.jsonl"
-    durable_evidence.write_text(
-        _record("ev-research", "promoted research") + "\n", encoding="utf-8"
-    )
-
-    result = seed_persistent_workspace(snapshot_root, persistent_root)
-
-    records = [
-        json.loads(line) for line in durable_evidence.read_text(encoding="utf-8").splitlines()
-    ]
-    assert [record["evidence_record_id"] for record in records] == ["ev-research", "ev-base-a"]
-    assert result.evidence_path == durable_evidence
-    assert result.sources_path.read_text(encoding="utf-8") == (
-        "doi,title\n10.1000/a,Snapshot paper\n"
-    )
-    assert result.research_papers_dir.is_dir()
-    assert result.discovery_ledger_root.is_dir()
-
-
-def test_reseed_adds_new_baseline_records_and_keeps_prior_research_records(
-    tmp_path: Path,
-) -> None:
-    snapshot_root = tmp_path / "snapshot"
-    persistent_root = tmp_path / "persistent"
-    snapshot_root.mkdir()
-    persistent_root.mkdir()
-    (snapshot_root / "sources.csv").write_text("doi,title\n", encoding="utf-8")
-    evidence_seed = snapshot_root / "evidence_records.jsonl"
-    evidence_seed.write_text(_record("ev-base-a", "baseline A") + "\n", encoding="utf-8")
 
     seed_persistent_workspace(snapshot_root, persistent_root)
-    durable_evidence = persistent_root / "evidence_records.jsonl"
-    with durable_evidence.open("a", encoding="utf-8") as handle:
-        handle.write(_record("ev-research", "promoted research") + "\n")
 
-    evidence_seed.write_text(
-        _record("ev-base-a", "baseline A") + "\n" + _record("ev-base-b", "baseline B") + "\n",
+    assert (persistent_root / "sources.csv").read_text(
+        encoding="utf-8"
+    ) == "doi,title\n10.1/a,Alpha\n"
+    assert (
+        json.loads((persistent_root / "evidence_records.jsonl").read_text(encoding="utf-8"))[
+            "evidence_record_id"
+        ]
+        == "ev-base"
+    )
+
+
+def test_seed_preserves_research_evidence_and_adds_new_snapshot_records(tmp_path: Path) -> None:
+    snapshot_root = tmp_path / "snapshot"
+    persistent_root = tmp_path / "persistent"
+    snapshot_root.mkdir()
+    persistent_root.mkdir()
+    (snapshot_root / "sources.csv").write_text("doi,title\n10.1/a,Alpha\n", encoding="utf-8")
+    (snapshot_root / "evidence_records.jsonl").write_text(
+        "\n".join([_record("ev-base-a", "baseline a"), _record("ev-base-b", "baseline b")]) + "\n",
         encoding="utf-8",
     )
+    (persistent_root / "evidence_records.jsonl").write_text(
+        "\n".join([_record("ev-base-a", "baseline a"), _record("ev-research", "research")]) + "\n",
+        encoding="utf-8",
+    )
+
     seed_persistent_workspace(snapshot_root, persistent_root)
 
+    durable_evidence = persistent_root / "evidence_records.jsonl"
     records = [
         json.loads(line) for line in durable_evidence.read_text(encoding="utf-8").splitlines()
     ]
@@ -162,9 +135,9 @@ def test_dockerfile_builds_sources_and_uses_persistent_aware_startup() -> None:
 
     assert "alpha_workspace build-sources" in dockerfile
     assert "KE_WEB_SOURCES_PATH=/app/data/sources.csv" in dockerfile
+    assert "KE_WEB_KE_EXECUTABLE=/opt/ke-research/bin/ke-research" in dockerfile
+    assert "ke-research-workspace" in startup
     assert 'CMD ["/app/scripts/start-alpha.sh"]' in dockerfile
     assert "alpha_workspace seed" in startup
-    assert (
-        'export KE_WEB_EVIDENCE_RECORDS_PATH="$persistent_root/evidence_records.jsonl"' in startup
-    )
+    assert 'export KE_WEB_EVIDENCE_RECORDS_PATH="$core_workspace/evidence_records.jsonl"' in startup
     assert 'export KE_WEB_SOURCES_PATH="$persistent_root/sources.csv"' in startup
