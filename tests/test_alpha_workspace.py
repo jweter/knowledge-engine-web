@@ -71,8 +71,15 @@ def test_seed_creates_durable_workspace_from_snapshot(tmp_path: Path) -> None:
 
     seed_persistent_workspace(snapshot_root, persistent_root)
 
-    assert (persistent_root / "sources.csv").read_text(encoding="utf-8") == "doi,title\n10.1/a,Alpha\n"
-    assert json.loads((persistent_root / "evidence_records.jsonl").read_text(encoding="utf-8"))["evidence_record_id"] == "ev-base"
+    assert (persistent_root / "sources.csv").read_text(
+        encoding="utf-8"
+    ) == "doi,title\n10.1/a,Alpha\n"
+    assert (
+        json.loads((persistent_root / "evidence_records.jsonl").read_text(encoding="utf-8"))[
+            "evidence_record_id"
+        ]
+        == "ev-base"
+    )
 
 
 def test_seed_preserves_research_evidence_and_adds_new_snapshot_records(tmp_path: Path) -> None:
