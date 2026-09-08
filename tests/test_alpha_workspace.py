@@ -8,7 +8,7 @@ import pytest
 
 from knowledge_engine_web.alpha_workspace import (
     AlphaWorkspaceError,
-    build_sources_csv,
+    build_sources_snapshot,
     seed_persistent_workspace,
 )
 
@@ -49,7 +49,7 @@ def test_build_sources_csv_uses_public_papers_metadata(tmp_path: Path) -> None:
     output = tmp_path / "sources.csv"
     _write_papers_db(database, [("10.2/b", "Beta"), ("10.1/a", "Alpha"), ("", "Skip")])
 
-    count = build_sources_csv(database, output)
+    count = build_sources_snapshot(database, output)
 
     assert count == 2
     assert output.read_text(encoding="utf-8").splitlines() == [
