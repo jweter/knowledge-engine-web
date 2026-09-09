@@ -5,13 +5,18 @@
 set -eu
 
 model="${OLLAMA_MODEL:-qwen2.5:1.5b}"
-export OLLAMA_HOST="${OLLAMA_HOST:-0.0.0.0:11434}"
+listen_host="${OLLAMA_HOST:-0.0.0.0:11434}"
 export OLLAMA_MODELS="${OLLAMA_MODELS:-/var/data/models}"
 
 mkdir -p "$OLLAMA_MODELS"
 
-ollama serve &
+# Bind the server on the private-service interface, then point this wrapper's
+# own CLI probes/pull at loopback. `0.0.0.0` is a listen address, not a
+# portable client destination, so using it for both sides is unnecessarily
+# dependent on OS socket behavior.
+OLLAMA_HOST="$listen_host" ollama serve &
 server_pid=$!
+export OLLAMA_HOST="${OLLAMA_CLIENT_HOST:-http://127.0.0.1:11434}"
 
 cleanup() {
   kill "$server_pid" 2>/dev/null || true
