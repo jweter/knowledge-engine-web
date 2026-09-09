@@ -1,12 +1,12 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-09-02T04:24:55Z"
-status_source: "Live GitHub state verified 2026-09-02 plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
+updated_at: "2026-09-09T01:28:00Z"
+status_source: "Live GitHub state verified 2026-09-09 plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, docs/hosted_research_runtime.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
 
 product:
   primary_surface: "FastAPI Web/API/frontend layer for Knowledge Engine"
   role_in_family: "consumes knowledge-engine-core validated evidence and knowledge-engine-ai Research Copilot contracts"
-  ask_status: "The deployed Ask path supports deterministic indexed retrieval plus asynchronous Research mode with durable session identity, background execution, polling, grounded-completion/re-retrieval, verified final release, provider/degradation transparency, citation provenance, and BT-2/BT-6 funnel/latency reporting. PR #109 carried the structured ResearchReport payload through Web orchestration and durable async job state, PR #110 merged answer-first Layer 1 rendering, PR #111 merged the expandable Layer 2 researcher audit trail, and PR #112 (merged) made Layer 2 EvidenceRecord IDs resolve through the existing authoritative /claims/{evidence_record_id} evidence/source-detail surface. PR #113 (merged) fixed a routing defect so ordinary Ask requests enter bounded Research by default, with quick=1 as the explicit fast indexed-search opt-out. PR #113 also recorded that the current hosted Render alpha still intentionally fails the Research capability gate pending a complete writable Core operational workspace, a deployable Core Research command surface, durable storage, and reachable inference. Deployed Monster #79 acceptance has not yet run."
+  ask_status: "The Ask path supports deterministic indexed retrieval plus asynchronous Research mode with durable session identity, background execution, polling, grounded-completion/re-retrieval, verified final release, provider/degradation transparency, citation provenance, and BT-2/BT-6 funnel/latency reporting. PRs #109-#113 completed the structured Research Report v1 Web path and made bounded Research the default whenever the deployment passes the capability gate. Core PR #451 is merged; Web PR #135 installs Core's slim Research runtime and persistent workspace bootstrap in the hosted container. Web PR #136 adds the explicit operator-gated full hosted Research Blueprint with durable Web storage plus a private Ollama service, and PR #137 hardens that private Ollama startup path. The active default Render deployment remains retrieval-only until the operator explicitly approves and applies the paid hosted Research infrastructure. Deployed Monster #79 acceptance has not yet run."
 
 current_milestone:
   name: "Research Report v1 — answer-first Web integration and Monster acceptance"
@@ -16,29 +16,33 @@ current_milestone:
   companion_ai_issue: "jweter/knowledge-engine-ai#129"
   acceptance_case: "jweter/knowledge-engine-ai#79 monster-energy-bp-one-year"
   objective: "Render a two-layer research report: Layer 1 answers the question clearly with bottom line plus dimension-specific conclusions/certainty; Layer 2 makes evidence, methodology, provenance, counter-evidence, coverage, and missing evidence inspectable without forcing the user to read pipeline internals first."
-  implementation_state: "WEB-GQR-4 asynchronous Research Sessions with progressive Ask polling is complete and merged as PR #106. knowledge-engine-ai PRs #130 and #131 are merged and provide the structured ResearchReport contract plus safe completed-session integration seam. Web PR #109 (merged) pins that AI revision, carries ResearchReportBuildResult through WebResearchResult, and persists its typed payload in durable async job results. Web PR #110 (merged) renders Layer 1. Web PR #111 (merged) renders the Layer 2 audit trail: conclusion-level supporting/null-or-contradictory evidence IDs, directness, direct/indirect summaries, indexed-vs-acquired-during-run provenance, provider coverage/degradation/status, limitations/missing evidence, and session/state identity. Web PR #112 (merged) turned those structured EvidenceRecord IDs into safe navigation to the existing authoritative claim/evidence/source-detail route without duplicating or fabricating source metadata. Web PR #113 (merged) made ordinary Ask requests enter bounded Research by default instead of requiring an explicit opt-in. Deployed Monster #79 acceptance remains open."
-  blocking_gap: "All known Web-side code defects for Research Report v1 are fixed and merged (PRs #109-#113). Deployed Monster #79 acceptance is now blocked purely on hosted-runtime capability: PR #113 confirmed the current hosted Render alpha still intentionally fails the Research capability gate, which requires knowledge-engine-core's persistent Research workspace bootstrap (core PR #451, open and currently blocked pending a human decision on a CI secret-scan false positive) plus durable storage and reachable inference before Monster #79 can run end to end on the deployed path."
-  priority_rule: "Until Monster #79 passes on the deployed Ask path, Research Report v1 integration outranks decorative UI work and unrelated non-blocking backend abstractions."
+  implementation_state: "WEB-GQR-4 asynchronous Research Sessions with progressive Ask polling is complete and merged as PR #106. knowledge-engine-ai PRs #130 and #131 provide the structured ResearchReport contract plus safe completed-session integration seam. Web PRs #109-#113 carry and render that report, expose the evidence audit trail and source-detail navigation, and make ordinary Ask enter bounded Research by default when capability exists. Core PR #451 merged the persistent Research workspace bootstrap. Web PR #135 merged the hosted Core Research runtime/workspace adoption. Web PR #136 merged the operator-gated full hosted Research Blueprint and private Ollama service definition. Web PR #137 merged a startup hardening fix that separates Ollama's private listen address from its loopback CLI client address. Repository-side hosted runtime preparation is complete; the remaining step is operator-approved Render infrastructure activation followed by Product Reality verification and Monster #79."
+  blocking_gap: "No known repository-side code blocker remains for enabling hosted Research. The remaining gate is an external operator/cost decision plus deployment: applying render.research.yaml would add a 1 GB persistent Web disk and a dedicated Render 1c-2g private Ollama service with a 2 GB model disk. Until that recurring paid infrastructure is explicitly approved and activated, the current default Render alpha correctly remains retrieval-only. After activation, durable storage, private-model reachability, normal /ask Research entry, and Monster #79 must be verified on the deployed service before success is claimed."
+  priority_rule: "Until Monster #79 passes on the deployed Ask path, Research Report v1 integration and hosted Product Reality outrank decorative UI work and unrelated non-blocking backend abstractions."
 
 research_report_v1_handoff:
   completed_foundation:
     - "PR #106 — asynchronous Research Sessions with progressive Ask polling — merged to main and validated with Quality, Docker, container smoke, and TruffleHog checks."
     - "Ask returns immediately with deterministic indexed retrieval while Research mode continues in the background."
     - "The page polls durable session state and renders only verified/releaseable final research output."
-    - "Current Ask already exposes provider coverage/degradation, indexed-vs-new evidence provenance, acquisition/extraction funnel facts, limitations, resolved citations, and research latency."
+    - "Current Ask exposes provider coverage/degradation, indexed-vs-new evidence provenance, acquisition/extraction funnel facts, limitations, resolved citations, and research latency."
     - "AI PR #130 provides the typed ResearchReport contract and deterministic validation."
     - "AI PR #131 provides a fail-closed completed-session integration seam that returns a ResearchReportBuildResult without weakening the base verified result."
-    - "PR #109 (merged) pinned the AI revision, carried ResearchReportBuildResult through WebResearchResult, and persisted its typed payload in durable async job results."
-    - "PR #110 (merged) renders Layer 1 on Ask: bottom_line, conclusion_rows (dimension/conclusion/certainty/rationale), and missing_direct_evidence as a first-class limitation."
-    - "PR #111 (merged) renders the structured Layer 2 audit trail for evidence relationships, directness, provenance, provider coverage/degradation, limitations, and session identity."
-    - "PR #112 (merged) links Layer 2 EvidenceRecord IDs to the existing authoritative /claims/{evidence_record_id} route; docs/research_report_v1.md records a remaining richer inline study-detail follow-up where the authoritative detail surface lacks a requested study attribute (not yet scheduled)."
-    - "PR #113 (merged) made ordinary Ask requests enter bounded Research by default; quick=1 is the explicit fast indexed-search opt-out, and legacy synthesize=1/0 URLs remain compatible."
+    - "PR #109 pinned the AI revision, carried ResearchReportBuildResult through WebResearchResult, and persisted its typed payload in durable async job results."
+    - "PR #110 renders Layer 1 on Ask: bottom_line, conclusion_rows (dimension/conclusion/certainty/rationale), and missing_direct_evidence as a first-class limitation."
+    - "PR #111 renders the structured Layer 2 audit trail for evidence relationships, directness, provenance, provider coverage/degradation, limitations, and session identity."
+    - "PR #112 links Layer 2 EvidenceRecord IDs to the existing authoritative /claims/{evidence_record_id} route; docs/research_report_v1.md records a remaining richer inline study-detail follow-up where the authoritative detail surface lacks a requested study attribute."
+    - "PR #113 makes ordinary Ask requests enter bounded Research by default when capability is complete; quick=1 is the explicit fast indexed-search opt-out, and legacy synthesize=1/0 URLs remain compatible."
+    - "Core PR #451 merged the idempotent persistent Research workspace bootstrap and ke-research-workspace deployment surface."
+    - "Web PR #135 installs the tested slim Core Research runtime in the hosted Web container and bootstraps Core's writable workspace when a real persistent mount is present."
+    - "Web PR #136 adds render.research.yaml as an explicit operator-gated full Research deployment: persistent Web workspace plus a private qwen2.5:1.5b Ollama service and persistent model disk. It intentionally does not alter the active default render.yaml or incur cost merely by merging."
+    - "Web PR #137 hardens private Ollama startup by binding the service on 0.0.0.0:11434 while using loopback for startup probes/model pull."
   current_work_in_progress: null
   exact_next_sequence:
-    - "1. Preserve the existing asynchronous session/polling behavior from PR #106; structured-report rendering must not regress immediate indexed retrieval or truthful durable progress."
-    - "2. If structured report generation is unavailable or fails, preserve the already-verified base result and show an honest structured-report-unavailable state; never replace a valid grounded answer with a fabricated report."
-    - "3. Wait for knowledge-engine-core's persistent Research workspace bootstrap (core PR #451) to be unblocked and merged, and for the hosted Render alpha to actually pass the Research capability gate (durable storage + reachable inference + deployable Core Research command surface)."
-    - "4. Deploy and run Monster #79 end to end. Record session ID, BT-2 funnel, time to first grounded information, time to final report, provider coverage/degradation, promoted Evidence Records, final ResearchState, every conclusion row, missing evidence, and resolved citations/source-detail navigation."
+    - "1. Obtain explicit operator approval for the recurring Render cost before applying render.research.yaml; do not silently create or upgrade paid resources."
+    - "2. Apply the full hosted Research Blueprint in Render, preserving the existing KE_WEB_ALPHA_USERNAME and KE_WEB_ALPHA_PASSWORD secrets, and deploy both the Web service persistent disk and private Ollama service/model disk."
+    - "3. Verify Product Reality: Core workspace bootstrap succeeds on /var/data, qwen2.5:1.5b is present and reachable over Render's private network, and a normal /ask submission enters a durable asynchronous Research session rather than retrieval-only fallback."
+    - "4. Run Monster #79 end to end. Record session ID, BT-2 funnel, time to first grounded information, time to final report, provider coverage/degradation, promoted Evidence Records, final ResearchState, every conclusion row, missing evidence, and resolved citations/source-detail navigation."
     - "5. Fail acceptance honestly on any unsupported claim, missing dimension, collapsed evidence boundary, omitted counter-evidence, hidden missing-one-year-evidence gap, broken evidence-detail navigation, or materially worse readability than the scholarly-assistant baseline. Fix and rerun until it passes."
   layer_1_required_dimensions_for_monster:
     - "acute post-consumption blood-pressure effect"
@@ -75,20 +79,20 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-09-02T04:24:55Z"
+  checked_at: "2026-09-09T01:28:00Z"
   note: "Live PR/check/branch state must be queried before acting; cached counts here are only a handoff snapshot."
   open_prs: 0
   recently_merged_prs:
+    - number: 137
+      title: "Harden private Ollama startup client routing"
+    - number: 136
+      title: "Prepare operator-gated hosted Research runtime"
+    - number: 135
+      title: "Adopt Core Research runtime in hosted Web"
+    - number: 134
+      title: "Preserve reconciliation branch when PR creation is unavailable"
     - number: 113
       title: "Make Research the default Ask behavior"
-    - number: 112
-      title: "Research Report v1: link evidence IDs to source detail"
-    - number: 111
-      title: "Research Report v1: add Layer 2 evidence audit trail"
-    - number: 110
-      title: "Research Report v1: render answer-first Layer 1"
-    - number: 109
-      title: "Research Report v1: carry structured report through Web backend"
   active_research_report_issue: "#107"
   wip_branch: null
   wip_branch_has_open_pr: false
@@ -103,11 +107,11 @@ secondary_track:
   note: "WEB-GQR-0 through WEB-GQR-4 are the execution/progress foundation beneath Research Report v1. Continue GQR work when it directly blocks the report or Monster acceptance. Do not re-open already-completed async/polling work unless a concrete regression is found."
 
 next_continuation:
-  priority: "P-blocked-on-hosted-capability"
-  action: "No known Web-side code defect currently blocks Research Report v1. Do not invent new Web abstractions. The next real progress step is deployed Monster #79 acceptance, which requires knowledge-engine-core's hosted Research capability (core PR #451) to land first. Until then, prefer the optional richer inline study-detail follow-up noted in docs/research_report_v1.md (Layer 2, where the authoritative /claims detail surface lacks a requested study attribute) only if a concrete gap is found; otherwise leave this repository idle rather than manufacturing work."
+  priority: "P-operator-approval-hosted-runtime"
+  action: "Repository-side hosted Research preparation is complete. Do not invent more Web abstractions. The next real progress step is the explicit operator decision to incur the recurring Render cost and apply render.research.yaml; once approved, activate the persistent Web disk and private Ollama service, verify deployed capability, then run Monster #79 through normal /ask and fix any Product Reality failure until acceptance passes."
   selection_rule: "Before beginning work, query live PR/CI/branch state. Existing failed, pending, conflicted, blocked, or merge-ready work takes priority. Never merge failed, pending, conflicted, blocked, or materially uncertain work."
 
-human_decision_required: null
+human_decision_required: "Explicit approval is required before applying render.research.yaml because it creates recurring paid Render infrastructure: a persistent Web disk, a dedicated 1c-2g private inference service, and a persistent model disk."
 
 maintenance_contract:
   verify_every_scheduled_run: true
