@@ -40,7 +40,9 @@ def test_start_scripts_preserve_model_and_private_host_wiring() -> None:
 
     assert 'listen_host="${OLLAMA_HOST:-0.0.0.0:11434}"' in ollama_start
     assert 'OLLAMA_HOST="$listen_host" ollama serve &' in ollama_start
-    assert "OLLAMA_CLIENT_HOST:-http://127.0.0.1:11434" in ollama_start
+    assert '*:*) listen_port="${listen_host##*:}" ;;' in ollama_start
+    assert '*) listen_port="11434" ;;' in ollama_start
+    assert "OLLAMA_CLIENT_HOST:-http://127.0.0.1:$listen_port" in ollama_start
     assert 'OLLAMA_MODELS="${OLLAMA_MODELS:-/var/data/models}"' in ollama_start
     assert 'ollama show "$model"' in ollama_start
     assert 'ollama pull "$model"' in ollama_start
