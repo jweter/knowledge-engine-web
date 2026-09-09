@@ -1,0 +1,11 @@
+# Private hosted inference service for the full Research deployment.
+#
+# This image is deliberately separate from the public Web image so model
+# memory/CPU cannot starve the FastAPI/Core process. The tag is pinned for
+# reproducibility; upgrade it only through normal PR/CI review.
+FROM ollama/ollama:0.33.3
+
+COPY scripts/start-ollama.sh /usr/local/bin/start-knowledge-engine-ollama
+RUN chmod +x /usr/local/bin/start-knowledge-engine-ollama
+
+ENTRYPOINT ["/usr/local/bin/start-knowledge-engine-ollama"]

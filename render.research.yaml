@@ -1,0 +1,92 @@
+# Full hosted Research deployment for Knowledge Engine.
+#
+# This is intentionally NOT the default render.yaml because applying it creates
+# paid persistent disks and a dedicated 2 GB private inference service. Use it
+# only after the operator explicitly approves that cost. Render supports a
+# custom Blueprint path during setup/sync.
+services:
+  - type: web
+    name: knowledge-engine-web-alpha
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    disk:
+      name: knowledge-engine-research
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: KE_WEB_ALPHA_USERNAME
+        sync: false
+      - key: KE_WEB_ALPHA_PASSWORD
+        sync: false
+
+      # Research model: qwen2.5:1.5b is the CPU model already exercised by the
+      # Knowledge Engine AI verification work. The host:port is injected from
+      # the private Render service and converted to an HTTP URL by start-alpha.
+      - key: KE_WEB_LLM_MODEL
+        value: qwen2.5:1.5b
+      - key: KE_WEB_OLLAMA_HOSTPORT
+        fromService:
+          type: pserv
+          name: knowledge-engine-ollama
+          property: hostport
+
+      - key: KE_WEB_SESSION_STORAGE_MODE
+        value: persistent
+      - key: KE_WEB_SESSION_PERSISTENT_ROOT
+        value: /var/data
+      - key: KE_WEB_SESSION_DB_PATH
+        value: /var/data/research_sessions.sqlite3
+      - key: KE_WEB_CORE_CLI_COMMAND_PREFLIGHT
+        value: "true"
+      - key: KE_WEB_RESEARCH_PAPERS_DIR
+        value: /var/data/research-papers
+
+      # Hosted CPU inference is intentionally allowed a longer wall-clock
+      # budget than the retrieval-only alpha. Async Research keeps the browser
+      # responsive while the durable session is progressing.
+      - key: KE_WEB_AI_REQUEST_TIMEOUT_SECONDS
+        value: "600"
+      - key: KE_WEB_AI_MAX_CONCURRENT_REQUESTS
+        value: "1"
+      - key: KE_WEB_AI_RATE_LIMIT_REQUESTS
+        value: "3"
+      - key: KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS
+        value: "600"
+      - key: KE_WEB_ASYNC_RESEARCH_ENABLED
+        value: "true"
+
+      - key: KE_WEB_DISCOVERY_REQUEST_TIMEOUT_SECONDS
+        value: "60"
+      - key: KE_WEB_DISCOVERY_MAX_CONCURRENT_REQUESTS
+        value: "1"
+      - key: KE_WEB_DISCOVERY_RATE_LIMIT_REQUESTS
+        value: "5"
+      - key: KE_WEB_DISCOVERY_RATE_LIMIT_WINDOW_SECONDS
+        value: "600"
+      - key: KE_WEB_DISCOVERY_LEDGER_STORAGE_MODE
+        value: persistent
+      - key: KE_WEB_DISCOVERY_LEDGER_PERSISTENT_ROOT
+        value: /var/data
+      - key: KE_WEB_FEDERATED_DISCOVERY_LEDGER_ROOT
+        value: /var/data/discovery-ledger
+
+  # Ollama is private-network only: there is no public model endpoint or API
+  # key. Keeping it separate prevents model RAM/CPU from starving the Web/Core
+  # process and preserves the project's local/private inference boundary.
+  - type: pserv
+    name: knowledge-engine-ollama
+    runtime: docker
+    dockerfilePath: ./Dockerfile.ollama
+    plan: 1c-2g
+    disk:
+      name: knowledge-engine-ollama-models
+      mountPath: /var/data
+      sizeGB: 2
+    envVars:
+      - key: OLLAMA_HOST
+        value: 0.0.0.0:11434
+      - key: OLLAMA_MODELS
+        value: /var/data/models
+      - key: OLLAMA_MODEL
+        value: qwen2.5:1.5b

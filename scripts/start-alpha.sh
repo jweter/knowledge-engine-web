@@ -44,5 +44,20 @@ else
   echo "Persistent research mount not available; continuing retrieval-only." >&2
 fi
 
+# Render's Blueprint service references expose a private service as host:port,
+# while OllamaLLM expects an absolute HTTP URL. Keep the public application
+# configuration provider-neutral and perform the one required interpolation at
+# process start. A directly configured KE_WEB_OLLAMA_HOST still takes priority.
+if [ -z "${KE_WEB_OLLAMA_HOST:-}" ] && [ -n "${KE_WEB_OLLAMA_HOSTPORT:-}" ]; then
+  case "$KE_WEB_OLLAMA_HOSTPORT" in
+    http://*|https://*)
+      export KE_WEB_OLLAMA_HOST="$KE_WEB_OLLAMA_HOSTPORT"
+      ;;
+    *)
+      export KE_WEB_OLLAMA_HOST="http://$KE_WEB_OLLAMA_HOSTPORT"
+      ;;
+  esac
+fi
+
 export KE_WEB_PORT="${PORT:-${KE_WEB_PORT:-8000}}"
 exec poetry run knowledge-engine-web
