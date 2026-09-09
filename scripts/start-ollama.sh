@@ -11,11 +11,15 @@ export OLLAMA_MODELS="${OLLAMA_MODELS:-/var/data/models}"
 mkdir -p "$OLLAMA_MODELS"
 
 # Bind the server on the private-service interface, then point this wrapper's
-# own CLI probes/pull at loopback. Preserve the configured listen port by
-# default; operators may override the complete client destination explicitly.
+# own CLI probes/pull at loopback. Preserve an explicitly configured listen
+# port, while portless bind addresses retain Ollama's default port. Operators
+# may override the complete client destination explicitly.
 OLLAMA_HOST="$listen_host" ollama serve &
 server_pid=$!
-listen_port="${listen_host##*:}"
+case "$listen_host" in
+  *:*) listen_port="${listen_host##*:}" ;;
+  *) listen_port="11434" ;;
+esac
 export OLLAMA_HOST="${OLLAMA_CLIENT_HOST:-http://127.0.0.1:$listen_port}"
 
 cleanup() {
