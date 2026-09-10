@@ -1,5 +1,3 @@
-import pytest
-
 from knowledge_engine_web.mobile_product_reality import MobileSmokeEvidence
 
 
@@ -55,7 +53,7 @@ def test_reviewed_evidence_does_not_publish_free_form_notes() -> None:
 
 
 def test_question_reference_rejects_raw_question_text() -> None:
-    with pytest.raises(ValueError, match="sha256 digest"):
+    try:
         MobileSmokeEvidence(
             web_commit="abc123",
             scenario_id="iphone-smoke-4",
@@ -64,3 +62,7 @@ def test_question_reference_rejects_raw_question_text() -> None:
             evidence_count=1,
             provenance_traceable=True,
         )
+    except ValueError as exc:
+        assert "sha256 digest" in str(exc)
+    else:
+        raise AssertionError("raw question text must be rejected")
