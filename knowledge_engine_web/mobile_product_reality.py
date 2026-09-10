@@ -6,7 +6,8 @@ not duplicate research, retrieval, or provenance logic in the browser-facing lay
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+from re import fullmatch
 from typing import Literal
 
 ReviewState = Literal["UNREVIEWED", "PASS", "FAIL", "FLAG"]
@@ -30,8 +31,8 @@ class MobileSmokeEvidence:
             raise ValueError("web_commit is required")
         if not self.scenario_id.strip():
             raise ValueError("scenario_id is required")
-        if not self.question_reference.strip():
-            raise ValueError("question_reference is required")
+        if fullmatch(r"sha256:[0-9a-fA-F]{64}", self.question_reference) is None:
+            raise ValueError("question_reference must be a sha256 digest reference")
         if self.evidence_count < 0:
             raise ValueError("evidence_count cannot be negative")
 
@@ -46,12 +47,17 @@ class MobileSmokeEvidence:
 
     def public_payload(self) -> dict[str, object]:
         """Return only the sanitized review contract; never raw source payloads."""
-        payload = asdict(self)
-        payload["automated_evidence_state"] = self.automated_evidence_state
-        payload["remaining_acceptance_debt"] = [
-            "human_mobile_safari_review" if self.review == "UNREVIEWED" else ""
-        ]
-        payload["remaining_acceptance_debt"] = [
-            item for item in payload["remaining_acceptance_debt"] if item
-        ]
+        payload: dict[str, object] = {
+            "web_commit": self.web_commit,
+            "scenario_id": self.scenario_id,
+            "question_reference": self.question_reference,
+            "response_state": self.response_state,
+            "evidence_count": self.evidence_count,
+            "provenance_traceable": self.provenance_traceable,
+            "review": self.review,
+            "automated_evidence_state": self.automated_evidence_state,
+            "remaining_acceptance_debt": (
+                ["human_mobile_safari_review"] if self.review == "UNREVIEWED" else []
+            ),
+        }
         return payload
