@@ -14,6 +14,33 @@ This repository participates in the portfolio engineering-learning contract defi
 - Never invent lessons, test results, Product Reality, metrics, or progress. If there is no genuinely new lesson in a run, reuse prior learning and report that fact.
 - A preventable diagnosed failure class should not repeatedly consume scheduled runs. Automate prevention when safe, or document why it cannot safely be automated.
 
+## Learned prevention rule — exact-head verification invalidation
+
+### Problem
+PR #141 received a correctness/privacy repair after its original exact-head preflight had already passed. The repaired head then reached fresh PR CI with a Ruff `I001` import-order failure in `tests/test_mobile_product_reality.py`.
+
+### Root cause
+The earlier GREEN preflight applied only to the earlier commit. Any subsequent repair commit changed the exact head and invalidated that verification evidence. The repaired head was therefore not entitled to inherit the previous preflight state. Formatting also proved insufficient as a proxy for lint: `ruff format --check` passed while `ruff check` correctly failed.
+
+### Bounded fix
+- Correct the lint failure without weakening production validation or test intent.
+- Reset the repaired branch to `PREFLIGHT_UNVERIFIED` after every head-changing repair.
+- Require a fresh full exact-head preflight before treating a repaired branch as promotion-ready.
+
+### Verification
+The corrective head must pass the repository's complete canonical preflight and then fresh independent PR CI. Prior GREEN evidence from an older SHA is not valid verification for the new head.
+
+### Regression protection
+- Treat any branch-head mutation after preflight as automatic invalidation of `PREFLIGHT_GREEN`.
+- Run both repository formatting and lint checks on modified Python/test files; formatting success must never imply lint success.
+- Keep PR verification metadata SHA-specific and mark it stale when the head changes.
+
+### Residual risk
+GitHub or orchestration surfaces may display historical successful checks from older heads. Promotion logic must bind verification to the current exact SHA rather than the branch name or PR number alone.
+
+### Prevention rule
+**Every head-changing repair invalidates prior preflight evidence. Re-run the full canonical preflight on the new exact head before promotion, and never infer lint success from formatter success.**
+
 ## Evolution objective
 
 Improve product capability, engineering capability, autonomous reliability, and prevention effectiveness together. Target **Preventable Repeat Failure Rate = 0**. Shipping more code is not success if avoidable failures continue recurring.
