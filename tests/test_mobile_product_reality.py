@@ -1,6 +1,5 @@
 from knowledge_engine_web.mobile_product_reality import MobileSmokeEvidence
 
-
 QUESTION_REF = "sha256:" + ("a" * 64)
 
 
