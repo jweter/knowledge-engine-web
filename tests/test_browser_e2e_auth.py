@@ -12,23 +12,24 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Browser, Page
-from playwright.sync_api import Error as PlaywrightError
 
 from tests._browser_e2e_support import ALPHA_PASSWORD, ALPHA_USERNAME
 
 pytestmark = pytest.mark.browser_e2e
 
 
+def _assert_rejected_navigation(page: Page, url: str) -> None:
+    """Assert the real browser receives the Basic Auth rejection without rendering the app."""
+    response = page.goto(url)
+    assert response is not None
+    assert response.status == 401
+    assert "Knowledge Engine" not in page.title()
+
+
 def test_unauthenticated_browser_request_is_challenged(
     page: Page, live_app_with_alpha_auth: str
 ) -> None:
-    # A real Chromium network stack with no usable credentials for the Basic
-    # Auth challenge fails navigation outright (net::ERR_INVALID_AUTH_CREDENTIALS)
-    # rather than handing back a 401 Response -- unlike a raw HTTP client, it
-    # never renders the gated page's body. That refusal to render is the real
-    # protection this test verifies.
-    with pytest.raises(PlaywrightError, match="ERR_INVALID_AUTH_CREDENTIALS"):
-        page.goto(live_app_with_alpha_auth + "/")
+    _assert_rejected_navigation(page, live_app_with_alpha_auth + "/")
 
 
 def test_correct_credentials_allow_real_browser_access(
@@ -55,11 +56,6 @@ def test_wrong_credentials_are_rejected_by_the_real_browser_flow(
     )
     try:
         page = context.new_page()
-        # Chromium retries a rejected credential once against the challenge
-        # before giving up, surfacing as ERR_HTTP_RESPONSE_CODE_FAILURE rather
-        # than a navigable 401 response -- same real-browser refusal-to-render
-        # behavior as the no-credentials case above, for a wrong password.
-        with pytest.raises(PlaywrightError, match="ERR_HTTP_RESPONSE_CODE_FAILURE"):
-            page.goto(live_app_with_alpha_auth + "/")
+        _assert_rejected_navigation(page, live_app_with_alpha_auth + "/")
     finally:
         context.close()
