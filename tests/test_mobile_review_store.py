@@ -300,3 +300,93 @@ def test_migration_refuses_an_unrecognized_schema_rather_than_guess(tmp_path: Pa
 
     with pytest.raises(RuntimeError, match="unrecognized schema"):
         read_mobile_review_history(str(session_db), "any-session")
+
+
+def test_migration_rejects_a_schema_that_merely_contains_web_commit(tmp_path: Path) -> None:
+    """Finding a `web_commit` column is not proof the schema is valid -- only the
+    exact append-only column set counts as already-migrated. A table missing other
+    required columns (here: `id` and `build_identity_verified`) must be refused,
+    not waved through."""
+
+    session_db = tmp_path / "sessions.sqlite3"
+    connection = sqlite3.connect(str(session_db))
+    try:
+        connection.execute(
+            """
+            CREATE TABLE web_mobile_reviews (
+                session_id TEXT PRIMARY KEY,
+                review TEXT NOT NULL,
+                notes TEXT NOT NULL DEFAULT '',
+                web_commit TEXT NOT NULL DEFAULT '',
+                reviewed_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(RuntimeError, match="unrecognized schema"):
+        read_mobile_review_history(str(session_db), "any-session")
+
+
+def test_post_lock_recheck_catches_a_table_migrated_after_the_first_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression test for the exact race this migration must close: two concurrent
+    first accesses can both observe the legacy schema before either takes the lock.
+    If the second blindly re-migrated after acquiring the lock, it would re-run the
+    rename/create/copy/drop sequence against the table the first caller already
+    migrated -- silently discarding any build-provenance fields recorded in
+    between (the copy step hardcodes web_commit='' / build_identity_verified=0).
+
+    This simulates that interleaving directly: `_table_columns` is patched to
+    return a stale legacy reading on its first call (standing in for the
+    lock-free fast-path read that happened before another caller's migration
+    landed), then falls through to the real, live read for every call after --
+    in particular the post-`BEGIN IMMEDIATE` recheck. The real table is already
+    fully migrated with a build-verified review by the time this runs. The fix
+    must trust only the recheck and no-op; the pre-fix code had no recheck at
+    all and would have destroyed that review's real provenance.
+    """
+
+    import knowledge_engine_web.mobile_review_store as store
+
+    session_db = tmp_path / "sessions.sqlite3"
+    session_id = "race-session"
+
+    # Stands in for "another caller already migrated this database, including
+    # recording a real build identity, in the window between this call's stale
+    # read and its lock acquisition."
+    record_mobile_review(
+        str(session_db),
+        session_id,
+        "PASS",
+        "Recorded by the caller that actually held the lock first.",
+        web_commit="already-migrated-sha",
+        build_identity_verified=True,
+    )
+
+    real_table_columns = store._table_columns
+    calls: list[frozenset[str]] = []
+
+    def stale_first_read(connection: sqlite3.Connection) -> frozenset[str]:
+        if not calls:
+            calls.append(store._PR144_LEGACY_COLUMNS)
+            return store._PR144_LEGACY_COLUMNS
+        result = real_table_columns(connection)
+        calls.append(result)
+        return result
+
+    monkeypatch.setattr(store, "_table_columns", stale_first_read)
+
+    history = read_mobile_review_history(str(session_db), session_id)
+
+    assert len(calls) == 2, "expected exactly the stale fast-path read plus one post-lock recheck"
+    assert calls[0] == store._PR144_LEGACY_COLUMNS
+    assert calls[1] == store._APPEND_ONLY_COLUMNS
+
+    # Nothing was lost or re-migrated: the real build identity survives.
+    assert [entry.review for entry in history] == ["PASS"]
+    assert history[0].web_commit == "already-migrated-sha"
+    assert history[0].build_identity_verified is True
