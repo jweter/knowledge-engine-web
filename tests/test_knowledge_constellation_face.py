@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).parents[1]
 BASE_TEMPLATE = ROOT / "knowledge_engine_web" / "templates" / "base.html"
 CONSTELLATION_CSS = ROOT / "knowledge_engine_web" / "static" / "knowledge_constellation.css"
