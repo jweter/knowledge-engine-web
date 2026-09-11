@@ -23,7 +23,7 @@ This is above the level of a portfolio mockup and below the level of a polished,
 | Retrieval UX foundation | 7.0 | Real Ask path and benchmarked ranking exist. General research continuation after a miss is not complete. |
 | Visual/interaction UX maturity | 6.0 | Functional alpha, not yet a polished researcher workspace. |
 | Accessibility | 4.5 | No automated accessibility/WCAG test evidence was found in the current repository search. |
-| Browser end-to-end testing | 5.0 | Docker startup is tested, but no Playwright/Selenium-style browser workflow evidence was found. |
+| Browser end-to-end testing | 5.5 | `tests/test_browser_e2e.py` (added 2026-09-11) now drives the real app with real headless Chromium for the Ask critical path -- homepage load, indexed direct match, citation navigation, no-fabrication miss state, mobile viewport -- and is wired into `.github/workflows/browser-e2e.yml` on every PR. It already caught and fixed two real rendering bugs (see `docs/browser_e2e_testing.md`). Still narrow: research-required/partial-answer/degraded-provider/auth/resume states and any Playwright coverage beyond Ask remain unaddressed, and the new CI job is advisory, not yet a required check. |
 | CI / release hygiene | 8.0 | Ruff, mypy, pytest, pip-audit, Docker build and container smoke test are strong. |
 | Security posture | 7.5 | Read-only architecture, password-gated alpha and secret scanning are solid for alpha. Production identity/access control is not yet demonstrated. |
 | Observability / performance | 5.0 | Latency/bottleneck work is recognized but not yet productized. |

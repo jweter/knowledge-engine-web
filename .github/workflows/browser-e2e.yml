@@ -1,0 +1,51 @@
+name: Browser E2E (advisory)
+
+# Real headless-Chromium browser tests for the Ask critical path
+# (tests/test_browser_e2e.py). This closes the "no Playwright/Selenium-style
+# browser workflow evidence was found" gap from docs/INDUSTRY_REALITY_CHECK.md.
+#
+# Deliberately NOT part of the required Quality/Docker checks yet: this job
+# installs and manages its own Chromium build, which is heavier and slower
+# than the rest of the Quality gate, and the suite is new. It runs on every
+# PR and push to main so results are visible, but a failure here does not
+# block merge until this repository's own required-check policy adds it
+# (see docs/agent-development-policy.md section 3 and
+# docs/project-status.yaml's automation_contract.required_pr_workflows).
+# tests/test_browser_e2e.py self-skips (rather than failing) if no Chromium
+# executable is available, so a failure here is a real product regression,
+# not an environment gap.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    name: Real headless-Chromium Ask tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: python -m pip install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Install Playwright's Chromium
+        run: poetry run playwright install --with-deps chromium
+
+      - name: Run real browser E2E tests
+        run: poetry run pytest -m browser_e2e -v

@@ -32,6 +32,7 @@ pytest = "^9.1.1"
 ruff = "0.16.5"
 httpx = "^0.28.0"
 pip-audit = "^2.10.1"
+playwright = "^1.62.0"
 
 [tool.poetry.scripts]
 knowledge-engine-web = "knowledge_engine_web.main:run"
@@ -60,3 +61,6 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "browser_e2e: real headless-Chromium browser tests (see docs/browser_e2e_testing.md); self-skips when no Chromium executable is available",
+]

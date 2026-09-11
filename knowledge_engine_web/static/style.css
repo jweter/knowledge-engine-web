@@ -164,7 +164,16 @@ th {
 .inspect-menu { position: relative; }
 .inspect-menu summary { color: var(--link); cursor: pointer; list-style: none; }
 .inspect-menu summary::-webkit-details-marker { display: none; }
-.inspect-menu > div { position: absolute; right: 0; top: 1.7rem; z-index: 10; min-width: 13rem; padding: 0.55rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+/* Combining `position: absolute` with relying only on native <details>
+   open/closed hiding leaves the closed panel still occupying real,
+   off-canvas layout geometry in at least one real browser engine, which
+   grows document.documentElement.scrollWidth and causes horizontal
+   overflow on narrow viewports (caught by tests/test_browser_e2e.py's
+   real headless-Chromium mobile-viewport test). Hide it explicitly and
+   show it only when the <details> is actually open, instead of trusting
+   the browser's own closed-content hiding to also apply here. */
+.inspect-menu > div { display: none; position: absolute; right: 0; top: 1.7rem; z-index: 10; min-width: 13rem; padding: 0.55rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.inspect-menu[open] > div { display: block; }
 .inspect-menu > div a { display: block; padding: 0.35rem 0.45rem; }
 
 .site-footer {
@@ -175,7 +184,12 @@ th {
   color: var(--text-muted);
   font-size: 0.88rem;
 }
-.snapshot-line { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.76rem; }
+/* Real snapshot metadata (data/snapshot_metadata.json's corpus_id) can be one
+   long comma/underscore-separated token with no space or hyphen break
+   opportunity, which otherwise overflows a narrow viewport horizontally
+   instead of wrapping (caught by tests/test_browser_e2e.py's real
+   headless-Chromium mobile-viewport test). */
+.snapshot-line { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.76rem; overflow-wrap: anywhere; }
 .snapshot-panel { padding: 0.7rem 0.85rem; border-left: 3px solid var(--accent); background: var(--bg-alt); color: var(--text-muted); }
 .demo-hero { padding: 2.5rem 0 1.5rem; }
 .demo-hero h1 { max-width: 700px; font-size: clamp(2rem, 5vw, 3.4rem); }
