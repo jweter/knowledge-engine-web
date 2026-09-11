@@ -633,7 +633,13 @@
       if (reviewAutomatedStateNode) reviewAutomatedStateNode.textContent = text(data.automated_evidence_state);
       if (reviewRecordedNode) {
         if (data.review && data.review !== "UNREVIEWED") {
-          reviewRecordedNode.textContent = `Recorded verdict: ${data.review}`;
+          const authoritative = data.review_authoritative
+            ? `authoritative -- build ${text(data.review_build_commit)}`
+            : "not yet authoritative: no exact build identity was configured when this was recorded";
+          const historyNote = data.review_history_count > 1
+            ? ` (${data.review_history_count} verdicts recorded for this session; this is the latest)`
+            : "";
+          reviewRecordedNode.textContent = `Recorded verdict: ${data.review} -- ${authoritative}${historyNote}`;
           reviewRecordedNode.hidden = false;
         } else {
           reviewRecordedNode.hidden = true;

@@ -178,6 +178,9 @@ def test_mobile_review_status_reports_automated_evidence_before_any_human_review
     assert payload["provenance_traceable"] is True
     assert payload["automated_evidence_state"] == "EVIDENCE_PRESENT"
     assert payload["review"] == "UNREVIEWED"
+    assert payload["review_authoritative"] is False
+    assert payload["review_build_commit"] == ""
+    assert payload["review_history_count"] == 0
     assert payload["remaining_acceptance_debt"] == ["human_mobile_safari_review"]
     assert "notes" not in payload
 
@@ -196,6 +199,7 @@ def test_posting_a_mobile_review_records_and_returns_the_verdict(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     session_db = _enable_async_research(tmp_path, monkeypatch)
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "deployed-sha")
     session_id = "session-mobile-2"
     _complete_job_with_evidence(session_db, session_id, "Does Monster Energy raise blood pressure?")
 
@@ -207,11 +211,71 @@ def test_posting_a_mobile_review_records_and_returns_the_verdict(
     assert response.status_code == 200
     payload = response.json()
     assert payload["review"] == "PASS"
+    assert payload["review_authoritative"] is True
+    assert payload["review_build_commit"] == "deployed-sha"
+    assert payload["review_history_count"] == 1
     assert payload["remaining_acceptance_debt"] == []
     assert "notes" not in payload
 
     follow_up = TestClient(app).get(f"/ask/session/{session_id}/mobile-review")
-    assert follow_up.json()["review"] == "PASS"
+    follow_up_payload = follow_up.json()
+    assert follow_up_payload["review"] == "PASS"
+    assert follow_up_payload["review_build_commit"] == "deployed-sha"
+    assert follow_up_payload["review_history_count"] == 1
+
+
+def test_posting_a_review_without_a_verified_build_identity_is_not_authoritative(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session_db = _enable_async_research(tmp_path, monkeypatch)
+    monkeypatch.delenv("RENDER_GIT_COMMIT", raising=False)
+    monkeypatch.delenv("KE_WEB_BUILD_COMMIT", raising=False)
+    session_id = "session-mobile-unverified"
+    _complete_job_with_evidence(session_db, session_id, "Does Monster Energy raise blood pressure?")
+
+    response = TestClient(app).post(
+        f"/ask/session/{session_id}/mobile-review",
+        json={"review": "PASS"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["review"] == "PASS"
+    assert payload["review_authoritative"] is False
+    assert payload["review_build_commit"] == "unknown-build"
+    assert payload["remaining_acceptance_debt"] == ["exact_build_identity"]
+
+
+def test_repeated_mobile_reviews_preserve_prior_history_rather_than_overwrite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session_db = _enable_async_research(tmp_path, monkeypatch)
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "sha-1")
+    session_id = "session-mobile-history"
+    _complete_job_with_evidence(session_db, session_id, "Does Monster Energy raise blood pressure?")
+    client = TestClient(app)
+
+    first = client.post(
+        f"/ask/session/{session_id}/mobile-review",
+        json={"review": "FAIL", "notes": "Broken on first pass."},
+    )
+    assert first.json()["review"] == "FAIL"
+    assert first.json()["review_history_count"] == 1
+
+    second = client.post(
+        f"/ask/session/{session_id}/mobile-review",
+        json={"review": "PASS", "notes": "Fixed, confirmed on retest."},
+    )
+
+    assert second.status_code == 200
+    payload = second.json()
+    assert payload["review"] == "PASS"
+    assert payload["review_history_count"] == 2
+
+    from knowledge_engine_web.mobile_review_store import read_mobile_review_history
+
+    history = read_mobile_review_history(str(session_db), session_id)
+    assert [entry.review for entry in history] == ["FAIL", "PASS"]
 
 
 def test_posting_a_mobile_review_before_the_job_is_terminal_is_rejected(

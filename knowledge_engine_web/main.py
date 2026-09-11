@@ -88,10 +88,15 @@ from knowledge_engine_web.graph_visual import (
 )
 from knowledge_engine_web.mobile_product_reality import (
     MOBILE_REVIEW_STATES,
+    build_identity_is_verified,
     mobile_smoke_evidence_from_job,
     web_build_identity,
 )
-from knowledge_engine_web.mobile_review_store import read_mobile_review, record_mobile_review
+from knowledge_engine_web.mobile_review_store import (
+    read_mobile_review,
+    read_mobile_review_history,
+    record_mobile_review,
+)
 from knowledge_engine_web.relationship_reader import (
     list_relationship_records_for_evidence_record_id,
 )
@@ -927,17 +932,23 @@ def _mobile_review_payload(session_id: str) -> tuple[dict[str, object], bool]:
     if job is None:
         raise HTTPException(status_code=404, detail="No research session with that ID.")
     stored = read_mobile_review(settings.session_db_path, session_id)
+    history = read_mobile_review_history(settings.session_db_path, session_id)
     review = stored.review if stored is not None else "UNREVIEWED"
     notes = stored.notes if stored is not None else ""
+    review_build_commit = stored.web_commit if stored is not None else ""
+    review_build_identity_verified = stored.build_identity_verified if stored is not None else False
     evidence = mobile_smoke_evidence_from_job(
         job,
         web_commit=web_build_identity(),
         scenario_id="ask-session",
         review=review,  # type: ignore[arg-type]
         notes=notes,
+        review_build_commit=review_build_commit,
+        review_build_identity_verified=review_build_identity_verified,
     )
     payload = evidence.public_payload()
     payload["terminal"] = job.terminal
+    payload["review_history_count"] = len(history)
     return payload, job.terminal
 
 
@@ -973,6 +984,13 @@ def submit_mobile_review(session_id: str, submission: MobileReviewSubmission) ->
 
     Only accepted once the session's Research job reaches a terminal state --
     a review judges an actual finished answer, never a still-running guess.
+    Appends a new row rather than overwriting any prior verdict for this
+    session (see `mobile_review_store.record_mobile_review`), and captures
+    `web_build_identity()` at this exact moment so the verdict stays tied to
+    the build it actually judged even if the deployment moves on later. A
+    verdict recorded while no real build identity is configured is still
+    kept, but `public_payload`'s `review_authoritative` stays false and
+    `remaining_acceptance_debt` reports it until a real one is.
     """
 
     settings = Settings()
@@ -989,7 +1007,15 @@ def submit_mobile_review(session_id: str, submission: MobileReviewSubmission) ->
             status_code=400,
             detail=f"review must be one of {', '.join(MOBILE_REVIEW_STATES)}.",
         )
-    record_mobile_review(settings.session_db_path, session_id, submission.review, submission.notes)
+    web_commit = web_build_identity()
+    record_mobile_review(
+        settings.session_db_path,
+        session_id,
+        submission.review,
+        submission.notes,
+        web_commit=web_commit,
+        build_identity_verified=build_identity_is_verified(web_commit),
+    )
     payload, _ = _mobile_review_payload(session_id)
     return Response(content=json.dumps(payload, indent=2) + "\n", media_type="application/json")
 
