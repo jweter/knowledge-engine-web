@@ -1,0 +1,516 @@
+/*
+ * Knowledge Constellation
+ *
+ * A cinematic visual layer for the public Knowledge Engine face. The ambient
+ * star field is decorative only; evidence meaning remains in the existing
+ * source-linked UI and reviewed relationship graph.
+ */
+
+:root {
+  --ke-space-0: #030711;
+  --ke-space-1: #07101d;
+  --ke-space-2: #0c1730;
+  --ke-glass: rgba(8, 18, 35, 0.78);
+  --ke-glass-strong: rgba(8, 18, 35, 0.93);
+  --ke-cyan: #72e8ff;
+  --ke-cyan-strong: #25d6f5;
+  --ke-violet: #a98cff;
+  --ke-gold: #ffd27a;
+  --ke-text: #eef7ff;
+  --ke-muted: #a6b7c9;
+  --ke-border: rgba(126, 208, 255, 0.18);
+  --ke-border-bright: rgba(126, 208, 255, 0.42);
+  --ke-shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+}
+
+body.ke-constellation {
+  --bg: var(--ke-space-0);
+  --bg-alt: rgba(12, 28, 50, 0.82);
+  --text: var(--ke-text);
+  --text-muted: var(--ke-muted);
+  --border: var(--ke-border);
+  --accent: var(--ke-cyan);
+  --accent-contrast: #021018;
+  --link: #8cecff;
+  --code-bg: rgba(124, 181, 255, 0.1);
+  min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 14% -8%, rgba(71, 91, 212, 0.34), transparent 32rem),
+    radial-gradient(circle at 84% 10%, rgba(36, 203, 223, 0.18), transparent 28rem),
+    radial-gradient(circle at 58% 72%, rgba(116, 70, 185, 0.14), transparent 36rem),
+    linear-gradient(155deg, var(--ke-space-0) 0%, var(--ke-space-1) 46%, #050916 100%);
+}
+
+body.ke-constellation::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.34;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 1px, transparent 1.25px),
+    radial-gradient(circle, rgba(119, 232, 255, 0.74) 0 1px, transparent 1.35px),
+    radial-gradient(circle, rgba(186, 158, 255, 0.58) 0 0.8px, transparent 1.15px);
+  background-position: 0 0, 39px 67px, 91px 17px;
+  background-size: 137px 137px, 191px 191px, 263px 263px;
+  mask-image: linear-gradient(to bottom, black 0%, rgba(0, 0, 0, 0.75) 58%, transparent 100%);
+}
+
+#knowledge-constellation-field {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.84;
+}
+
+.ke-constellation .site-header,
+.ke-constellation main,
+.ke-constellation .site-footer {
+  position: relative;
+  z-index: 2;
+}
+
+.ke-constellation .site-header {
+  max-width: 1180px;
+  margin-top: 0.8rem;
+  border: 1px solid var(--ke-border);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(11, 25, 48, 0.88), rgba(7, 14, 29, 0.7));
+  box-shadow: 0 14px 50px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+.ke-constellation .site-title {
+  position: relative;
+  font-size: 1.08rem;
+  letter-spacing: 0.01em;
+  color: var(--ke-text);
+  text-shadow: 0 0 22px rgba(114, 232, 255, 0.22);
+}
+
+.ke-constellation .site-title::before {
+  content: "";
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-right: 0.55rem;
+  border-radius: 50%;
+  vertical-align: 0.02rem;
+  background: var(--ke-cyan);
+  box-shadow:
+    0 0 0 4px rgba(114, 232, 255, 0.08),
+    0 0 18px rgba(114, 232, 255, 0.9),
+    0 0 42px rgba(169, 140, 255, 0.42);
+}
+
+.ke-constellation .alpha-badge {
+  border: 1px solid rgba(114, 232, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(114, 232, 255, 0.11);
+  color: var(--ke-cyan);
+  box-shadow: inset 0 0 16px rgba(114, 232, 255, 0.05);
+}
+
+.ke-constellation .site-header nav {
+  align-items: center;
+}
+
+.ke-constellation .site-header nav > a,
+.ke-constellation .inspect-menu summary {
+  padding: 0.35rem 0.46rem;
+  border-radius: 7px;
+  color: var(--ke-muted);
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.ke-constellation .site-header nav > a:hover,
+.ke-constellation .site-header nav > a:focus-visible,
+.ke-constellation .inspect-menu summary:hover,
+.ke-constellation .inspect-menu summary:focus-visible {
+  text-decoration: none;
+  color: var(--ke-text);
+  background: rgba(114, 232, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(114, 232, 255, 0.13);
+}
+
+.ke-constellation .inspect-menu > div {
+  border-color: var(--ke-border-bright);
+  background: var(--ke-glass-strong);
+  box-shadow: var(--ke-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.ke-constellation main {
+  max-width: 1080px;
+  margin-top: 1.2rem;
+  margin-bottom: 1.4rem;
+  border: 1px solid rgba(126, 208, 255, 0.12);
+  border-radius: 24px;
+  background:
+    linear-gradient(150deg, rgba(10, 23, 43, 0.74), rgba(4, 11, 24, 0.74)),
+    radial-gradient(circle at 74% 4%, rgba(114, 232, 255, 0.07), transparent 28rem);
+  box-shadow: var(--ke-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(15px) saturate(115%);
+  -webkit-backdrop-filter: blur(15px) saturate(115%);
+}
+
+.ke-constellation h1,
+.ke-constellation h2,
+.ke-constellation h3 {
+  color: var(--ke-text);
+}
+
+.ke-constellation h1 {
+  text-wrap: balance;
+}
+
+.ke-constellation h2 {
+  border-top-color: rgba(126, 208, 255, 0.14);
+}
+
+.ke-constellation a {
+  text-underline-offset: 0.18em;
+}
+
+.ke-constellation code {
+  border: 1px solid rgba(126, 208, 255, 0.12);
+}
+
+.ke-constellation .site-footer {
+  max-width: 1080px;
+  margin-bottom: 1.25rem;
+  border: 1px solid rgba(126, 208, 255, 0.11);
+  border-radius: 18px;
+  background: rgba(5, 13, 26, 0.66);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Landing page: the real reviewed graph becomes the visual centerpiece. */
+.ke-constellation .landing-hero {
+  gap: clamp(2rem, 5vw, 4rem);
+  padding: 3.8rem 0 3rem;
+}
+
+.ke-constellation .landing-hero-copy h1 {
+  max-width: 18ch;
+  font-size: clamp(2.55rem, 5.4vw, 4.55rem);
+  font-weight: 680;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+  color: transparent;
+  background: linear-gradient(120deg, #ffffff 0%, #baf5ff 38%, #bca7ff 74%, #ffffff 100%);
+  background-size: 180% 180%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 10px 32px rgba(46, 194, 230, 0.1));
+  animation: ke-title-aurora 12s ease-in-out infinite;
+}
+
+.ke-constellation .landing-lede {
+  max-width: 61ch;
+  color: #bfd0df;
+  font-size: 1.04rem;
+  line-height: 1.72;
+}
+
+.ke-constellation .eyebrow,
+.ke-constellation .trust-label {
+  color: var(--ke-cyan);
+  text-shadow: 0 0 18px rgba(114, 232, 255, 0.22);
+}
+
+.ke-constellation .landing-cta-primary,
+.ke-constellation .demo-cta,
+.ke-constellation .coffee-button,
+.ke-constellation .ask-form button {
+  border-color: rgba(114, 232, 255, 0.55);
+  border-radius: 10px;
+  color: #031019;
+  background: linear-gradient(120deg, #85f2ff, #67d7ff 52%, #9d8cff);
+  box-shadow:
+    0 10px 30px rgba(37, 214, 245, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48);
+  transition: transform 170ms ease, box-shadow 170ms ease, filter 170ms ease;
+}
+
+.ke-constellation .landing-cta-primary:hover,
+.ke-constellation .landing-cta-primary:focus-visible,
+.ke-constellation .demo-cta:hover,
+.ke-constellation .demo-cta:focus-visible,
+.ke-constellation .coffee-button:hover,
+.ke-constellation .coffee-button:focus-visible,
+.ke-constellation .ask-form button:hover,
+.ke-constellation .ask-form button:focus-visible {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  text-decoration: none;
+  box-shadow:
+    0 13px 38px rgba(37, 214, 245, 0.26),
+    0 0 0 1px rgba(114, 232, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.ke-constellation .landing-cta-secondary {
+  border-color: rgba(126, 208, 255, 0.22);
+  color: var(--ke-text);
+  background: rgba(126, 208, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+
+.ke-constellation .landing-trust-badges li::before {
+  box-shadow: 0 0 16px rgba(114, 232, 255, 0.7);
+}
+
+.ke-constellation .landing-hero-visual {
+  overflow: hidden;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid rgba(126, 208, 255, 0.24);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(46, 208, 241, 0.12), transparent 41%),
+    radial-gradient(circle at 82% 14%, rgba(169, 140, 255, 0.15), transparent 31%),
+    linear-gradient(145deg, rgba(10, 24, 47, 0.88), rgba(4, 9, 21, 0.86));
+  box-shadow:
+    0 32px 90px rgba(0, 0, 0, 0.38),
+    0 0 72px rgba(55, 186, 221, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.ke-constellation .landing-hero-visual::before,
+.ke-constellation .landing-hero-visual::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(2px);
+}
+
+.ke-constellation .landing-hero-visual::before {
+  width: 14rem;
+  height: 14rem;
+  top: -6rem;
+  right: -5rem;
+  border: 1px solid rgba(114, 232, 255, 0.16);
+  box-shadow: 0 0 65px rgba(114, 232, 255, 0.08), inset 0 0 35px rgba(169, 140, 255, 0.06);
+}
+
+.ke-constellation .landing-hero-visual::after {
+  width: 5px;
+  height: 5px;
+  left: 18%;
+  top: 22%;
+  background: white;
+  box-shadow:
+    88px 38px 0 rgba(114, 232, 255, 0.84),
+    190px 96px 0 rgba(255, 255, 255, 0.66),
+    236px 8px 0 rgba(169, 140, 255, 0.82),
+    290px 154px 0 rgba(114, 232, 255, 0.55),
+    130px 210px 0 rgba(255, 210, 122, 0.66);
+}
+
+.ke-constellation .landing-graph-network {
+  position: relative;
+  z-index: 1;
+  margin-top: 0;
+  filter: drop-shadow(0 16px 36px rgba(0, 0, 0, 0.34));
+}
+
+.ke-constellation .graph-network svg circle.graph-node {
+  fill: #071426;
+  stroke: var(--ke-cyan);
+  filter: drop-shadow(0 0 6px rgba(114, 232, 255, 0.52));
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.ke-constellation .graph-network svg.ke-live-graph circle.graph-node {
+  animation: ke-node-breathe 4.8s ease-in-out infinite;
+}
+
+.ke-constellation .graph-network svg.ke-live-graph line {
+  animation: ke-edge-breathe 5.8s ease-in-out infinite;
+}
+
+.ke-constellation .graph-network svg text {
+  fill: #c4d4e3;
+}
+
+.ke-constellation .landing-visual-caption {
+  color: #91a8bb;
+}
+
+.ke-constellation .landing-stats > div,
+.ke-constellation .landing-pillars > div,
+.ke-constellation .demo-section,
+.ke-constellation .demo-boundary,
+.ke-constellation .ask-result-card,
+.ke-constellation .ask-evidence-entry,
+.ke-constellation .ask-trace-events li,
+.ke-constellation .discovery-method-details {
+  border-color: rgba(126, 208, 255, 0.16);
+  background: linear-gradient(145deg, rgba(14, 31, 55, 0.74), rgba(7, 16, 32, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.ke-constellation .landing-stats > div,
+.ke-constellation .landing-pillars > div {
+  border-radius: 14px;
+}
+
+.ke-constellation .landing-stats strong {
+  color: #dffbff;
+  text-shadow: 0 0 24px rgba(114, 232, 255, 0.2);
+}
+
+.ke-constellation .landing-final-cta {
+  border-color: rgba(126, 208, 255, 0.22);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(114, 232, 255, 0.11), transparent 18rem),
+    linear-gradient(135deg, rgba(13, 31, 57, 0.86), rgba(11, 19, 39, 0.82));
+}
+
+/* Ask becomes a quiet observatory. During real async work, the shell brightens. */
+.ke-constellation .ask-form input[type="text"] {
+  min-height: 2.8rem;
+  border-color: rgba(126, 208, 255, 0.23);
+  background: rgba(3, 10, 21, 0.78);
+  color: var(--ke-text);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.012), 0 0 0 rgba(114, 232, 255, 0);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.ke-constellation .ask-form input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(114, 232, 255, 0.68);
+  background: rgba(4, 13, 27, 0.92);
+  box-shadow: 0 0 0 3px rgba(114, 232, 255, 0.08), 0 0 35px rgba(37, 214, 245, 0.08);
+}
+
+.ke-constellation.ke-researching main {
+  border-color: rgba(114, 232, 255, 0.26);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.4),
+    0 0 70px rgba(37, 214, 245, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.ke-constellation.ke-researching .ask-running-status {
+  color: #bff7ff;
+  text-shadow: 0 0 18px rgba(114, 232, 255, 0.28);
+}
+
+.ke-constellation.ke-researching .ask-form button[aria-busy="true"] {
+  opacity: 1;
+  animation: ke-research-pulse 1.8s ease-in-out infinite;
+}
+
+/* Preserve warning semantics: cinematic styling never softens scientific state. */
+.ke-constellation .publication-status-banner.is-critical,
+.ke-constellation .trust-warning.is-critical {
+  box-shadow: 0 0 0 1px rgba(242, 139, 130, 0.08), 0 0 32px rgba(242, 139, 130, 0.08);
+}
+
+.ke-constellation .publication-status-banner.is-degraded {
+  box-shadow: 0 0 0 1px rgba(224, 164, 88, 0.08), 0 0 32px rgba(224, 164, 88, 0.06);
+}
+
+@keyframes ke-title-aurora {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes ke-node-breathe {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(114, 232, 255, 0.4)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(114, 232, 255, 0.72)); }
+}
+
+@keyframes ke-edge-breathe {
+  0%, 100% { stroke-opacity: 0.52; }
+  50% { stroke-opacity: 0.94; }
+}
+
+@keyframes ke-research-pulse {
+  0%, 100% { box-shadow: 0 10px 30px rgba(37, 214, 245, 0.18), 0 0 0 0 rgba(114, 232, 255, 0.18); }
+  50% { box-shadow: 0 14px 38px rgba(37, 214, 245, 0.28), 0 0 0 8px rgba(114, 232, 255, 0); }
+}
+
+@media (max-width: 900px) {
+  .ke-constellation .site-header,
+  .ke-constellation main,
+  .ke-constellation .site-footer {
+    margin-left: 0.7rem;
+    margin-right: 0.7rem;
+  }
+
+  .ke-constellation main {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .ke-constellation .landing-hero {
+    padding-top: 2.5rem;
+  }
+}
+
+@media (max-width: 650px) {
+  .ke-constellation .site-header {
+    margin-top: 0.45rem;
+    border-radius: 14px;
+  }
+
+  .ke-constellation main {
+    margin-top: 0.7rem;
+    border-radius: 18px;
+  }
+
+  .ke-constellation .landing-hero-copy h1 {
+    font-size: clamp(2.35rem, 13vw, 3.35rem);
+  }
+
+  .ke-constellation .landing-hero-visual {
+    border-radius: 20px;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .ke-constellation {
+    --text: #ffffff;
+    --text-muted: #c7d5e2;
+    --border: rgba(164, 227, 255, 0.5);
+  }
+
+  .ke-constellation main,
+  .ke-constellation .site-header,
+  .ke-constellation .site-footer {
+    border-width: 2px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ke-constellation *,
+  .ke-constellation *::before,
+  .ke-constellation *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  #knowledge-constellation-field {
+    opacity: 0.62;
+  }
+}
