@@ -87,9 +87,13 @@ automation_contract:
 
 verified_repository_state:
   checked_at: "2026-09-11T21:00:00Z"
-  note: "Live PR/check/branch state re-verified by this run: PR #150 merged (2026-09-11T20:32:36Z), zero open PRs at run start. This run opened a new PR (real keyboard-navigation E2E coverage plus a skip-to-main-content link fix it found missing, and a robustness fix for a pre-existing flaky assertion in tests/test_browser_e2e_auth.py) against the current main head -- full local preflight GREEN (502 tests passed) before opening; fresh CI not yet observed by this run (see CI FOLLOW-UP HARD RULE -- next scheduled run/orchestrator owns following up on it). The stray non-PR branches listed below were re-checked and remain untouched, out of scope for this run's selected task."
-  open_prs: 0
-  open_pr_detail: []
+  note: "Live PR/check/branch state re-verified by this run: PR #150 merged (2026-09-11T20:32:36Z), zero open PRs at run start. This run opened PR #151 (real keyboard-navigation E2E coverage plus a skip-to-main-content link fix it found missing, and a robustness fix for a pre-existing flaky assertion in tests/test_browser_e2e_auth.py) against exact head 978824eab03c901953529b50ea65272a9660d04d -- full local preflight GREEN (502 tests passed) before opening; fresh CI not yet observed by this run (see CI FOLLOW-UP HARD RULE -- next scheduled run/orchestrator owns following up on it). The stray non-PR branches listed below were re-checked and remain untouched, out of scope for this run's selected task."
+  open_prs: 1
+  open_pr_detail:
+    - number: 151
+      title: "Add real keyboard-navigation E2E coverage; fix missing skip link"
+      branch: "claude/magical-curie-1wzwv9"
+      note: "This run's own PR. Adds a real keyboard-nav E2E test module, fixes a real missing-skip-link WCAG 2.4.1 gap it found, and hardens a pre-existing flaky real-browser auth-rejection assertion. No shared-contract impact. Local preflight GREEN at exact head; awaiting fresh CI observation by a later run."
   recently_merged_prs:
     - number: 150
       title: "Add real-browser authentication and indexed-path refresh/resume E2E coverage"
@@ -125,7 +129,7 @@ verified_repository_state:
       title: "Make Research the default Ask behavior"
   active_research_report_issue: "#107"
   wip_branch: "claude/magical-curie-1wzwv9"
-  wip_branch_has_open_pr: false
+  wip_branch_has_open_pr: true
   open_research_report_pr: null
   stale_unmerged_branches_without_open_prs: "agent/background-research-polling, automation/status-reconcile, orchestrator/activate-compounding-report, orchestrator/compounding-measurement, orchestrator/compounding-metrics-v2, orchestrator/reconcile-permission-fallback -- none owned by an open PR as of this check; not touched this run (out of scope for the selected task, no PR to repair)."
   ci_workflows:
@@ -151,7 +155,7 @@ browser_e2e_track:
   name: "Browser end-to-end testing"
   roadmap_file: "docs/browser_e2e_testing.md"
   tracking_issue: null
-  state: "initial infrastructure landed and merged; Ask critical path plus refresh/resume, real-browser authentication, a widened automated accessibility pass across 7 pages (PR #150, merged), and now real keyboard-navigation coverage plus a skip-link fix it found missing (this run, PR pending)"
+  state: "initial infrastructure landed and merged; Ask critical path plus refresh/resume, real-browser authentication, a widened automated accessibility pass across 7 pages (PR #150, merged), and now real keyboard-navigation coverage plus a skip-link fix it found missing (PR #151, open)"
   implementation_state: "tests/test_browser_e2e.py, tests/test_browser_e2e_auth.py, and tests/test_accessibility_e2e.py all start the real FastAPI app as a real uvicorn subprocess against real SQLite/JSONL fixture data and drive it with a real headless Chromium (Playwright sync API); shared fixtures live in tests/_browser_e2e_support.py and tests/conftest.py so every module (and future sibling modules) reuse one live-server/fixture-data setup instead of re-deriving it. No mocked backend authority: Research/AI capability is left genuinely unconfigured so the honest fail-closed 'Broader Research is unavailable' path is exercised rather than a faked result. test_browser_e2e.py covers: homepage load, an indexed direct-match citation with its /claims/{evidence_record_id} link, real navigation to that claim detail page, a no-fabrication miss state, a 390px mobile-viewport overflow check, and (this run) reloading the Ask page for the same indexed-only question reproduces the identical citation (refresh/resume, indexed-path scope only). test_browser_e2e_auth.py (this run, new module) closes the real-browser-authentication gap: a new live_app_with_alpha_auth fixture (tests/conftest.py) starts the real server with KE_WEB_ALPHA_USERNAME/PASSWORD configured, and three tests prove a real Chromium network stack refuses to render the gated page with no credentials (net::ERR_INVALID_AUTH_CREDENTIALS) or the wrong password (net::ERR_HTTP_RESPONSE_CODE_FAILURE), and loads it normally with the correct ones -- tests/test_alpha_auth.py already covered this middleware at the TestClient/ASGI level, this is the separate real-browser-network-stack evidence that was missing. test_accessibility_e2e.py runs real axe-core (via axe-playwright-python, which vendors axe.min.js -- no network access needed at test time) against seven real pages, all four axe-core impact levels (critical/serious/moderate/minor) enforced, all currently zero-violation (PR #149, merged). Both modules self-skip (not fail) when no Chromium executable is available. .github/workflows/browser-e2e.yml installs Chromium and runs the suite on every PR/push to main via `pytest -m browser_e2e`, deliberately as an advisory (non-required) job until it has proven stable -- see docs/agent-development-policy.md section 3 before promoting it into automation_contract.required_pr_workflows below."
   bugs_found_and_fixed_by_this_infrastructure:
     - "knowledge_engine_web/static/style.css .snapshot-line: the footer's real snapshot metadata (data/snapshot_metadata.json's corpus_id, a long comma/underscore-separated token with no wrap opportunity) overflowed a 390px viewport instead of wrapping. Fixed with overflow-wrap: anywhere."
