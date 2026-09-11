@@ -1,23 +1,4 @@
-"""Real headless-Chromium browser end-to-end tests for the Ask product path.
-
-`docs/INDUSTRY_REALITY_CHECK.md` flags "no Playwright/Selenium-style browser
-workflow evidence was found" as a P1 production gap. This module closes that
-gap for the Ask critical path: it starts the real FastAPI application as a
-real HTTP server (a `uvicorn` subprocess) against a real SQLite fixture
-database and a real Evidence Records JSONL file -- the same shapes
-`tests/_fixtures.py` and `tests/test_ask_question_contract.py` already use
-for Python-level tests -- then drives it with a real headless Chromium
-instance. No mocked backend authority: Research/AI capability is left
-genuinely unconfigured, so these tests also exercise the honest,
-fail-closed "Broader Research is unavailable on this deployment" path
-rather than fabricating a research result.
-
-Chromium is optional at test time. When no usable executable is found (a
-contributor machine or CI runner that has not installed Playwright's
-browsers), every test in this module is skipped rather than failed --
-see `_browser` below. `.github/workflows/browser-e2e.yml` installs
-Chromium and always runs this module for real.
-"""
+"""Real headless-Chromium browser end-to-end tests for the Ask product path."""
 
 from __future__ import annotations
 
@@ -51,10 +32,6 @@ def _candidate_chromium_executables() -> list[str]:
     override = os.environ.get("KE_WEB_TEST_CHROMIUM_PATH")
     if override:
         candidates.append(override)
-    # The stable symlink this harness's pre-installed Chromium is published
-    # at (see the environment's own guidance); not present on a plain
-    # contributor machine or an unprepared CI runner, which is fine -- the
-    # fallback below tries Playwright's own default resolution instead.
     candidates.append("/opt/pw-browsers/chromium")
     return candidates
 
@@ -72,7 +49,6 @@ def _browser() -> Iterator[Browser]:
                 break
             except PlaywrightError as exc:
                 attempted.append(f"{candidate}: {exc}")
-
         if browser is None:
             try:
                 browser = playwright.chromium.launch(headless=True)
@@ -83,7 +59,6 @@ def _browser() -> Iterator[Browser]:
                     "KE_WEB_TEST_CHROMIUM_PATH to a Chromium binary, or run "
                     "`poetry run playwright install chromium`. Tried: " + "; ".join(attempted)
                 )
-
         try:
             yield browser
         finally:
@@ -106,14 +81,6 @@ def _free_port() -> int:
 
 
 def _seed_fixture_data(tmp_path: Path) -> tuple[Engine, Path]:
-    """Build a real SQLite database and Evidence Records JSONL, mirroring core's schema.
-
-    One paper with a directly matching abstract (same shape as
-    `test_ask_question_contract.py`'s direct-match case) plus one graph
-    claim and evidence record for it, so the Ask page has a real
-    source-linked citation to navigate rather than an empty demo.
-    """
-
     engine = build_engine(tmp_path)
     create_papers_table(engine)
     create_graph_tables(engine)
@@ -147,7 +114,6 @@ def _seed_fixture_data(tmp_path: Path) -> tuple[Engine, Path]:
                 created_at="2026-01-01T00:00:00Z",
             )
         )
-
     evidence_path = tmp_path / "evidence_records.jsonl"
     evidence_path.write_text(
         json.dumps(
@@ -187,27 +153,59 @@ def _wait_until_serving(base_url: str, process: subprocess.Popen[bytes]) -> None
     raise RuntimeError(f"Real Web server never became reachable at {base_url}")
 
 
+def _isolated_server_env(tmp_path: Path, evidence_path: Path, port: int) -> dict[str, str]:
+    """Return a deterministic child environment that cannot inherit Research authority.
+
+    Settings also load repository ``.env``, so every KE_WEB setting that can
+    enable external calls, authentication, or durable writes is explicitly
+    overridden with a safe value rather than merely removed from ``os.environ``.
+    """
+    env = {key: value for key, value in os.environ.items() if not key.startswith("KE_WEB_")}
+    env.update(
+        {
+            "KE_WEB_DATABASE_URL": f"sqlite:///{tmp_path / 'fixture.sqlite3'}",
+            "KE_WEB_EVIDENCE_RECORDS_PATH": str(evidence_path),
+            "KE_WEB_RELATIONSHIP_RECORDS_PATH": "",
+            "KE_WEB_WHATS_CHANGED_BASELINE_PATH": str(tmp_path / "whats_changed.json"),
+            "KE_WEB_SNAPSHOT_METADATA_PATH": str(tmp_path / "snapshot.json"),
+            "KE_WEB_HOST": "127.0.0.1",
+            "KE_WEB_PORT": str(port),
+            "KE_WEB_ALPHA_USERNAME": "",
+            "KE_WEB_ALPHA_PASSWORD": "",
+            "KE_WEB_LLM_MODEL": "",
+            "KE_WEB_OLLAMA_HOST": "http://127.0.0.1:1",
+            "KE_WEB_SOURCES_PATH": "",
+            "KE_WEB_SESSION_DB_PATH": str(tmp_path / "research_sessions.db"),
+            "KE_WEB_SESSION_STORAGE_MODE": "local",
+            "KE_WEB_SESSION_PERSISTENT_ROOT": "",
+            "KE_WEB_KE_EXECUTABLE": str(tmp_path / "missing-ke"),
+            "KE_WEB_CORE_CLI_COMMAND_PREFLIGHT": "false",
+            "KE_WEB_AI_REQUEST_TIMEOUT_SECONDS": "1",
+            "KE_WEB_AI_MAX_CONCURRENT_REQUESTS": "1",
+            "KE_WEB_AI_RATE_LIMIT_REQUESTS": "1",
+            "KE_WEB_AI_RATE_LIMIT_WINDOW_SECONDS": "60",
+            "KE_WEB_ASYNC_RESEARCH_ENABLED": "false",
+            "KE_WEB_RESEARCH_PAPERS_DIR": str(tmp_path / "research_papers"),
+            "KE_WEB_FEDERATED_DISCOVERY_LEDGER_ROOT": str(tmp_path / "federated_runs"),
+            "KE_WEB_FEDERATED_OPENALEX_API_KEY": "",
+            "KE_WEB_FEDERATED_SEMANTIC_SCHOLAR_API_KEY": "",
+            "KE_WEB_DISCOVERY_REQUEST_TIMEOUT_SECONDS": "1",
+            "KE_WEB_DISCOVERY_MAX_CONCURRENT_REQUESTS": "1",
+            "KE_WEB_DISCOVERY_RATE_LIMIT_REQUESTS": "1",
+            "KE_WEB_DISCOVERY_RATE_LIMIT_WINDOW_SECONDS": "60",
+            "KE_WEB_DISCOVERY_LEDGER_STORAGE_MODE": "local",
+            "KE_WEB_DISCOVERY_LEDGER_PERSISTENT_ROOT": "",
+        }
+    )
+    return env
+
+
 @pytest.fixture
 def live_app(tmp_path: Path) -> Iterator[str]:
-    """Run the actual `knowledge_engine_web` FastAPI app as a real HTTP server.
-
-    Deliberately leaves Research/AI capability unconfigured (no `ke`
-    executable, no Ollama) so Ask takes its real, honest indexed-retrieval
-    fallback -- the same path an unequipped deployment takes -- instead of
-    a faked research result. See `docs/agent-development-policy.md` section
-    1 and `knowledge_engine_web/ai_orchestration.py`'s capability gate.
-    """
-
+    """Run the real Web app against isolated, fail-closed fixture authority."""
     _, evidence_path = _seed_fixture_data(tmp_path)
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
-    env = {
-        **os.environ,
-        "KE_WEB_DATABASE_URL": f"sqlite:///{tmp_path / 'fixture.sqlite3'}",
-        "KE_WEB_EVIDENCE_RECORDS_PATH": str(evidence_path),
-        "KE_WEB_HOST": "127.0.0.1",
-        "KE_WEB_PORT": str(port),
-    }
     process = subprocess.Popen(
         [
             sys.executable,
@@ -219,7 +217,7 @@ def live_app(tmp_path: Path) -> Iterator[str]:
             "--port",
             str(port),
         ],
-        env=env,
+        env=_isolated_server_env(tmp_path, evidence_path, port),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
@@ -237,7 +235,6 @@ def live_app(tmp_path: Path) -> Iterator[str]:
 
 def test_homepage_loads_the_real_application(page: Page, live_app: str) -> None:
     page.goto(live_app + "/")
-
     assert "Knowledge Engine" in page.title()
 
 
@@ -245,16 +242,10 @@ def test_ask_shows_a_direct_indexed_match_and_an_honest_capability_notice(
     page: Page, live_app: str
 ) -> None:
     page.goto(live_app + "/ask?q=" + _QUESTION.replace(" ", "+").replace("?", "%3F"))
-
-    # Real, deterministic indexed retrieval renders a source-linked result --
-    # not a fabricated answer.
     assert page.get_by_text("Direct match").first.is_visible()
     assert page.get_by_role("link", name=_PAPER_TITLE).is_visible()
     citation_link = page.locator(f'a[href="/claims/{_EVIDENCE_RECORD_ID}"]')
     assert citation_link.is_visible()
-
-    # This test environment has no Research/AI capability configured, so the
-    # page must say so honestly rather than pretending research ran.
     assert "Broader Research is unavailable on this deployment" in page.content()
 
 
@@ -262,9 +253,7 @@ def test_citation_link_navigates_to_a_real_evidence_record_detail_page(
     page: Page, live_app: str
 ) -> None:
     page.goto(live_app + "/ask?q=" + _QUESTION.replace(" ", "+").replace("?", "%3F"))
-
     page.locator(f'a[href="/claims/{_EVIDENCE_RECORD_ID}"]').first.click()
-
     assert page.url == live_app + "/claims/" + _EVIDENCE_RECORD_ID
     assert page.locator("h1", has_text=_EVIDENCE_RECORD_ID).is_visible()
     assert "Semaglutide showed no statistically significant IQ change." in page.content()
@@ -274,16 +263,13 @@ def test_ask_with_no_matching_evidence_does_not_fabricate_an_answer(
     page: Page, live_app: str
 ) -> None:
     page.goto(live_app + "/ask?q=does+topical+minoxidil+regrow+hair%3F")
-
     assert "No relevant papers found in the indexed corpus." in page.content()
     assert "Direct match" not in page.content()
 
 
 def test_ask_page_is_usable_at_a_mobile_viewport(page: Page, live_app: str) -> None:
     page.set_viewport_size({"width": 390, "height": 844})
-
     page.goto(live_app + "/ask?q=" + _QUESTION.replace(" ", "+").replace("?", "%3F"))
-
     assert page.get_by_label("Question").is_visible()
     assert page.get_by_role("button", name="Ask").is_visible()
     citation_link = page.locator(f'a[href="/claims/{_EVIDENCE_RECORD_ID}"]')
