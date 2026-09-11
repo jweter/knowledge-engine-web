@@ -1,6 +1,6 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-09-11T01:20:00Z"
+updated_at: "2026-09-11T01:40:00Z"
 status_source: "Live GitHub state verified 2026-09-11 plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, docs/hosted_research_runtime.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
 
 product_decisions:
@@ -86,15 +86,17 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-09-11T01:20:00Z"
+  checked_at: "2026-09-11T01:40:00Z"
   note: "Live PR/check/branch state must be queried before acting; cached counts here are only a handoff snapshot."
   open_prs: 1
   open_pr_detail:
+    - number: 145
+      title: "Harden Mobile Product Reality provenance; record deferred-infra decision"
+      branch: "claude/magical-curie-4r3adb"
+      note: "Additive follow-up on top of already-merged #144: per-verdict build identity (KE_WEB_BUILD_COMMIT/RENDER_GIT_COMMIT, honestly unverified otherwise), append-only review history, a transactional/idempotent migration of any pre-existing PR #144 single-row-per-session database to that append-only schema (migrated rows marked unverified, never a fabricated build identity), and the 2026-09-11 paid-infra-deferred product decision recorded in this file. #144 merged as dc12a7c before this follow-up commit (then a5432ef) landed on it, so none of this reached main until #145; #144 itself stays closed/untouched -- do not reopen it or treat its number as covering this work."
+  recently_merged_prs:
     - number: 144
       title: "Wire Mobile Product Reality evidence to real research sessions"
-      branch: "claude/magical-curie-4r3adb"
-      note: "Backend/UI wiring for issue #140 plus, as of this update, provenance hardening (per-verdict build identity, append-only review history) and the 2026-09-11 paid-infra-deferred product decision recorded in this file."
-  recently_merged_prs:
     - number: 141
       title: "Add Mobile Product Reality evidence foundation"
     - number: 139
@@ -129,8 +131,8 @@ mobile_product_reality_track:
   name: "Mobile Product Reality"
   tracking_issue: "#140"
   portfolio_relation: "jweter/project-orchestrator#44"
-  state: "backend/UI capability implemented and provenance-hardened; not yet acceptance-complete"
-  implementation_state: "PR #141 added the sanitized MobileSmokeEvidence contract (privacy-safe question hashing, fail-closed automated evidence state, notes never in the public payload). PR #144 wired it to real data: mobile_smoke_evidence_from_job derives response_state/evidence_count/provenance_traceable from the same durable async-Research job payload Layer 2 already renders (never a second, divergent computation); mobile_review_store persisted one human PASS/FAIL/FLAG verdict per session_id; GET/POST /ask/session/{id}/mobile-review expose this; ask.html shows a PASS/FAIL/FLAG panel once a session reaches terminal state, gated by the same AlphaBasicAuthMiddleware as the rest of the deployment. Verified with a real uvicorn instance plus a headless Chromium (390px viewport) run of the actual template/JS -- not just unit tests; caught and fixed one real bug this way. PR #144 (this update) hardened provenance further per Jeremy's explicit request: (1) a recorded verdict now carries its own exact build identity (web_commit + verified flag) captured at submission time via web_build_identity()/build_identity_is_verified() -- RENDER_GIT_COMMIT for a real deploy, the new KE_WEB_BUILD_COMMIT for the zero-cost/local runtime that is now authoritative (see product_decisions), or an honest unverified placeholder -- and public_payload()'s review_authoritative/remaining_acceptance_debt fields refuse to present an unverified-build verdict as settled; (2) mobile_review_store is now append-only (a new SQLite row per submission, never an UPSERT), so an earlier FAIL/FLAG is never erased by a later PASS -- read_mobile_review still answers 'what is current', read_mobile_review_history exposes the full sequence, and the GET payload's review_history_count proves nothing was lost. Raw question text and free-form notes are still never returned in any payload."
+  state: "backend/UI capability merged (#144); provenance hardening + legacy-schema migration open in #145; not yet acceptance-complete"
+  implementation_state: "PR #141 (merged) added the sanitized MobileSmokeEvidence contract (privacy-safe question hashing, fail-closed automated evidence state, notes never in the public payload). PR #144 (merged) wired it to real data: mobile_smoke_evidence_from_job derives response_state/evidence_count/provenance_traceable from the same durable async-Research job payload Layer 2 already renders (never a second, divergent computation); mobile_review_store persisted one human PASS/FAIL/FLAG verdict per session_id (single-row-per-session, upserted); GET/POST /ask/session/{id}/mobile-review expose this; ask.html shows a PASS/FAIL/FLAG panel once a session reaches terminal state, gated by the same AlphaBasicAuthMiddleware as the rest of the deployment. Verified with a real uvicorn instance plus a headless Chromium (390px viewport) run of the actual template/JS -- not just unit tests; caught and fixed one real bug this way. PR #145 (open, this branch) hardens provenance on top of merged #144 per Jeremy's explicit request: (1) a recorded verdict now carries its own exact build identity (web_commit + verified flag) captured at submission time via web_build_identity()/build_identity_is_verified() -- RENDER_GIT_COMMIT for a real deploy, the new KE_WEB_BUILD_COMMIT for the zero-cost/local runtime that is now authoritative (see product_decisions), or an honest unverified placeholder -- and public_payload()'s review_authoritative/remaining_acceptance_debt fields refuse to present an unverified-build verdict as settled; (2) mobile_review_store is now append-only (a new SQLite row per submission, never an UPSERT), so an earlier FAIL/FLAG is never erased by a later PASS -- read_mobile_review still answers 'what is current', read_mobile_review_history exposes the full sequence, and the GET payload's review_history_count proves nothing was lost; (3) because #144 already merged and could have created real databases on its own single-row-per-session schema, #145 also adds a transactional, idempotent migration (_ensure_migrated/_migrate_legacy_schema_if_needed in mobile_review_store.py) that detects that exact legacy shape before any read or write, atomically rewrites it into the append-only schema preserving every row, and marks every migrated row honestly unverified (empty web_commit, build_identity_verified=false) rather than fabricating a build identity it never recorded; an unrecognized schema is refused (RuntimeError) rather than guessed at. Raw question text and free-form notes are still never returned in any payload."
   remaining_acceptance_debt: "Human iPhone Mobile Safari Product Reality review has not run. The review routes key off the async Research job projection, so they only serve sessions where Research mode actually ran -- on the current retrieval-only default Render deployment, a plain indexed Ask has no session to review through this path yet. Per the 2026-09-11 product decision, the fix is to verify Research capability on the zero-cost/local runtime (not paid hosted Research) and set KE_WEB_BUILD_COMMIT there so a real human review can be recorded as authoritative."
   not_done: "Issue #140 is not closed by this work; do not claim it complete without an actual recorded, authoritative (verified build identity) PASS/FAIL/FLAG from a real iPhone Safari session."
 
