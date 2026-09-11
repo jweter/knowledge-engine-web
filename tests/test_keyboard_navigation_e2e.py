@@ -42,6 +42,21 @@ def _focused_element_info(page: Page) -> dict[str, str]:
     return cast(dict[str, str], result)
 
 
+def _question_input_style(page: Page) -> dict[str, str]:
+    result = page.locator('input[type="text"]').first.evaluate(
+        """(el) => {
+            const style = window.getComputedStyle(el);
+            return {
+                outlineStyle: style.outlineStyle,
+                boxShadow: style.boxShadow,
+                borderColor: style.borderColor,
+                backgroundColor: style.backgroundColor,
+            };
+        }"""
+    )
+    return cast(dict[str, str], result)
+
+
 def test_skip_link_is_first_tab_stop_on_homepage(page: Page, live_app: str) -> None:
     page.goto(live_app + "/")
     page.keyboard.press("Tab")
@@ -59,31 +74,45 @@ def test_skip_link_activation_moves_focus_to_main_content(page: Page, live_app: 
     assert focused["id"] == "main-content"
 
 
-def test_ask_page_autofocuses_question_input(page: Page, live_app: str) -> None:
+def test_ask_page_autofocuses_question_input_and_supports_reverse_tab(
+    page: Page, live_app: str
+) -> None:
     # The question field carries `autofocus`, so a real browser focuses it
-    # immediately on load -- a keyboard user lands straight on the page's
-    # primary control rather than needing to Tab past the header nav at all.
-    # The skip link (shared base.html markup, verified above on the
-    # homepage) remains reachable by tabbing backward from here.
+    # immediately on load. Shift+Tab must still let a keyboard user traverse
+    # backward through the real document order without programmatic focus.
     page.goto(live_app + "/ask?q=" + QUESTION.replace(" ", "+").replace("?", "%3F"))
     focused = _focused_element_info(page)
     assert focused["tag"] == "INPUT"
     assert focused["id"] == "q"
 
+    page.keyboard.press("Shift+Tab")
+    focused = _focused_element_info(page)
+    assert focused["tag"] in {"A", "SUMMARY"}
+    assert focused["id"] != "q"
+
 
 def test_ask_form_input_is_keyboard_reachable_and_focus_visible(page: Page, live_app: str) -> None:
     page.goto(live_app + "/ask")
     question_input = page.locator('input[type="text"]').first
-    question_input.focus()
+
+    # Capture the ordinary rendered style before any focus. A decorative
+    # unfocused box-shadow must not be mistaken for a focus indicator.
+    page.locator("main").click(position={"x": 1, "y": 1})
+    normal_style = _question_input_style(page)
+
+    # Exercise the actual keyboard path: the Ask input autofocuses on load,
+    # Shift+Tab moves backward, and Tab returns to it.
+    page.keyboard.press("Shift+Tab")
+    page.keyboard.press("Tab")
     focused = _focused_element_info(page)
     assert focused["tag"] == "INPUT"
-    # A real keyboard user must see where focus is: the element must not be
-    # rendered with no visible outline/box-shadow indicator at all.
-    outline, box_shadow = page.evaluate(
-        """() => {
-            const el = document.activeElement;
-            const style = window.getComputedStyle(el);
-            return [style.outlineStyle, style.boxShadow];
-        }"""
+    assert focused["id"] == "q"
+
+    focused_style = _question_input_style(page)
+    assert focused_style != normal_style
+    assert (
+        focused_style["outlineStyle"] != normal_style["outlineStyle"]
+        or focused_style["boxShadow"] != normal_style["boxShadow"]
+        or focused_style["borderColor"] != normal_style["borderColor"]
+        or focused_style["backgroundColor"] != normal_style["backgroundColor"]
     )
-    assert outline != "none" or box_shadow != "none"
