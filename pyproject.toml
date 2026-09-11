@@ -33,6 +33,7 @@ ruff = "0.16.5"
 httpx = "^0.28.0"
 pip-audit = "^2.10.1"
 playwright = "^1.62.0"
+axe-playwright-python = "^0.1.8"
 
 [tool.poetry.scripts]
 knowledge-engine-web = "knowledge_engine_web.main:run"
@@ -57,6 +58,10 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "axe_playwright_python.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

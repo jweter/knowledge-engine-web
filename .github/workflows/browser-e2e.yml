@@ -1,8 +1,10 @@
 name: Browser E2E (advisory)
 
 # Real headless-Chromium browser tests for the Ask critical path
-# (tests/test_browser_e2e.py). This closes the "no Playwright/Selenium-style
-# browser workflow evidence was found" gap from docs/INDUSTRY_REALITY_CHECK.md.
+# (tests/test_browser_e2e.py) plus automated axe-core accessibility checks
+# (tests/test_accessibility_e2e.py). This closes the "no Playwright/Selenium-
+# style browser workflow evidence was found" and "no automated accessibility
+# tooling was found" gaps from docs/INDUSTRY_REALITY_CHECK.md.
 #
 # Deliberately NOT part of the required Quality/Docker checks yet: this job
 # installs and manages its own Chromium build, which is heavier and slower
@@ -26,7 +28,7 @@ permissions:
 
 jobs:
   browser-e2e:
-    name: Real headless-Chromium Ask tests
+    name: Real headless-Chromium Ask + accessibility tests
     runs-on: ubuntu-latest
 
     steps:
