@@ -138,6 +138,7 @@ def _wait_until_serving(base_url: str, process: subprocess.Popen[bytes]) -> None
     import urllib.request
 
     deadline = time.monotonic() + 20
+    last_http_error: urllib.error.HTTPError | None = None
     while time.monotonic() < deadline:
         if process.poll() is not None:
             output = (
@@ -147,9 +148,21 @@ def _wait_until_serving(base_url: str, process: subprocess.Popen[bytes]) -> None
         try:
             urllib.request.urlopen(base_url + "/", timeout=1).read()  # noqa: S310
             return
+        except urllib.error.HTTPError as exc:
+            # The server answered but with a non-2xx status on every attempt (e.g. a
+            # fixture-env misconfiguration tripping alpha auth) -- surface that instead
+            # of letting it look identical to "never came up" for the full deadline.
+            last_http_error = exc
+            time.sleep(0.2)
         except (urllib.error.URLError, ConnectionError, TimeoutError):
             time.sleep(0.2)
     process.kill()
+    if last_http_error is not None:
+        raise RuntimeError(
+            f"Real Web server at {base_url} kept answering HTTP {last_http_error.code} "
+            f"({last_http_error.reason}) instead of becoming reachable -- check the "
+            "fixture server env, not a startup timing issue"
+        )
     raise RuntimeError(f"Real Web server never became reachable at {base_url}")
 
 
@@ -170,8 +183,11 @@ def _isolated_server_env(tmp_path: Path, evidence_path: Path, port: int) -> dict
             "KE_WEB_SNAPSHOT_METADATA_PATH": str(tmp_path / "snapshot.json"),
             "KE_WEB_HOST": "127.0.0.1",
             "KE_WEB_PORT": str(port),
-            "KE_WEB_ALPHA_USERNAME": "",
-            "KE_WEB_ALPHA_PASSWORD": "",
+            # Deliberately omitted, not set to "": AlphaBasicAuthMiddleware treats
+            # a set-but-empty username/password as "configured" and fails closed
+            # with 401 on every request (including this fixture's own readiness
+            # probe below). Leaving them unset makes Settings() see None/None,
+            # which is the actual "alpha gate disabled" state this suite needs.
             "KE_WEB_LLM_MODEL": "",
             "KE_WEB_OLLAMA_HOST": "http://127.0.0.1:1",
             "KE_WEB_SOURCES_PATH": "",
