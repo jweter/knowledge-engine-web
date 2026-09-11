@@ -93,22 +93,22 @@ def test_ask_page_autofocuses_question_input_and_supports_reverse_tab(
 
 def test_ask_form_input_is_keyboard_reachable_and_focus_visible(page: Page, live_app: str) -> None:
     page.goto(live_app + "/ask")
-    question_input = page.locator('input[type="text"]').first
 
-    # Capture the ordinary rendered style before any focus. A decorative
-    # unfocused box-shadow must not be mistaken for a focus indicator.
-    page.locator("main").click(position={"x": 1, "y": 1})
+    # The Ask input autofocuses. Capture its focused style first, then use only
+    # real keyboard traversal to move away and capture the ordinary style.
+    focused_style = _question_input_style(page)
+    page.keyboard.press("Shift+Tab")
+    focused = _focused_element_info(page)
+    assert focused["id"] != "q"
     normal_style = _question_input_style(page)
 
-    # Exercise the actual keyboard path: the Ask input autofocuses on load,
-    # Shift+Tab moves backward, and Tab returns to it.
-    page.keyboard.press("Shift+Tab")
+    # Tab must return to the input, and the keyboard-focused rendering must be
+    # visibly distinguishable from its unfocused rendering.
     page.keyboard.press("Tab")
     focused = _focused_element_info(page)
     assert focused["tag"] == "INPUT"
     assert focused["id"] == "q"
 
-    focused_style = _question_input_style(page)
     assert focused_style != normal_style
     assert (
         focused_style["outlineStyle"] != normal_style["outlineStyle"]
