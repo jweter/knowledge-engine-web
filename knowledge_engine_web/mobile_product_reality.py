@@ -31,6 +31,8 @@ class MobileSmokeEvidence:
     provenance_traceable: bool
     review: ReviewState = "UNREVIEWED"
     notes: str = ""
+    review_build_commit: str = ""
+    review_build_identity_verified: bool = False
 
     def __post_init__(self) -> None:
         if not self.web_commit.strip():
@@ -51,8 +53,25 @@ class MobileSmokeEvidence:
             return "INSUFFICIENT_EVIDENCE"
         return "EVIDENCE_PRESENT"
 
+    @property
+    def review_is_authoritative(self) -> bool:
+        """A recorded verdict counts as authoritative only against a known exact build.
+
+        A PASS/FAIL/FLAG recorded while `web_build_identity` could only return
+        its placeholder is real human input and stays recorded (see
+        `mobile_review_store`'s append-only history) -- it just cannot be
+        treated as a settled Product Reality result until it is known exactly
+        which local or deployed build produced the answer it judged.
+        """
+        return self.review != "UNREVIEWED" and self.review_build_identity_verified
+
     def public_payload(self) -> dict[str, object]:
         """Return only the sanitized review contract; never raw source payloads."""
+        debt: list[str] = []
+        if self.review == "UNREVIEWED":
+            debt.append("human_mobile_safari_review")
+        elif not self.review_build_identity_verified:
+            debt.append("exact_build_identity")
         payload: dict[str, object] = {
             "web_commit": self.web_commit,
             "scenario_id": self.scenario_id,
@@ -61,24 +80,48 @@ class MobileSmokeEvidence:
             "evidence_count": self.evidence_count,
             "provenance_traceable": self.provenance_traceable,
             "review": self.review,
+            "review_build_commit": self.review_build_commit,
+            "review_authoritative": self.review_is_authoritative,
             "automated_evidence_state": self.automated_evidence_state,
-            "remaining_acceptance_debt": (
-                ["human_mobile_safari_review"] if self.review == "UNREVIEWED" else []
-            ),
+            "remaining_acceptance_debt": debt,
         }
         return payload
+
+
+UNVERIFIED_BUILD_IDENTITY = "unknown-build"
 
 
 def web_build_identity() -> str:
     """Return this deployment's exact commit identity, or an honest placeholder.
 
-    Render sets `RENDER_GIT_COMMIT` on every deployed service automatically.
-    Locally (tests, `uvicorn` outside Render) no such identity exists -- this
-    returns a fixed, unmistakable placeholder rather than a fabricated SHA.
+    Render sets `RENDER_GIT_COMMIT` on every deployed service automatically --
+    checked first because it is populated automatically and cannot go stale.
+    `KE_WEB_BUILD_COMMIT` is the equivalent operator-set identity (e.g. a
+    local `git rev-parse HEAD`) for the zero-additional-cost/local Research
+    runtime that is this project's authoritative path while paid hosted
+    Research infrastructure stays intentionally deferred (see
+    `docs/project-status.yaml`). Neither present means no real identity
+    exists -- this returns a fixed, unmistakable placeholder rather than a
+    fabricated SHA.
     """
 
     commit = os.environ.get("RENDER_GIT_COMMIT", "").strip()
-    return commit if commit else "unknown-build"
+    if commit:
+        return commit
+    commit = os.environ.get("KE_WEB_BUILD_COMMIT", "").strip()
+    return commit if commit else UNVERIFIED_BUILD_IDENTITY
+
+
+def build_identity_is_verified(web_commit: str) -> bool:
+    """A human verdict is only authoritative against an exact build identity.
+
+    True for any real deployed (`RENDER_GIT_COMMIT`) or explicitly
+    operator-set local (`KE_WEB_BUILD_COMMIT`) commit `web_build_identity`
+    can return; false for its placeholder, which is never itself a build
+    identity no matter how it is quoted back.
+    """
+
+    return bool(web_commit.strip()) and web_commit != UNVERIFIED_BUILD_IDENTITY
 
 
 def question_reference(question: str) -> str:
@@ -95,6 +138,8 @@ def mobile_smoke_evidence_from_job(
     scenario_id: str,
     review: ReviewState = "UNREVIEWED",
     notes: str = "",
+    review_build_commit: str = "",
+    review_build_identity_verified: bool = False,
 ) -> MobileSmokeEvidence:
     """Derive sanitized mobile smoke evidence from one durable Web research job.
 
@@ -135,4 +180,6 @@ def mobile_smoke_evidence_from_job(
         provenance_traceable=provenance_traceable,
         review=review,
         notes=notes,
+        review_build_commit=review_build_commit,
+        review_build_identity_verified=review_build_identity_verified,
     )
