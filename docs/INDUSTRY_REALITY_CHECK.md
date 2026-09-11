@@ -22,7 +22,7 @@ This is above the level of a portfolio mockup and below the level of a polished,
 | Backend/web architecture | 6.5 | Sensible read-only boundary, but direct Core schema/artifact consumption and duplicated retrieval behavior create coupling. |
 | Retrieval UX foundation | 7.0 | Real Ask path and benchmarked ranking exist. General research continuation after a miss is not complete. |
 | Visual/interaction UX maturity | 6.0 | Functional alpha, not yet a polished researcher workspace. |
-| Accessibility | 4.5 | No automated accessibility/WCAG test evidence was found in the current repository search. |
+| Accessibility | 5.0 | `tests/test_accessibility_e2e.py` (added 2026-09-11) now runs real axe-core checks against the homepage, both Ask states, and the claim detail page, enforced on critical/serious violations, wired into the same advisory `browser-e2e.yml` CI job. All four pages verified at zero violations at any impact level. This is real automated evidence, not an assumed pass -- but axe-core's automated ruleset only catches roughly 30-50% of WCAG 2.2 AA success criteria industry-wide, no manual keyboard/screen-reader pass has been performed, and coverage does not extend beyond those four pages/states (notably the async-Research progress/report views and the mobile review panel are unchecked). Do not treat this as WCAG 2.2 AA conformance evidence. |
 | Browser end-to-end testing | 5.5 | `tests/test_browser_e2e.py` (added 2026-09-11) now drives the real app with real headless Chromium for the Ask critical path -- homepage load, indexed direct match, citation navigation, no-fabrication miss state, mobile viewport -- and is wired into `.github/workflows/browser-e2e.yml` on every PR. It already caught and fixed two real rendering bugs (see `docs/browser_e2e_testing.md`). Still narrow: research-required/partial-answer/degraded-provider/auth/resume states and any Playwright coverage beyond Ask remain unaddressed, and the new CI job is advisory, not yet a required check. |
 | CI / release hygiene | 8.0 | Ruff, mypy, pytest, pip-audit, Docker build and container smoke test are strong. |
 | Security posture | 7.5 | Read-only architecture, password-gated alpha and secret scanning are solid for alpha. Production identity/access control is not yet demonstrated. |
@@ -114,7 +114,7 @@ At minimum automate:
 
 A scientific/research product should target WCAG 2.2 AA behavior for keyboard navigation, focus states, semantic headings, form labels, status announcements, contrast and non-color status communication.
 
-No automated accessibility tooling was found in the current repository search. Add axe-based checks to browser tests and perform manual keyboard/screen-reader passes on the critical flows.
+`tests/test_accessibility_e2e.py` (added 2026-09-11) now runs real axe-core checks against the homepage, both Ask states, and the claim detail page on every PR, and all four currently pass with zero violations at any impact level. That is real, verified automated evidence where none existed before -- but it is not WCAG 2.2 AA conformance evidence: axe-core's automated ruleset only catches roughly 30-50% of success criteria industry-wide, no manual keyboard-navigation/screen-reader pass has been performed, and the async-Research progress/report views and mobile review panel remain unchecked. Extend axe coverage to those remaining pages/states and perform an actual manual keyboard/screen-reader pass before calling this gap closed.
 
 ### 6. Alpha authentication is not production identity/security
 
@@ -170,7 +170,7 @@ Use a real browser test suite for the researcher-critical paths. Include determi
 
 ### P1 — Establish accessibility gates
 
-Add automated axe checks and a documented manual WCAG 2.2 AA verification checklist for every major release.
+Automated axe checks now exist for the homepage, both Ask states, and the claim detail page (`tests/test_accessibility_e2e.py`), currently all zero-violation. Remaining: extend coverage to the async-Research progress/report views and mobile review panel, and add a documented manual WCAG 2.2 AA verification checklist for every major release -- axe-core alone does not establish conformance.
 
 ### P1 — Add measurable UX performance targets
 

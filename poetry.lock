@@ -111,6 +111,24 @@ files = [
 ]
 
 [[package]]
+name = "axe-playwright-python"
+version = "0.1.8"
+description = "Automated web accessibility testing using axe-core engine and Playwright."
+optional = false
+python-versions = ">=3.8"
+groups = ["dev"]
+files = [
+    {file = "axe_playwright_python-0.1.8-py3-none-any.whl", hash = "sha256:fdd263c998388f1a8e67cad02677e612d946248bd44d163be5e8650ea31f95f8"},
+    {file = "axe_playwright_python-0.1.8.tar.gz", hash = "sha256:97de160210fd5ce51e552d21d3b0a1cabb850235942737643ee3b9398de81a47"},
+]
+
+[package.dependencies]
+playwright = ">=1.36.0"
+
+[package.extras]
+dev = ["black (==23.7.0)", "flit", "mkdocs (==1.4.3)", "mkdocs-material (==9.1.19)", "mkdocstrings (==0.22.0)", "pre-commit (==3.3.3)", "pytest (==7.4.0)", "pytest-asyncio (==0.21.1)", "pytest-cov (==4.1.0)", "pytest-playwright (==0.3.3)", "ruff (==0.0.280)"]
+
+[[package]]
 name = "boolean-py"
 version = "5.0"
 description = "Define boolean algebras, create and parse boolean expressions and create custom boolean DSL."
@@ -1941,4 +1959,4 @@ standard = ["httptools (>=0.8.0)", "python-dotenv (>=0.13)", "pyyaml (>=5.1)", "
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "c9d9fbfdb740b2f8646aa94f3e9fc7a350e7b5aeee0da380c55c3f9b8fafcae5"
+content-hash = "134962d2d29dfa771543dd9fddcb819feb1e19dd0f1cc52d3a5b416a1322aa7b"

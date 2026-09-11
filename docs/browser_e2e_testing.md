@@ -1,10 +1,16 @@
 # Browser end-to-end testing
 
-Status: initial infrastructure, Ask critical path only.
+Status: initial infrastructure, Ask critical path; now includes automated
+accessibility checks.
 
 `docs/INDUSTRY_REALITY_CHECK.md` identified "no Playwright/Selenium-style
-browser workflow evidence was found" as a P1 production gap. `tests/test_browser_e2e.py`
-is the first committed, reusable answer to that gap.
+browser workflow evidence was found" and "no automated accessibility tooling
+was found" as P1 production gaps. `tests/test_browser_e2e.py` and
+`tests/test_accessibility_e2e.py` are the first committed, reusable answers
+to those gaps. Both import their real-server/real-Chromium fixtures from
+`tests/_browser_e2e_support.py` -- extend that shared module, or add another
+sibling test module that imports its fixtures, rather than re-deriving the
+live-server/fixture-data setup.
 
 ## What it does
 
@@ -44,9 +50,28 @@ implicit browser behavior. See `knowledge_engine_web/static/style.css`.
 Not yet covered: the remaining critical-path scenarios
 `docs/INDUSTRY_REALITY_CHECK.md` lists (indexed miss -> research-required
 state, partial-answer updates, degraded-provider state, authentication/session
-expiration, refresh/resume behavior) and any accessibility (axe/WCAG)
-automation. Extend this module -- or add sibling modules following the same
-pattern -- rather than re-deriving the live-server/fixture-data approach.
+expiration, refresh/resume behavior). Extend this module -- or add sibling
+modules following the same pattern -- rather than re-deriving the
+live-server/fixture-data approach.
+
+## Accessibility (axe-core)
+
+`tests/test_accessibility_e2e.py` runs [axe-core](https://github.com/dequelabs/axe-core)
+(via `axe-playwright-python`, which vendors `axe.min.js` -- no network access
+needed at test time) against the homepage, the Ask page in both its indexed-hit
+and no-match states, and the claim detail page. Each test fails on any
+"critical" or "serious" impact violation axe-core reports; "moderate"/"minor"
+findings are not yet enforced.
+
+As of the run that added this suite, all four real pages had **zero** axe-core
+violations at any impact level -- a genuine, verified result, not an assumed
+pass. This closes real automated-accessibility-evidence gap `docs/INDUSTRY_REALITY_CHECK.md`
+identified, but it is still only what axe-core's automated ruleset can catch
+(roughly 30-50% of WCAG 2.2 AA success criteria industry-wide). It does not
+replace a manual keyboard-navigation/screen-reader pass, and does not cover
+any page or state outside the four listed above (notably: the async-Research
+progress/report views, the mobile Product Reality review panel, and any
+degraded-provider/error state).
 
 ## Running it
 
