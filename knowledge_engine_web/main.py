@@ -22,6 +22,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from knowledge_engine_ai.ke_client import FederatedProviderStatus
+from pydantic import BaseModel
 from sqlalchemy import Engine, create_engine
 
 from knowledge_engine_web.ai_guardrails import AIAdmissionError
@@ -85,6 +86,12 @@ from knowledge_engine_web.graph_visual import (
     build_relationship_network_svg,
     relationship_type_legend,
 )
+from knowledge_engine_web.mobile_product_reality import (
+    MOBILE_REVIEW_STATES,
+    mobile_smoke_evidence_from_job,
+    web_build_identity,
+)
+from knowledge_engine_web.mobile_review_store import read_mobile_review, record_mobile_review
 from knowledge_engine_web.relationship_reader import (
     list_relationship_records_for_evidence_record_id,
 )
@@ -903,6 +910,87 @@ def ask_session_status(session_id: str) -> Response:
         "event_count": view.event_count,
         "latest_workflow_node": view.latest_workflow_node,
     }
+    return Response(content=json.dumps(payload, indent=2) + "\n", media_type="application/json")
+
+
+def _mobile_review_payload(session_id: str) -> tuple[dict[str, object], bool]:
+    """Return the sanitized Mobile Product Reality payload for one session.
+
+    Second element is whether the underlying research job is terminal -- a
+    review can only be recorded once it is. Raises 404 when no async Research
+    job exists for this session (indexed-only sessions have nothing to review
+    through this Web-owned job projection).
+    """
+
+    settings = Settings()
+    job = read_research_job(settings.session_db_path, session_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="No research session with that ID.")
+    stored = read_mobile_review(settings.session_db_path, session_id)
+    review = stored.review if stored is not None else "UNREVIEWED"
+    notes = stored.notes if stored is not None else ""
+    evidence = mobile_smoke_evidence_from_job(
+        job,
+        web_commit=web_build_identity(),
+        scenario_id="ask-session",
+        review=review,  # type: ignore[arg-type]
+        notes=notes,
+    )
+    payload = evidence.public_payload()
+    payload["terminal"] = job.terminal
+    return payload, job.terminal
+
+
+@app.get("/ask/session/{session_id}/mobile-review")
+def mobile_review_status(session_id: str) -> Response:
+    """Return the automated Mobile Product Reality evidence and current review.
+
+    Lets a phone reviewer see, for the exact session they just ran through
+    `/ask`, whether the evidence Web can verify on its own (answered state,
+    evidence count, provenance) already exists -- before recording their own
+    human PASS/FAIL/FLAG judgment. Never returns free-form notes; see
+    `mobile_product_reality.MobileSmokeEvidence.public_payload`.
+    """
+
+    payload, _ = _mobile_review_payload(session_id)
+    return Response(content=json.dumps(payload, indent=2) + "\n", media_type="application/json")
+
+
+class MobileReviewSubmission(BaseModel):
+    """Request body for recording one Mobile Product Reality verdict.
+
+    A JSON body, not multipart form data, so this route has no dependency on
+    an optional form-parsing package this project does not otherwise need.
+    """
+
+    review: str
+    notes: str = ""
+
+
+@app.post("/ask/session/{session_id}/mobile-review")
+def submit_mobile_review(session_id: str, submission: MobileReviewSubmission) -> Response:
+    """Record one human PASS/FAIL/FLAG Mobile Product Reality verdict.
+
+    Only accepted once the session's Research job reaches a terminal state --
+    a review judges an actual finished answer, never a still-running guess.
+    """
+
+    settings = Settings()
+    job = read_research_job(settings.session_db_path, session_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="No research session with that ID.")
+    if not job.terminal:
+        raise HTTPException(
+            status_code=409,
+            detail="This research session has not finished yet; review it once it is terminal.",
+        )
+    if submission.review not in MOBILE_REVIEW_STATES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"review must be one of {', '.join(MOBILE_REVIEW_STATES)}.",
+        )
+    record_mobile_review(settings.session_db_path, session_id, submission.review, submission.notes)
+    payload, _ = _mobile_review_payload(session_id)
     return Response(content=json.dumps(payload, indent=2) + "\n", media_type="application/json")
 
 
