@@ -109,6 +109,26 @@
       <ul id="async-research-citations"></ul>
     </div>
   </div>
+  <div id="mobile-review-panel" hidden>
+    <h4>Mobile Product Reality review</h4>
+    <p class="disclaimer">
+      Record your own judgment of this exact answer and its evidence -- this does not affect
+      Web's automated evidence check above, and stays a human verdict on this one build.
+    </p>
+    <dl>
+      <dt>Build under test</dt><dd id="mobile-review-build"></dd>
+      <dt>Automated evidence check</dt><dd id="mobile-review-automated-state"></dd>
+    </dl>
+    <p id="mobile-review-recorded" role="status" aria-live="polite" hidden></p>
+    <div role="group" aria-label="Mobile Product Reality verdict">
+      <button type="button" id="mobile-review-pass">PASS</button>
+      <button type="button" id="mobile-review-fail">FAIL</button>
+      <button type="button" id="mobile-review-flag">FLAG</button>
+    </div>
+    <label for="mobile-review-notes">Notes (kept private to this session; never rendered back)</label>
+    <textarea id="mobile-review-notes" rows="3"></textarea>
+    <p class="empty-state" id="mobile-review-error" hidden></p>
+  </div>
 </section>
 {% endif %}
 
@@ -479,6 +499,11 @@
 {% endif %}
 <script>
   (() => {
+    const text = (value, fallback = "not available") => {
+      if (value === null || value === undefined || value === "") return fallback;
+      return String(value);
+    };
+
     const form = document.getElementById("ask-form");
     const submit = document.getElementById("ask-submit");
     const status = document.getElementById("ask-running-status");
@@ -595,6 +620,69 @@
       resultNode.hidden = false;
     };
 
+    const reviewPanel = document.getElementById("mobile-review-panel");
+    const reviewBuildNode = document.getElementById("mobile-review-build");
+    const reviewAutomatedStateNode = document.getElementById("mobile-review-automated-state");
+    const reviewRecordedNode = document.getElementById("mobile-review-recorded");
+    const reviewErrorNode = document.getElementById("mobile-review-error");
+    const reviewNotesNode = document.getElementById("mobile-review-notes");
+
+    const renderMobileReview = (data) => {
+      if (!reviewPanel) return;
+      if (reviewBuildNode) reviewBuildNode.textContent = text(data.web_commit);
+      if (reviewAutomatedStateNode) reviewAutomatedStateNode.textContent = text(data.automated_evidence_state);
+      if (reviewRecordedNode) {
+        if (data.review && data.review !== "UNREVIEWED") {
+          reviewRecordedNode.textContent = `Recorded verdict: ${data.review}`;
+          reviewRecordedNode.hidden = false;
+        } else {
+          reviewRecordedNode.hidden = true;
+        }
+      }
+      reviewPanel.hidden = false;
+    };
+
+    const submitMobileReview = async (sessionId, review) => {
+      if (reviewErrorNode) reviewErrorNode.hidden = true;
+      try {
+        const response = await fetch(`/ask/session/${encodeURIComponent(sessionId)}/mobile-review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            review,
+            notes: reviewNotesNode ? reviewNotesNode.value : "",
+          }),
+        });
+        if (!response.ok) throw new Error(`status ${response.status}`);
+        renderMobileReview(await response.json());
+      } catch (_error) {
+        if (reviewErrorNode) {
+          reviewErrorNode.textContent = "Could not record this review. Check connectivity and try again.";
+          reviewErrorNode.hidden = false;
+        }
+      }
+    };
+
+    const loadMobileReview = async (sessionId) => {
+      try {
+        const response = await fetch(`/ask/session/${encodeURIComponent(sessionId)}/mobile-review`, {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        renderMobileReview(await response.json());
+      } catch (_error) {
+        // The panel simply stays hidden if the evidence endpoint is unreachable.
+      }
+    };
+
+    ["pass", "fail", "flag"].forEach((verdict) => {
+      const button = document.getElementById(`mobile-review-${verdict}`);
+      if (button) {
+        button.addEventListener("click", () => submitMobileReview(sessionId, verdict.toUpperCase()));
+      }
+    });
+
     let delayMs = 1000;
     const poll = async () => {
       try {
@@ -626,6 +714,7 @@
           if (data.job_status === "completed" && data.result) {
             if (progressNode) progressNode.textContent = "Bounded research completed.";
             renderResult(data.result);
+            loadMobileReview(sessionId);
           } else if (errorNode) {
             errorNode.textContent = data.visitor_error || "Research mode did not complete this session.";
             errorNode.hidden = false;

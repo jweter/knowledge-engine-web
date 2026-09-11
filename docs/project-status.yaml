@@ -1,7 +1,7 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-09-09T01:28:00Z"
-status_source: "Live GitHub state verified 2026-09-09 plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, docs/hosted_research_runtime.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
+updated_at: "2026-09-11T00:30:00Z"
+status_source: "Live GitHub state verified 2026-09-11 plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, docs/hosted_research_runtime.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
 
 product:
   primary_surface: "FastAPI Web/API/frontend layer for Knowledge Engine"
@@ -79,10 +79,16 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-09-09T01:28:00Z"
+  checked_at: "2026-09-11T00:30:00Z"
   note: "Live PR/check/branch state must be queried before acting; cached counts here are only a handoff snapshot."
   open_prs: 0
   recently_merged_prs:
+    - number: 141
+      title: "Add Mobile Product Reality evidence foundation"
+    - number: 139
+      title: "Fix custom Ollama client port routing"
+    - number: 138
+      title: "Reconcile project status after hosted Research preparation"
     - number: 137
       title: "Harden private Ollama startup client routing"
     - number: 136
@@ -97,6 +103,7 @@ verified_repository_state:
   wip_branch: null
   wip_branch_has_open_pr: false
   open_research_report_pr: null
+  stale_unmerged_branches_without_open_prs: "agent/background-research-polling, automation/status-reconcile, orchestrator/activate-compounding-report, orchestrator/compounding-measurement, orchestrator/compounding-metrics-v2, orchestrator/reconcile-permission-fallback -- none owned by an open PR as of this check; not touched this run (out of scope for the selected task, no PR to repair)."
   ci_workflows:
     - ".github/workflows/quality.yml"
 
@@ -105,6 +112,15 @@ secondary_track:
   roadmap_file: "docs/general_question_research_loop_v1.md"
   tracking_issue: "#93"
   note: "WEB-GQR-0 through WEB-GQR-4 are the execution/progress foundation beneath Research Report v1. Continue GQR work when it directly blocks the report or Monster acceptance. Do not re-open already-completed async/polling work unless a concrete regression is found."
+
+mobile_product_reality_track:
+  name: "Mobile Product Reality"
+  tracking_issue: "#140"
+  portfolio_relation: "jweter/project-orchestrator#44"
+  state: "backend/UI capability implemented; not yet acceptance-complete"
+  implementation_state: "PR #141 added the sanitized MobileSmokeEvidence contract (privacy-safe question hashing, fail-closed automated evidence state, notes never in the public payload). This run wired it to real data: mobile_smoke_evidence_from_job derives response_state/evidence_count/provenance_traceable from the same durable async-Research job payload Layer 2 already renders (never a second, divergent computation); mobile_review_store persists one human PASS/FAIL/FLAG verdict per session_id in the existing session DB; GET/POST /ask/session/{id}/mobile-review expose this; ask.html shows a PASS/FAIL/FLAG panel once a session reaches terminal state, gated by the same AlphaBasicAuthMiddleware as the rest of the deployment. Verified with a real uvicorn instance plus a headless Chromium (390px viewport) run of the actual template/JS -- not just unit tests; caught and fixed one real bug this way (the inline script referenced a `text()` helper defined in a different file's closure)."
+  remaining_acceptance_debt: "Human iPhone Mobile Safari Product Reality review has not run. Also: the review routes key off the async Research job projection, so they only serve sessions where Research mode actually ran -- on the current retrieval-only default deployment (see current_milestone.blocking_gap), a plain indexed Ask has no session to review through this path yet. Full #140 v1 acceptance needs either a retrieval-only-compatible review path or the hosted Research runtime operator decision below."
+  not_done: "Issue #140 is not closed by this work; do not claim it complete without an actual recorded PASS/FAIL/FLAG from a real iPhone Safari session against a real deployed build."
 
 next_continuation:
   priority: "P-operator-approval-hosted-runtime"
