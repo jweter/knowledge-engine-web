@@ -36,7 +36,21 @@ Covered so far:
 - an unmatched question does not fabricate an answer (`No relevant papers
   found in the indexed corpus.`);
 - the Ask page renders without horizontal overflow at a 390px mobile
-  viewport.
+  viewport;
+- reloading the Ask page for the same indexed-only question reproduces the
+  identical citation rather than losing or changing it (refresh/resume for
+  the synchronous indexed path only -- durable async Research session
+  resume across a refresh still needs real Research capability and is not
+  exercised here);
+- `tests/test_browser_e2e_auth.py` drives the real, unlisted-alpha HTTP
+  Basic Auth gate (`AlphaBasicAuthMiddleware`) with a real Chromium network
+  stack against a real server started with `KE_WEB_ALPHA_USERNAME`/
+  `KE_WEB_ALPHA_PASSWORD` configured: a real browser refuses to render the
+  gated page with no credentials (`net::ERR_INVALID_AUTH_CREDENTIALS`) or
+  the wrong password (`net::ERR_HTTP_RESPONSE_CODE_FAILURE`), and loads it
+  normally with the correct ones. `tests/test_alpha_auth.py` already covered
+  this middleware at the `TestClient`/ASGI level; this closes the separate,
+  previously-uncovered real-browser-authentication gap.
 
 This first pass already caught and fixed two real rendering bugs, not test
 artifacts: `.snapshot-line` (the footer's snapshot metadata line, which can
@@ -47,12 +61,15 @@ could still occupy real off-canvas layout geometry in at least one real
 browser engine). Both now wrap/hide explicitly rather than relying on
 implicit browser behavior. See `knowledge_engine_web/static/style.css`.
 
-Not yet covered: the remaining critical-path scenarios
-`docs/INDUSTRY_REALITY_CHECK.md` lists (indexed miss -> research-required
-state, partial-answer updates, degraded-provider state, authentication/session
-expiration, refresh/resume behavior). Extend this module -- or add sibling
-modules following the same pattern -- rather than re-deriving the
-live-server/fixture-data approach.
+Not yet covered: `docs/INDUSTRY_REALITY_CHECK.md`'s remaining critical-path
+scenarios that require real, durable async Research capability to exercise
+honestly -- indexed miss -> research-required state, partial-answer updates,
+degraded-provider state, and durable Research-session refresh/resume. This
+repository will not fake that backend authority merely to gain browser
+coverage (see `docs/agent-development-policy.md` section 1). Real-browser
+authentication and indexed-path refresh/resume are now covered (above).
+Extend this module -- or add sibling modules following the same pattern --
+rather than re-deriving the live-server/fixture-data approach.
 
 ## Accessibility (axe-core)
 

@@ -44,6 +44,25 @@ def test_ask_with_no_matching_evidence_does_not_fabricate_an_answer(
     assert "Direct match" not in page.content()
 
 
+def test_reloading_ask_preserves_the_same_indexed_answer(page: Page, live_app: str) -> None:
+    """Refresh/resume for the synchronous indexed path: the URL's ``q`` query
+    param is the only state the answer depends on, so a real browser reload
+    must reproduce the identical citation rather than losing or changing it.
+    This is deliberately scoped to the indexed-only path; resuming a durable
+    async Research session across a refresh needs real Research capability
+    and is not exercised here.
+    """
+    url = live_app + "/ask?q=" + QUESTION.replace(" ", "+").replace("?", "%3F")
+    page.goto(url)
+    assert page.get_by_text("Direct match").first.is_visible()
+
+    page.reload()
+
+    assert page.get_by_text("Direct match").first.is_visible()
+    assert page.get_by_role("link", name=PAPER_TITLE).is_visible()
+    assert page.locator(f'a[href="/claims/{EVIDENCE_RECORD_ID}"]').is_visible()
+
+
 def test_ask_page_is_usable_at_a_mobile_viewport(page: Page, live_app: str) -> None:
     page.set_viewport_size({"width": 390, "height": 844})
     page.goto(live_app + "/ask?q=" + QUESTION.replace(" ", "+").replace("?", "%3F"))
