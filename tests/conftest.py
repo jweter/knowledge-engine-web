@@ -25,6 +25,7 @@ from tests._browser_e2e_support import (
     candidate_chromium_executables,
     free_port,
     isolated_server_env,
+    isolated_server_env_with_alpha_auth,
     seed_fixture_data,
     wait_until_serving,
 )
@@ -91,6 +92,39 @@ def live_app(tmp_path: Path) -> Iterator[str]:
     )
     try:
         wait_until_serving(base_url, process)
+        yield base_url
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+@pytest.fixture
+def live_app_with_alpha_auth(tmp_path: Path) -> Iterator[str]:
+    """Same real Web app as `live_app`, with the alpha Basic Auth gate turned on."""
+    _, evidence_path = seed_fixture_data(tmp_path)
+    port = free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "knowledge_engine_web.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        env=isolated_server_env_with_alpha_auth(tmp_path, evidence_path, port),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    try:
+        wait_until_serving(base_url, process, ready_on_401=True)
         yield base_url
     finally:
         process.terminate()

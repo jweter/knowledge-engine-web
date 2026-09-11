@@ -98,7 +98,18 @@ def seed_fixture_data(tmp_path: Path) -> tuple[Engine, Path]:
     return engine, evidence_path
 
 
-def wait_until_serving(base_url: str, process: subprocess.Popen[bytes]) -> None:
+def wait_until_serving(
+    base_url: str, process: subprocess.Popen[bytes], *, ready_on_401: bool = False
+) -> None:
+    """Poll ``base_url`` until the real server answers.
+
+    ``ready_on_401`` is for the alpha-Basic-Auth-enabled fixture: that
+    server intentionally answers 401 to every unauthenticated request,
+    which is proof it is up and correctly gating, not a misconfiguration
+    to keep waiting out. Default callers (no alpha auth configured) leave
+    this False so a 401 there still surfaces as the real misconfiguration
+    it would be.
+    """
     import time
     import urllib.error
     import urllib.request
@@ -115,6 +126,8 @@ def wait_until_serving(base_url: str, process: subprocess.Popen[bytes]) -> None:
             urllib.request.urlopen(base_url + "/", timeout=1).read()  # noqa: S310
             return
         except urllib.error.HTTPError as exc:
+            if ready_on_401 and exc.code == 401:
+                return
             # The server answered but with a non-2xx status on every attempt (e.g. a
             # fixture-env misconfiguration tripping alpha auth) -- surface that instead
             # of letting it look identical to "never came up" for the full deadline.
@@ -179,4 +192,23 @@ def isolated_server_env(tmp_path: Path, evidence_path: Path, port: int) -> dict[
             "KE_WEB_DISCOVERY_LEDGER_PERSISTENT_ROOT": "",
         }
     )
+    return env
+
+
+ALPHA_USERNAME = "browser-e2e-tester"
+ALPHA_PASSWORD = "browser-e2e-secret"
+
+
+def isolated_server_env_with_alpha_auth(
+    tmp_path: Path, evidence_path: Path, port: int
+) -> dict[str, str]:
+    """Same isolated environment as ``isolated_server_env``, with the alpha Basic Auth
+    gate deliberately turned on -- for browser E2E coverage of the real, unlisted-alpha
+    authentication flow (docs/INDUSTRY_REALITY_CHECK.md's "authentication" browser
+    critical-path gap), rather than only the existing `TestClient`-level coverage in
+    `tests/test_alpha_auth.py`.
+    """
+    env = isolated_server_env(tmp_path, evidence_path, port)
+    env["KE_WEB_ALPHA_USERNAME"] = ALPHA_USERNAME
+    env["KE_WEB_ALPHA_PASSWORD"] = ALPHA_PASSWORD
     return env
