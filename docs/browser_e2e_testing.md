@@ -99,25 +99,34 @@ rather than re-deriving the live-server/fixture-data approach.
 
 `tests/test_accessibility_e2e.py` runs [axe-core](https://github.com/dequelabs/axe-core)
 (via `axe-playwright-python`, which vendors `axe.min.js` -- no network access
-needed at test time) against nine real, real-Chromium-rendered pages: the
-homepage; the Ask page in both its indexed-hit and no-match states; the claim
-detail page; the graph summary page (`/graph`); the Evidence Intelligence
-dashboard (`/dashboard`); the claims list (`/claims`); and (this run)
+needed at test time) against seventeen real, real-Chromium-rendered
+pages/states: the homepage; the Ask page in both its indexed-hit and no-match
+states; the claim detail page; the graph summary page (`/graph`); the
+Evidence Intelligence dashboard (`/dashboard`); the claims list (`/claims`);
 `/discover` in both its empty-form and unavailable-capability-error states --
 federated discovery is a separate capability gate from Ask's Research
 capability (see `docs/agent-development-policy.md` section 1), but the
 fixture server leaves both equally unconfigured, so this real form and its
 fail-closed error state are reachable the same honest way Ask's no-match
-state already was. Each test fails on any "critical", "serious", "moderate",
-or "minor" impact violation axe-core reports -- every impact level axe-core
-distinguishes is enforced, not just critical/serious.
+state already was; and (this run) the remaining static/reference pages that
+need no Research capability either: About (`/about`), Roadmap (`/roadmap`,
+including its embedded, banner-labeled concept-preview iframe), the Demo page
+in its honest "record unavailable" empty state (`/demo` -- the fixture data
+does not include the stable SELECT-trial demo record), the Reports index
+(`/reports`) and one rendered report view (`/reports/graph`), Unconfirmed
+Claims (`/unconfirmed-claims`), Relationship Candidates
+(`/relationship-candidates`), and one paper detail page (`/papers/1`). Each
+test fails on any "critical", "serious", "moderate", or "minor" impact
+violation axe-core reports -- every impact level axe-core distinguishes is
+enforced, not just critical/serious.
 
-As of this run, all nine real pages/states had **zero** axe-core violations
-at any impact level -- a genuine, verified result, not an assumed pass. This
-closes real automated-accessibility-evidence gap
-`docs/INDUSTRY_REALITY_CHECK.md` identified, but it is still only what
-axe-core's automated ruleset can catch (roughly 30-50% of WCAG 2.2 AA success
-criteria industry-wide). It does not replace a manual keyboard-navigation/
+As of this run, all seventeen real pages/states had **zero** axe-core
+violations at any impact level -- a genuine, verified result, not an assumed
+pass. This closes real automated-accessibility-evidence gap
+`docs/INDUSTRY_REALITY_CHECK.md` identified, and now covers every page
+reachable without Research/AI capability. It is still only what axe-core's
+automated ruleset can catch (roughly 30-50% of WCAG 2.2 AA success criteria
+industry-wide). It does not replace a manual keyboard-navigation/
 screen-reader pass, and still does not cover the async-Research progress/
 report views or the mobile Product Reality review panel -- both require real
 Research capability to exercise honestly, same as the browser-E2E gap noted

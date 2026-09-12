@@ -17,6 +17,11 @@ and the mobile Product Reality review panel remain unchecked because
 exercising them honestly requires real Research capability, which this
 repository cannot fake without violating that posture; see
 `docs/browser_e2e_testing.md`.
+
+Also covers the remaining static/reference pages (About, Roadmap, Demo,
+Reports index/view, Unconfirmed Claims, Relationship Candidates, paper
+detail) that need no Research capability either but were not yet part of
+this suite.
 """
 
 from __future__ import annotations
@@ -97,3 +102,49 @@ def test_discover_with_unavailable_capability_has_no_accessibility_violations(
     # match" case above, per `docs/agent-development-policy.md` section 1.
     page.goto(live_app + "/discover?q=GLP-1+receptor+agonist+weight+loss")
     _assert_no_enforced_violations(page, "Discover (capability unavailable)")
+
+
+def test_about_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
+    page.goto(live_app + "/about")
+    _assert_no_enforced_violations(page, "About")
+
+
+def test_roadmap_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
+    page.goto(live_app + "/roadmap")
+    _assert_no_enforced_violations(page, "Roadmap")
+
+
+def test_demo_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
+    # The fixture data does not include the stable SELECT-trial demo record,
+    # so this exercises the honest "Demo record unavailable" empty state --
+    # same reachable-without-Research-capability posture as the other empty
+    # states above.
+    page.goto(live_app + "/demo")
+    _assert_no_enforced_violations(page, "Demo")
+
+
+def test_reports_index_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
+    page.goto(live_app + "/reports")
+    _assert_no_enforced_violations(page, "Reports index")
+
+
+def test_report_view_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
+    page.goto(live_app + "/reports/graph")
+    _assert_no_enforced_violations(page, "Report view (graph)")
+
+
+def test_unconfirmed_claims_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
+    page.goto(live_app + "/unconfirmed-claims")
+    _assert_no_enforced_violations(page, "Unconfirmed claims")
+
+
+def test_relationship_candidates_page_has_no_accessibility_violations(
+    page: Page, live_app: str
+) -> None:
+    page.goto(live_app + "/relationship-candidates")
+    _assert_no_enforced_violations(page, "Relationship candidates")
+
+
+def test_paper_detail_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
+    page.goto(live_app + "/papers/1")
+    _assert_no_enforced_violations(page, "Paper detail")
