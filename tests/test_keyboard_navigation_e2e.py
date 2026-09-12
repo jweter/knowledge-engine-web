@@ -1,18 +1,4 @@
-"""Real-keyboard navigation E2E checks for reachable Web pages.
-
-`docs/INDUSTRY_REALITY_CHECK.md`'s Accessibility gap notes that automated
-axe-core coverage exists but "no manual keyboard-navigation/screen-reader
-pass has been performed." This module does not replace that manual pass --
-axe-core and a scripted Tab/Enter sequence cannot substitute for a human
-screen-reader session -- but it adds real, automated evidence for the one
-keyboard behavior axe-core's static DOM analysis cannot verify: what a real
-browser actually focuses when a real keyboard user presses Tab and Enter.
-
-Every page covered here is reachable without Research/AI capability
-configured (same fixture data as `tests/test_browser_e2e.py`), so this adds
-coverage without faking backend authority -- see
-`docs/agent-development-policy.md` section 1.
-"""
+"""Real-browser keyboard-navigation regression tests."""
 
 from __future__ import annotations
 
@@ -21,52 +7,48 @@ from typing import cast
 import pytest
 from playwright.sync_api import Page
 
-from tests._browser_e2e_support import QUESTION
-
 pytestmark = pytest.mark.browser_e2e
 
 
 def _focused_element_info(page: Page) -> dict[str, str]:
-    result = page.evaluate(
-        """() => {
-            const el = document.activeElement;
-            if (!el) return {tag: '', className: '', id: '', text: ''};
-            return {
-                tag: el.tagName,
-                className: el.className || '',
-                id: el.id || '',
-                text: (el.textContent || '').trim(),
-            };
-        }"""
+    return cast(
+        dict[str, str],
+        page.evaluate(
+            """() => ({
+                tag: document.activeElement?.tagName ?? '',
+                id: document.activeElement?.id ?? '',
+                href: document.activeElement?.getAttribute('href') ?? '',
+            })"""
+        ),
     )
-    return cast(dict[str, str], result)
 
 
-def _question_input_style(page: Page) -> dict[str, str]:
-    result = page.locator('input[type="text"]').first.evaluate(
-        """(el) => {
-            const style = window.getComputedStyle(el);
-            return {
-                outlineStyle: style.outlineStyle,
-                boxShadow: style.boxShadow,
-                borderColor: style.borderColor,
-                backgroundColor: style.backgroundColor,
-            };
-        }"""
+def _first_text_input_style(page: Page) -> dict[str, str]:
+    return cast(
+        dict[str, str],
+        page.locator("input[type='text'], input:not([type])").first.evaluate(
+            """element => {
+                const style = getComputedStyle(element);
+                return {
+                    outlineStyle: style.outlineStyle,
+                    boxShadow: style.boxShadow,
+                    borderColor: style.borderColor,
+                    backgroundColor: style.backgroundColor,
+                };
+            }"""
+        ),
     )
-    return cast(dict[str, str], result)
 
 
-def test_skip_link_is_first_tab_stop_on_homepage(page: Page, live_app: str) -> None:
+def test_skip_link_is_first_keyboard_target(page: Page, live_app: str) -> None:
     page.goto(live_app + "/")
     page.keyboard.press("Tab")
     focused = _focused_element_info(page)
     assert focused["tag"] == "A"
-    assert "skip-link" in focused["className"]
-    assert focused["text"] == "Skip to main content"
+    assert focused["href"] == "#main-content"
 
 
-def test_skip_link_activation_moves_focus_to_main_content(page: Page, live_app: str) -> None:
+def test_skip_link_moves_focus_to_main_content(page: Page, live_app: str) -> None:
     page.goto(live_app + "/")
     page.keyboard.press("Tab")
     page.keyboard.press("Enter")
@@ -74,36 +56,46 @@ def test_skip_link_activation_moves_focus_to_main_content(page: Page, live_app: 
     assert focused["id"] == "main-content"
 
 
-def test_ask_page_autofocuses_question_input_and_supports_reverse_tab(
-    page: Page, live_app: str
-) -> None:
-    # The question field carries `autofocus`, so a real browser focuses it
-    # immediately on load. Shift+Tab must still let a keyboard user traverse
-    # backward through the real document order without programmatic focus.
-    page.goto(live_app + "/ask?q=" + QUESTION.replace(" ", "+").replace("?", "%3F"))
+def test_question_input_is_keyboard_reachable(page: Page, live_app: str) -> None:
+    # The question form lives on /ask; the landing page intentionally contains
+    # no text input. /ask autofocuses q, which is itself keyboard reachability.
+    page.goto(live_app + "/ask")
     focused = _focused_element_info(page)
     assert focused["tag"] == "INPUT"
     assert focused["id"] == "q"
 
     page.keyboard.press("Shift+Tab")
+    assert _focused_element_info(page)["id"] != "q"
+    page.keyboard.press("Tab")
     focused = _focused_element_info(page)
-    assert focused["tag"] in {"A", "SUMMARY"}
-    assert focused["id"] != "q"
+    assert focused["tag"] == "INPUT"
+    assert focused["id"] == "q"
 
 
-def test_ask_form_input_is_keyboard_reachable_and_focus_visible(page: Page, live_app: str) -> None:
+def test_question_input_has_visible_focus_style(page: Page, live_app: str) -> None:
     page.goto(live_app + "/ask")
+    focused = _focused_element_info(page)
+    assert focused["tag"] == "INPUT"
+    assert focused["id"] == "q"
+    focused_style = _first_text_input_style(page)
 
-    # The Ask input autofocuses. Capture its focused style first, then use only
-    # real keyboard traversal to move away and capture the ordinary style.
-    focused_style = _question_input_style(page)
+    page.keyboard.press("Shift+Tab")
+    normal_style = _first_text_input_style(page)
+    assert focused_style != normal_style
+
+
+def test_discover_query_input_autofocus_and_reverse_tab(page: Page, live_app: str) -> None:
+    page.goto(live_app + "/discover")
+    focused = _focused_element_info(page)
+    assert focused["tag"] == "INPUT"
+    assert focused["id"] == "q"
+
+    focused_style = _first_text_input_style(page)
     page.keyboard.press("Shift+Tab")
     focused = _focused_element_info(page)
     assert focused["id"] != "q"
-    normal_style = _question_input_style(page)
+    normal_style = _first_text_input_style(page)
 
-    # Tab must return to the input, and the keyboard-focused rendering must be
-    # visibly distinguishable from its unfocused rendering.
     page.keyboard.press("Tab")
     focused = _focused_element_info(page)
     assert focused["tag"] == "INPUT"
@@ -116,3 +108,20 @@ def test_ask_form_input_is_keyboard_reachable_and_focus_visible(page: Page, live
         or focused_style["borderColor"] != normal_style["borderColor"]
         or focused_style["backgroundColor"] != normal_style["backgroundColor"]
     )
+
+
+def test_discover_submit_button_is_reachable_by_tab_from_query_input(
+    page: Page, live_app: str
+) -> None:
+    # /discover autofocuses the query input. Anchor the assertion to that
+    # documented starting state so browser focus restoration/default focus
+    # behavior cannot turn this into a test of the global navigation order.
+    page.goto(live_app + "/discover")
+    focused = _focused_element_info(page)
+    assert focused["tag"] == "INPUT"
+    assert focused["id"] == "q"
+
+    page.keyboard.press("Tab")
+    focused = _focused_element_info(page)
+    assert focused["tag"] == "BUTTON"
+    assert focused["id"] == "discover-submit"

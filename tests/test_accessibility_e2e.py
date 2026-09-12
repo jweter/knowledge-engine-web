@@ -81,3 +81,19 @@ def test_dashboard_page_has_no_accessibility_violations(page: Page, live_app: st
 def test_claims_list_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
     page.goto(live_app + "/claims")
     _assert_no_enforced_violations(page, "Claims list")
+
+
+def test_discover_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
+    page.goto(live_app + "/discover")
+    _assert_no_enforced_violations(page, "Discover")
+
+
+def test_discover_with_unavailable_capability_has_no_accessibility_violations(
+    page: Page, live_app: str
+) -> None:
+    # The fixture server never configures a `ke` CLI, so discovery capability
+    # is unavailable and this exercises the honest fail-closed error state --
+    # same reachable-without-Research-capability posture as the Ask "no
+    # match" case above, per `docs/agent-development-policy.md` section 1.
+    page.goto(live_app + "/discover?q=GLP-1+receptor+agonist+weight+loss")
+    _assert_no_enforced_violations(page, "Discover (capability unavailable)")
