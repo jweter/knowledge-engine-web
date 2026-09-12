@@ -18,10 +18,9 @@ exercising them honestly requires real Research capability, which this
 repository cannot fake without violating that posture; see
 `docs/browser_e2e_testing.md`.
 
-Also covers the remaining static/reference pages (About, Roadmap, Demo,
-Reports index/view, Unconfirmed Claims, Relationship Candidates, paper
-detail) that need no Research capability either but were not yet part of
-this suite.
+Also covers static/reference pages (About, Roadmap, the standalone concept
+preview embedded by Roadmap, Demo, Reports index/view, Unconfirmed Claims,
+Relationship Candidates, paper detail) that need no Research capability.
 """
 
 from __future__ import annotations
@@ -96,10 +95,6 @@ def test_discover_page_has_no_accessibility_violations(page: Page, live_app: str
 def test_discover_with_unavailable_capability_has_no_accessibility_violations(
     page: Page, live_app: str
 ) -> None:
-    # The fixture server never configures a `ke` CLI, so discovery capability
-    # is unavailable and this exercises the honest fail-closed error state --
-    # same reachable-without-Research-capability posture as the Ask "no
-    # match" case above, per `docs/agent-development-policy.md` section 1.
     page.goto(live_app + "/discover?q=GLP-1+receptor+agonist+weight+loss")
     _assert_no_enforced_violations(page, "Discover (capability unavailable)")
 
@@ -114,11 +109,15 @@ def test_roadmap_page_has_no_accessibility_violations(page: Page, live_app: str)
     _assert_no_enforced_violations(page, "Roadmap")
 
 
+def test_roadmap_concept_preview_has_no_accessibility_violations(page: Page, live_app: str) -> None:
+    # Axe on the outer Roadmap document does not inspect the iframe document.
+    # Exercise the exact same static document directly so embedded-preview
+    # accessibility is verified rather than inferred from the parent page.
+    page.goto(live_app + "/static/concept-preview.html")
+    _assert_no_enforced_violations(page, "Roadmap concept preview")
+
+
 def test_demo_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
-    # The fixture data does not include the stable SELECT-trial demo record,
-    # so this exercises the honest "Demo record unavailable" empty state --
-    # same reachable-without-Research-capability posture as the other empty
-    # states above.
     page.goto(live_app + "/demo")
     _assert_no_enforced_violations(page, "Demo")
 
