@@ -58,18 +58,21 @@ Covered so far:
   the app was never rendered, rather than hard-coding one exact error
   string.
 - `tests/test_keyboard_navigation_e2e.py` drives real Tab/Shift+Tab/Enter
-  keyboard input (not axe-core's static DOM analysis) against the homepage
-  and Ask page: a "Skip to main content" link is the first tab stop and
-  activating it moves focus into `<main>`; the Ask page's autofocused
-  question field receives focus immediately on load; a focused form control
-  has a visible focus indicator (outline or box-shadow). This run added the
-  skip link itself (`knowledge_engine_web/templates/base.html`,
+  keyboard input (not axe-core's static DOM analysis) against the homepage,
+  Ask page, and (this run) `/discover`: a "Skip to main content" link is the
+  first tab stop and activating it moves focus into `<main>`; the Ask and
+  Discover pages' autofocused query fields receive focus immediately on
+  load; a focused form control has a visible focus indicator (outline or
+  box-shadow); Discover's real submit button is the next tab stop after its
+  query input, with the unavailable-capability notice's plain text correctly
+  not intercepting focus. A prior run added the skip link itself
+  (`knowledge_engine_web/templates/base.html`,
   `knowledge_engine_web/static/style.css`): previously a keyboard user had
   no way to bypass the header's eight nav links plus an "Inspect" dropdown
   before reaching page content on every single page load, a real WCAG 2.4.1
   (Bypass Blocks) gap. axe-core's static analysis does not check this (a
   missing skip link is not itself an axe rule violation), which is why the
-  seven-page axe suite above reported zero violations while this gap still
+  axe suite below reported zero violations while this gap still
   existed -- real keyboard-driven navigation testing found what static
   analysis could not.
 
@@ -96,17 +99,22 @@ rather than re-deriving the live-server/fixture-data approach.
 
 `tests/test_accessibility_e2e.py` runs [axe-core](https://github.com/dequelabs/axe-core)
 (via `axe-playwright-python`, which vendors `axe.min.js` -- no network access
-needed at test time) against seven real, real-Chromium-rendered pages: the
+needed at test time) against nine real, real-Chromium-rendered pages: the
 homepage; the Ask page in both its indexed-hit and no-match states; the claim
 detail page; the graph summary page (`/graph`); the Evidence Intelligence
-dashboard (`/dashboard`); and the claims list (`/claims`). Each test fails on
-any "critical", "serious", "moderate", or "minor" impact violation axe-core
-reports -- every impact level axe-core distinguishes is now enforced, not
-just critical/serious.
+dashboard (`/dashboard`); the claims list (`/claims`); and (this run)
+`/discover` in both its empty-form and unavailable-capability-error states --
+federated discovery is a separate capability gate from Ask's Research
+capability (see `docs/agent-development-policy.md` section 1), but the
+fixture server leaves both equally unconfigured, so this real form and its
+fail-closed error state are reachable the same honest way Ask's no-match
+state already was. Each test fails on any "critical", "serious", "moderate",
+or "minor" impact violation axe-core reports -- every impact level axe-core
+distinguishes is enforced, not just critical/serious.
 
-As of the run that widened this suite, all seven real pages had **zero**
-axe-core violations at any impact level -- a genuine, verified result, not an
-assumed pass. This closes real automated-accessibility-evidence gap
+As of this run, all nine real pages/states had **zero** axe-core violations
+at any impact level -- a genuine, verified result, not an assumed pass. This
+closes real automated-accessibility-evidence gap
 `docs/INDUSTRY_REALITY_CHECK.md` identified, but it is still only what
 axe-core's automated ruleset can catch (roughly 30-50% of WCAG 2.2 AA success
 criteria industry-wide). It does not replace a manual keyboard-navigation/
