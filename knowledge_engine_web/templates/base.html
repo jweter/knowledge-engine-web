@@ -24,6 +24,7 @@
     <title>{% block title %}Knowledge Engine{% endblock %}</title>
   </head>
   <body class="ke-constellation">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <header class="site-header">
       <a class="site-title" href="/">Knowledge Engine</a>
       <span class="alpha-badge">alpha</span>
@@ -46,7 +47,7 @@
         </details>
       </nav>
     </header>
-    <main>{% block content %}{% endblock %}</main>
+    <main id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
     <footer class="site-footer">
       <p>
         Read-only alpha over a point-in-time snapshot. Evidence and relationships

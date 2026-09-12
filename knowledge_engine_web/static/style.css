@@ -90,6 +90,27 @@ a:focus {
   text-decoration: underline;
 }
 
+.skip-link {
+  position: absolute;
+  top: -3rem;
+  left: 0.75rem;
+  z-index: 1000;
+  padding: 0.6rem 1rem;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: 0 0 4px 4px;
+  transition: top 0.15s ease-in-out;
+}
+
+.skip-link:focus {
+  top: 0;
+  text-decoration: none;
+}
+
+main:focus {
+  outline: none;
+}
+
 code {
   background: var(--code-bg);
   padding: 0.1em 0.35em;

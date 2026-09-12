@@ -46,11 +46,32 @@ Covered so far:
   Basic Auth gate (`AlphaBasicAuthMiddleware`) with a real Chromium network
   stack against a real server started with `KE_WEB_ALPHA_USERNAME`/
   `KE_WEB_ALPHA_PASSWORD` configured: a real browser refuses to render the
-  gated page with no credentials (`net::ERR_INVALID_AUTH_CREDENTIALS`) or
-  the wrong password (`net::ERR_HTTP_RESPONSE_CODE_FAILURE`), and loads it
+  gated page with no credentials or the wrong password, and loads it
   normally with the correct ones. `tests/test_alpha_auth.py` already covered
   this middleware at the `TestClient`/ASGI level; this closes the separate,
-  previously-uncovered real-browser-authentication gap.
+  previously-uncovered real-browser-authentication gap. A real Chromium
+  network stack has been observed to reject the challenge two different
+  ways depending on Chromium build/version -- either `page.goto` completes
+  with a 401 response, or the navigation itself raises `net::
+  ERR_INVALID_AUTH_CREDENTIALS`/`net::ERR_HTTP_RESPONSE_CODE_FAILURE` before
+  any response exists -- so the assertion accepts either outcome as proof
+  the app was never rendered, rather than hard-coding one exact error
+  string.
+- `tests/test_keyboard_navigation_e2e.py` drives real Tab/Shift+Tab/Enter
+  keyboard input (not axe-core's static DOM analysis) against the homepage
+  and Ask page: a "Skip to main content" link is the first tab stop and
+  activating it moves focus into `<main>`; the Ask page's autofocused
+  question field receives focus immediately on load; a focused form control
+  has a visible focus indicator (outline or box-shadow). This run added the
+  skip link itself (`knowledge_engine_web/templates/base.html`,
+  `knowledge_engine_web/static/style.css`): previously a keyboard user had
+  no way to bypass the header's eight nav links plus an "Inspect" dropdown
+  before reaching page content on every single page load, a real WCAG 2.4.1
+  (Bypass Blocks) gap. axe-core's static analysis does not check this (a
+  missing skip link is not itself an axe rule violation), which is why the
+  seven-page axe suite above reported zero violations while this gap still
+  existed -- real keyboard-driven navigation testing found what static
+  analysis could not.
 
 This first pass already caught and fixed two real rendering bugs, not test
 artifacts: `.snapshot-line` (the footer's snapshot metadata line, which can
