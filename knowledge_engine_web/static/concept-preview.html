@@ -34,18 +34,18 @@
     --rule-soft: #dde3df;
     --text: var(--ink);
     --text-muted: #565f5c;
-    --text-faint: #8a928d;
+    --text-faint: #696969;
     --accent: #1f7a72;
     --accent-soft: #e3f0ee;
     --accent-ink: #f3fbf9;
-    --supports: #3f7d52;
+    --supports: #3b764d;
     --supports-soft: #e6f0e8;
     --contradicts: #a24936;
     --contradicts-soft: #f4e6e2;
     --qualifies: #b6832e;
     --qualifies-soft: #f4ecda;
     --contextualizes: #5b5f8a;
-    --gap: #8b8f94;
+    --gap: #696969;
     --gap-soft: #e9eae8;
     --shadow: 0 1px 0 rgba(18, 21, 27, 0.04);
     color-scheme: light;
@@ -60,7 +60,7 @@
       --rule-soft: #232a31;
       --text: var(--ink);
       --text-muted: #a3aca8;
-      --text-faint: #6b7470;
+      --text-faint: #969696;
       --accent: #4fb8ae;
       --accent-soft: #16302d;
       --accent-ink: #06120f;
@@ -305,13 +305,14 @@
   .col-title {
     font-family: monospace;
     font-size: 0.72rem;
+    font-weight: 400;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-faint);
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 18px;
+    margin: 0 0 18px;
   }
   .col-title::after {
     content: "";
@@ -487,15 +488,16 @@
     gap: 28px;
     align-items: start;
   }
-  .seam-col h4 {
+  .seam-col h3 {
     font-family: monospace;
     font-size: 0.68rem;
+    font-weight: 400;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     margin: 0 0 12px;
     color: var(--text-faint);
   }
-  .seam-col.built h4 { color: var(--accent); }
+  .seam-col.built h3 { color: var(--accent); }
   .seam-col ul {
     list-style: none;
     margin: 0;
@@ -567,26 +569,29 @@
 </style>
 </head>
 <body>
-<div class="cp-banner">
-  <strong>Concept preview -- not live.</strong> This page mocks up what a future
-  answer view could look like, once a judgment layer sits on top of what
-  <code>core</code> has already validated. The question and both evidence
-  records below are real, drawn from the actual corpus. The confidence score
-  and gap tracking remain illustrative rather than live output. The working
-  alpha now provides deterministic Evidence Intelligence and optional labeled
-  AI narration, but it does not implement this preview's judgment layer.
-  <a href="/roadmap">Back to Roadmap</a>
-</div>
-<div class="topbar">
-  <div class="wordmark"><span class="mark"></span>Knowledge Engine <span class="sub">core + graph + ai layer</span></div>
-  <div class="searchbar">
-    <span class="qmark">?</span>
-    <span class="q">Do GLP&#8209;1 receptor agonists reduce body weight in adults with overweight or obesity&hellip;</span>
+<header>
+  <div class="cp-banner">
+    <strong>Concept preview -- not live.</strong> This page mocks up what a future
+    answer view could look like, once a judgment layer sits on top of what
+    <code>core</code> has already validated. The question and both evidence
+    records below are real, drawn from the actual corpus. The confidence score
+    and gap tracking remain illustrative rather than live output. The working
+    alpha now provides deterministic Evidence Intelligence and optional labeled
+    AI narration, but it does not implement this preview's judgment layer.
+    <a href="/roadmap">Back to Roadmap</a>
   </div>
-  <button class="askbtn" type="button">Ask</button>
-</div>
+  <div class="topbar">
+    <div class="wordmark"><span class="mark"></span>Knowledge Engine <span class="sub">core + graph + ai layer</span></div>
+    <div class="searchbar">
+      <span class="qmark">?</span>
+      <span class="q">Do GLP&#8209;1 receptor agonists reduce body weight in adults with overweight or obesity&hellip;</span>
+    </div>
+    <button class="askbtn" type="button">Ask</button>
+  </div>
+</header>
 
 <div class="shell">
+<main>
 
   <section class="header">
     <div>
@@ -627,7 +632,7 @@
 
   <section class="main">
     <div class="evidence-col">
-      <p class="col-title">Evidence</p>
+      <h2 class="col-title">Evidence</h2>
       <div class="evidence-list">
 
         <article class="evidence-card">
@@ -678,7 +683,7 @@
 
     <aside class="graph-col">
       <div class="graph-card">
-        <p class="col-title" style="margin-bottom:14px">Knowledge graph</p>
+        <h2 class="col-title" style="margin-bottom:14px">Knowledge graph</h2>
         <svg viewBox="-30 0 250 300" role="img" aria-label="Knowledge graph diagram of claims, concepts, and one citation edge">
           <g stroke="var(--rule)" stroke-width="1.2" fill="none">
             <line x1="55" y1="70" x2="170" y2="30"/>
@@ -729,7 +734,7 @@
 
   <section class="seam">
     <div class="seam-col built">
-      <h4>Built &mdash; core, deterministic</h4>
+      <h3>Built &mdash; core, deterministic</h3>
       <ul>
         <li>Evidence &amp; Relationship records (M19&ndash;M24)</li>
         <li>Knowledge Graph &mdash; concepts, claims, citations (M46&ndash;M47)</li>
@@ -743,7 +748,7 @@
       <span class="line"></span>
     </div>
     <div class="seam-col future">
-      <h4>Not yet built &mdash; ai interface layer</h4>
+      <h3>Not yet built &mdash; ai interface layer</h3>
       <ul>
         <li>Compounded confidence rating</li>
         <li>Research&#8209;question crafting</li>
@@ -753,10 +758,13 @@
     </div>
   </section>
 
-  <div class="closing">
+
+</main>
+
+  <footer class="closing">
     <span>Grounded in <span class="mono">docs/roadmap/long_term_vision.md</span> and the real graph work shipped this session.</span>
     <span>Not a screenshot of running software.</span>
-  </div>
+  </footer>
 
 </div>
 </body>
