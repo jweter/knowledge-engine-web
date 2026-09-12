@@ -1,7 +1,7 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-09-12T00:00:00Z"
-status_source: "Live GitHub state re-verified 2026-09-11 (this update) plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, docs/hosted_research_runtime.md, docs/browser_e2e_testing.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
+updated_at: "2026-09-12T11:00:00Z"
+status_source: "Live GitHub state re-verified 2026-09-12 (this update) plus docs/research_report_v1.md, docs/general_question_research_loop_v1.md, docs/hosted_research_runtime.md, docs/browser_e2e_testing.md, and docs/web_design.md. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
 
 product_decisions:
   - decided_at: "2026-09-11"
@@ -86,15 +86,21 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-09-12T00:00:00Z"
-  note: "Live PR/check/branch state re-verified by this run: PR #151 merged, zero open PRs at run start (all three open issues -- #93, #107, #140 -- remain blocked on the same zero-cost/local Research runtime standup an ephemeral scheduled-agent container cannot durably perform; per the anti-stall rule this run did not re-attempt that and instead selected parallel-safe Web-only work). This run extended `tests/test_accessibility_e2e.py` and `tests/test_keyboard_navigation_e2e.py` to cover `/discover` (a real, previously-uncovered form reachable in the same honest fail-closed posture as Ask, since the fixture server configures no `ke` CLI) -- full local preflight GREEN (507 tests passed, up from 502) at exact head before opening a PR; fresh CI not yet observed by this run (see CI FOLLOW-UP HARD RULE -- next scheduled run/orchestrator owns following up on it). The stray non-PR branches listed below were re-checked and remain untouched, out of scope for this run's selected task."
+  checked_at: "2026-09-12T11:00:00Z"
+  note: "Live PR/check/branch state re-verified by this run: main is GREEN at 73fd478 (PR #152 and #154 both merged since the prior update). The three open issues -- #93, #107, #140 -- remain blocked on the same zero-cost/local Research runtime standup an ephemeral scheduled-agent container cannot durably perform; per the anti-stall rule this run did not re-attempt that. The only open PR, #153 (dependabot Docker bump of the private Ollama image 0.33.3 -> 0.34.0), had 3 failing checks on its first CI run: 2 were a real regression this PR's own change caused (`tests/test_hosted_research_runtime.py::test_private_ollama_image_is_version_pinned` hardcoded the old 0.33.3 tag) and 1 (`Real headless-Chromium Ask + accessibility tests`) failed on a `pip install poetry` network IncompleteRead before any test ran, consistent with transient infra rather than a code defect. Pushed a one-line test fix directly to the dependabot branch (commit 0fcf074) updating the assertion to 0.34.0 -- no other file references the pin. Full local preflight (ruff format/check, mypy, pytest -- 506 passed, pip-audit, diff hygiene) is GREEN against that exact new head; fresh CI on 0fcf074 not yet observed by this run (see CI FOLLOW-UP HARD RULE -- next scheduled run/orchestrator owns following up, including a single re-run of the flake-suspected job if it recurs identically). Left a forensics comment on the PR. The stray non-PR branches listed below were re-checked and remain untouched, out of scope for this run's selected task."
   open_prs: 1
   open_pr_detail:
+    - number: 153
+      title: "chore(deps): bump ollama/ollama from 0.33.3 to 0.34.0"
+      branch: "dependabot/docker/ollama/ollama-0.34.0"
+      note: "Dependabot-authored; this run pushed one follow-up commit (0fcf074) fixing the version-pin test the bump broke. Test-only change, no shared-contract impact. Local preflight GREEN at 0fcf074; fresh CI not yet observed by this run."
+  recently_merged_prs:
+    - number: 154
+      title: "chore(deps-dev): bump ruff in the python-development group"
+      note: "Merged (dependabot). ruff 0.16.5 -> 0.16.6, no code changes required."
     - number: 152
       title: "Extend accessibility and keyboard-navigation E2E coverage to /discover"
-      branch: "claude/magical-curie-7irnbu"
-      note: "This run's own PR. Adds 2 axe-core checks (empty form, unavailable-capability error state) and 3 keyboard-navigation checks (autofocus/reverse-tab, focus-visible input, submit-button tab order) for the real /discover federated-discovery form, which had zero automated browser coverage before this run. No shared-contract impact -- test-only plus doc updates. Local preflight GREEN at exact head; awaiting fresh CI observation by a later run."
-  recently_merged_prs:
+      note: "Merged. Added /discover axe-core and keyboard-navigation coverage; full local preflight was GREEN (507 tests) before merge."
     - number: 151
       title: "Add real keyboard-navigation E2E coverage; fix missing skip link"
       note: "Merged. Added tests/test_keyboard_navigation_e2e.py and the skip-to-main-content link it found missing."
@@ -131,7 +137,7 @@ verified_repository_state:
     - number: 113
       title: "Make Research the default Ask behavior"
   active_research_report_issue: "#107"
-  wip_branch: "claude/magical-curie-7irnbu"
+  wip_branch: "dependabot/docker/ollama/ollama-0.34.0"
   wip_branch_has_open_pr: true
   open_research_report_pr: null
   stale_unmerged_branches_without_open_prs: "agent/background-research-polling, automation/status-reconcile, orchestrator/activate-compounding-report, orchestrator/compounding-measurement, orchestrator/compounding-metrics-v2, orchestrator/reconcile-permission-fallback -- none owned by an open PR as of this check; not touched this run (out of scope for the selected task, no PR to repair)."
@@ -166,8 +172,8 @@ browser_e2e_track:
   not_done: "docs/INDUSTRY_REALITY_CHECK.md's remaining critical-path scenarios (indexed miss -> research-required state, partial-answer updates, degraded-provider state, durable async-Research-session refresh/resume) remain unaddressed -- all require real Research capability to exercise honestly, which this repository will not fake in a test fixture merely to gain coverage. Authentication and indexed-path refresh/resume are covered (PR #150, merged). Accessibility coverage (9 pages/states as of this run) is real but still narrow: axe-core's automated ruleset only catches roughly 30-50% of WCAG 2.2 AA success criteria industry-wide. A full manual keyboard-navigation/screen-reader pass has still not been performed, and the async-Research progress/report views plus the mobile Product Reality review panel remain uncovered (both require real Research capability). Do not treat any of this as WCAG 2.2 AA conformance evidence."
 
 next_continuation:
-  priority: "P-local-zero-cost-research-verification"
-  action: "Paid Render Research infrastructure is intentionally deferred (2026-09-11 product decision, see product_decisions above) -- do not re-request that approval or apply render.research.yaml without a new explicit reversal. The next real progress step is to stand up and verify Research capability (Core + Ollama) on a zero-additional-cost/local runtime, set KE_WEB_BUILD_COMMIT to its exact commit, record an authoritative Mobile Product Reality review against it, then run Monster #79 through normal /ask on that verified local capability and fix any Product Reality failure until acceptance passes. This run re-confirmed that standup is still not attemptable from a fresh ephemeral scheduled-agent container (no persistent local Ollama/Core installation and no real iPhone Safari human reviewer available here) -- see human_decision_required -- and, per the anti-stall rule, did not re-attempt it or spend further runs rediscovering the same blocker. This run instead did parallel-safe Web-only work: extended tests/test_accessibility_e2e.py (2 new checks) and tests/test_keyboard_navigation_e2e.py (3 new checks) to cover /discover's real query form and its honest fail-closed unavailable-capability state, closing the last real, previously-zero-coverage interactive form reachable without Research/AI capability. Full local preflight GREEN (507 tests, up from 502) before opening a PR. A following run should first check this new PR's fresh CI/merge state (per the CI FOLLOW-UP HARD RULE this run does not itself watch or babysit it); if it is green and mergeable, the next genuinely new parallel-safe Web-only slice most consistent with docs/INDUSTRY_REALITY_CHECK.md is a documented manual WCAG 2.2 AA keyboard/screen-reader checklist pass (axe-core plus scripted Tab/Enter only cover ~30-50% of success criteria), since remaining browser-E2E/UX gaps (progressive research states, partial answers, degraded-provider UI, async-session resume, mobile review panel) all require the same blocked Research-capability standup."
+  priority: "P1-fix-failing-existing-pr"
+  action: "This run found PR #152 and #154 already merged since the prior update (main GREEN at 73fd478) and only one open PR: #153, a dependabot Docker bump of the private Ollama image (0.33.3 -> 0.34.0). Its first CI run had 3 failing checks; forensics (job logs, not guessed) found 2 were a real regression this PR's own change caused -- `tests/test_hosted_research_runtime.py::test_private_ollama_image_is_version_pinned` hardcoded the old 0.33.3 tag -- and 1 (`Real headless-Chromium Ask + accessibility tests`) failed on a `pip install poetry` network IncompleteRead before any test ran, consistent with transient infra. Per priority order (fix failing existing PRs/tests outranks new roadmap work), this run pushed a one-line test fix directly to the dependabot branch (commit 0fcf074) and left a forensics comment on PR #153 rather than starting new roadmap work in the same run. Full local preflight GREEN (506 tests) at that exact new head. A following run should first check PR #153's fresh CI/merge state (per the CI FOLLOW-UP HARD RULE this run does not itself watch or babysit it) -- including whether the suspected-flake browser-E2E job passed on retry -- and merge if repository authority permits once it is genuinely green and mergeable. The standing zero-cost/local Research runtime blocker (see human_decision_required) and the manual WCAG 2.2 AA keyboard/screen-reader checklist slice identified by the prior run both remain valid next options once #153 is resolved."
   selection_rule: "Before beginning work, query live PR/CI/branch state. Existing failed, pending, conflicted, blocked, or merge-ready work takes priority. Never merge failed, pending, conflicted, blocked, or materially uncertain work."
 
 human_decision_required: "None outstanding for Research infrastructure: Jeremy decided (2026-09-11) that paid Render Research infrastructure stays deferred and zero-additional-cost/local infrastructure is authoritative -- see product_decisions above. Do not re-raise the paid-infra approval ask; only a new explicit reversal from Jeremy changes this."
