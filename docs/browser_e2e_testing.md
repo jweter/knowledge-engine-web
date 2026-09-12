@@ -133,6 +133,16 @@ Research capability to exercise honestly, same as the browser-E2E gap noted
 above, which this repository will not fake in a test fixture merely to gain
 coverage.
 
+`docs/manual_accessibility_checklist.md` is the reusable checklist and
+results log for the remaining manual keyboard-navigation/screen-reader pass
+this section calls out. As of this run it contains checklist structure only
+-- no manual pass has been recorded against it yet -- so it does not itself
+close the gap; it gives the next real pass (human, or a future agent with
+real assistive-technology access) a concrete, WCAG-2.2-AA-criterion-level
+list scoped to what axe-core and the scripted keyboard tests above do not
+already establish, plus a place to record dated PASS/FAIL/NOT YET TESTABLE
+results per criterion against an exact build identity.
+
 ## Running it
 
 ```

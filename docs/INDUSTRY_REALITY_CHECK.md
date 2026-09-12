@@ -170,7 +170,7 @@ Use a real browser test suite for the researcher-critical paths. Include determi
 
 ### P1 — Establish accessibility gates
 
-Automated axe checks now exist for seventeen real pages/states (`tests/test_accessibility_e2e.py`) -- every page reachable without Research/AI capability -- enforced on every axe-core impact level (critical/serious/moderate/minor), currently all zero-violation. Remaining: extend coverage to the async-Research progress/report views and mobile review panel once Research capability is verifiable, and add a documented manual WCAG 2.2 AA verification checklist for every major release -- axe-core alone does not establish conformance.
+Automated axe checks now exist for seventeen real pages/states (`tests/test_accessibility_e2e.py`) -- every page reachable without Research/AI capability -- enforced on every axe-core impact level (critical/serious/moderate/minor), currently all zero-violation. `docs/manual_accessibility_checklist.md` (this run) is the documented manual WCAG 2.2 AA verification checklist this item called for -- a reusable, criterion-level list scoped to what automated coverage cannot establish (screen reader announcement quality, reflow/zoom, focus order across a full page traversal, status-message live regions, and more), plus a place to record dated results against an exact build identity. It is checklist infrastructure only: no manual pass has been recorded against it yet, so this remains open until at least one full pass is recorded with no open FAIL rows. Also still remaining: extend automated coverage to the async-Research progress/report views and mobile review panel once Research capability is verifiable.
 
 ### P1 — Add measurable UX performance targets
 
