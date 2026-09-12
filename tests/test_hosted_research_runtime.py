@@ -27,7 +27,7 @@ def test_full_research_blueprint_is_operator_gated_and_complete() -> None:
 def test_private_ollama_image_is_version_pinned() -> None:
     dockerfile = (ROOT / "Dockerfile.ollama").read_text(encoding="utf-8")
 
-    assert "FROM ollama/ollama:0.33.3" in dockerfile
+    assert "FROM ollama/ollama:0.34.0" in dockerfile
     assert "ollama/ollama:latest" not in dockerfile
 
 
