@@ -90,10 +90,10 @@ verified_repository_state:
   note: "Live PR/check/branch state re-verified by this run: PR #151 merged, zero open PRs at run start (all three open issues -- #93, #107, #140 -- remain blocked on the same zero-cost/local Research runtime standup an ephemeral scheduled-agent container cannot durably perform; per the anti-stall rule this run did not re-attempt that and instead selected parallel-safe Web-only work). This run extended `tests/test_accessibility_e2e.py` and `tests/test_keyboard_navigation_e2e.py` to cover `/discover` (a real, previously-uncovered form reachable in the same honest fail-closed posture as Ask, since the fixture server configures no `ke` CLI) -- full local preflight GREEN (507 tests passed, up from 502) at exact head before opening a PR; fresh CI not yet observed by this run (see CI FOLLOW-UP HARD RULE -- next scheduled run/orchestrator owns following up on it). The stray non-PR branches listed below were re-checked and remain untouched, out of scope for this run's selected task."
   open_prs: 1
   open_pr_detail:
-    - number: null
+    - number: 152
       title: "Extend accessibility and keyboard-navigation E2E coverage to /discover"
       branch: "claude/magical-curie-7irnbu"
-      note: "This run's own PR (number assigned at creation, not yet known when this file was edited). Adds 2 axe-core checks (empty form, unavailable-capability error state) and 3 keyboard-navigation checks (autofocus/reverse-tab, focus-visible input, submit-button tab order) for the real /discover federated-discovery form, which had zero automated browser coverage before this run. No shared-contract impact -- test-only plus doc updates. Local preflight GREEN at exact head; awaiting fresh CI observation by a later run."
+      note: "This run's own PR. Adds 2 axe-core checks (empty form, unavailable-capability error state) and 3 keyboard-navigation checks (autofocus/reverse-tab, focus-visible input, submit-button tab order) for the real /discover federated-discovery form, which had zero automated browser coverage before this run. No shared-contract impact -- test-only plus doc updates. Local preflight GREEN at exact head; awaiting fresh CI observation by a later run."
   recently_merged_prs:
     - number: 151
       title: "Add real keyboard-navigation E2E coverage; fix missing skip link"
