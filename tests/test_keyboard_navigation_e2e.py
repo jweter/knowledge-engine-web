@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from playwright.sync_api import Page
 
@@ -9,26 +11,32 @@ pytestmark = pytest.mark.browser_e2e
 
 
 def _focused_element_info(page: Page) -> dict[str, str]:
-    return page.evaluate(
-        """() => ({
-            tag: document.activeElement?.tagName ?? '',
-            id: document.activeElement?.id ?? '',
-            href: document.activeElement?.getAttribute('href') ?? '',
-        })"""
+    return cast(
+        dict[str, str],
+        page.evaluate(
+            """() => ({
+                tag: document.activeElement?.tagName ?? '',
+                id: document.activeElement?.id ?? '',
+                href: document.activeElement?.getAttribute('href') ?? '',
+            })"""
+        ),
     )
 
 
 def _first_text_input_style(page: Page) -> dict[str, str]:
-    return page.locator("input[type='text'], input:not([type])").first.evaluate(
-        """element => {
-            const style = getComputedStyle(element);
-            return {
-                outlineStyle: style.outlineStyle,
-                boxShadow: style.boxShadow,
-                borderColor: style.borderColor,
-                backgroundColor: style.backgroundColor,
-            };
-        }"""
+    return cast(
+        dict[str, str],
+        page.locator("input[type='text'], input:not([type])").first.evaluate(
+            """element => {
+                const style = getComputedStyle(element);
+                return {
+                    outlineStyle: style.outlineStyle,
+                    boxShadow: style.boxShadow,
+                    borderColor: style.borderColor,
+                    backgroundColor: style.backgroundColor,
+                };
+            }"""
+        ),
     )
 
 
