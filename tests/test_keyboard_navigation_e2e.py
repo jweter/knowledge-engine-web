@@ -57,25 +57,30 @@ def test_skip_link_moves_focus_to_main_content(page: Page, live_app: str) -> Non
 
 
 def test_question_input_is_keyboard_reachable(page: Page, live_app: str) -> None:
-    page.goto(live_app + "/")
-    for _ in range(20):
-        focused = _focused_element_info(page)
-        if focused["id"] == "question":
-            break
-        page.keyboard.press("Tab")
+    # The question form lives on /ask; the landing page intentionally contains
+    # no text input. /ask autofocuses q, which is itself keyboard reachability.
+    page.goto(live_app + "/ask")
     focused = _focused_element_info(page)
     assert focused["tag"] == "INPUT"
-    assert focused["id"] == "question"
+    assert focused["id"] == "q"
+
+    page.keyboard.press("Shift+Tab")
+    assert _focused_element_info(page)["id"] != "q"
+    page.keyboard.press("Tab")
+    focused = _focused_element_info(page)
+    assert focused["tag"] == "INPUT"
+    assert focused["id"] == "q"
 
 
 def test_question_input_has_visible_focus_style(page: Page, live_app: str) -> None:
-    page.goto(live_app + "/")
-    normal_style = _first_text_input_style(page)
-    for _ in range(20):
-        if _focused_element_info(page)["id"] == "question":
-            break
-        page.keyboard.press("Tab")
+    page.goto(live_app + "/ask")
+    focused = _focused_element_info(page)
+    assert focused["tag"] == "INPUT"
+    assert focused["id"] == "q"
     focused_style = _first_text_input_style(page)
+
+    page.keyboard.press("Shift+Tab")
+    normal_style = _first_text_input_style(page)
     assert focused_style != normal_style
 
 
