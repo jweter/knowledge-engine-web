@@ -75,6 +75,27 @@ Covered so far:
   axe suite below reported zero violations while this gap still
   existed -- real keyboard-driven navigation testing found what static
   analysis could not.
+- (this run) `test_motion_toggle_is_keyboard_operable_and_stops_animation`
+  and `test_motion_toggle_preference_persists_across_reload` drive the new
+  site-wide `#motion-toggle` header control
+  (`knowledge_engine_web/static/knowledge_constellation.js`,
+  `knowledge_engine_web/static/knowledge_constellation.css`,
+  `knowledge_engine_web/templates/base.html`): WCAG 2.2.2 (Pause, Stop,
+  Hide) requires that indefinite decorative motion -- the constellation
+  canvas background and the homepage headline's `ke-title-aurora` animation,
+  which ran continuously on every page with no way to stop them except an
+  OS-level `prefers-reduced-motion` setting -- have an operable pause/stop
+  mechanism independent of that OS setting. The tests confirm the control is
+  reachable and activatable by keyboard alone (`Tab` then `Enter`), that
+  activating it actually halts the animation (asserted via the real computed
+  `animationDuration`, not just a CSS class being present), that a second
+  activation resumes it, and that the preference persists (`localStorage`)
+  across a reload and across navigation to a different real page. This is a
+  real, previously-missing accessibility control this run added and
+  verified -- not a stand-in for the manual pass `docs/
+  manual_accessibility_checklist.md` row 7a still calls for (that row also
+  requires confirming real screen-reader operability, which this scripted
+  Tab/Enter sequence does not establish).
 
 This first pass already caught and fixed two real rendering bugs, not test
 artifacts: `.snapshot-line` (the footer's snapshot metadata line, which can

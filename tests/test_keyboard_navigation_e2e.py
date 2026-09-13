@@ -125,3 +125,62 @@ def test_discover_submit_button_is_reachable_by_tab_from_query_input(
     focused = _focused_element_info(page)
     assert focused["tag"] == "BUTTON"
     assert focused["id"] == "discover-submit"
+
+
+def _hero_heading_animation_duration(page: Page) -> str:
+    return cast(
+        str,
+        page.locator(".landing-hero-copy h1").evaluate(
+            "element => getComputedStyle(element).animationDuration"
+        ),
+    )
+
+
+def test_motion_toggle_is_keyboard_operable_and_stops_animation(page: Page, live_app: str) -> None:
+    # WCAG 2.2.2 (Pause, Stop, Hide): the homepage's decorative constellation
+    # background and headline animation run indefinitely and must be
+    # user-pausable independent of the OS-level prefers-reduced-motion
+    # setting. Regression-tests knowledge_constellation.js's #motion-toggle.
+    page.goto(live_app + "/")
+
+    toggle = page.locator("#motion-toggle")
+    assert toggle.is_visible()
+    assert toggle.get_attribute("aria-pressed") == "false"
+
+    running_duration = _hero_heading_animation_duration(page)
+    assert running_duration not in ("0s", "1e-06s")
+
+    toggle.focus()
+    focused = _focused_element_info(page)
+    assert focused["id"] == "motion-toggle"
+
+    page.keyboard.press("Enter")
+    assert toggle.get_attribute("aria-pressed") == "true"
+    assert "motion-paused" in (page.locator("body").get_attribute("class") or "")
+    assert _hero_heading_animation_duration(page) == "1e-06s"
+
+    # A second activation resumes motion.
+    page.keyboard.press("Enter")
+    assert toggle.get_attribute("aria-pressed") == "false"
+    assert "motion-paused" not in (page.locator("body").get_attribute("class") or "")
+    assert _hero_heading_animation_duration(page) not in ("0s", "1e-06s")
+
+
+def test_motion_toggle_preference_persists_across_reload(page: Page, live_app: str) -> None:
+    page.goto(live_app + "/")
+    toggle = page.locator("#motion-toggle")
+    toggle.click()
+    assert toggle.get_attribute("aria-pressed") == "true"
+
+    page.reload()
+    toggle = page.locator("#motion-toggle")
+    assert toggle.get_attribute("aria-pressed") == "true"
+    assert "motion-paused" in (page.locator("body").get_attribute("class") or "")
+    assert _hero_heading_animation_duration(page) == "1e-06s"
+
+    # A different real page (site-wide control, not homepage-only) honors
+    # the same persisted preference on first load.
+    page.goto(live_app + "/about")
+    toggle = page.locator("#motion-toggle")
+    assert toggle.get_attribute("aria-pressed") == "true"
+    assert "motion-paused" in (page.locator("body").get_attribute("class") or "")
