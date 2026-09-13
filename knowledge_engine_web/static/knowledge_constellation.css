@@ -514,3 +514,43 @@ body.ke-constellation::before {
     opacity: 0.62;
   }
 }
+
+/* WCAG 2.2.2 (Pause, Stop, Hide): the same treatment as OS-level
+   prefers-reduced-motion above, but toggled at runtime by #motion-toggle
+   (knowledge_constellation.js) so a visitor can stop this indefinite
+   decorative motion without changing an OS/browser-wide setting. */
+.motion-paused *,
+.motion-paused *::before,
+.motion-paused *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+.motion-paused #knowledge-constellation-field {
+  opacity: 0.62;
+}
+
+.motion-toggle {
+  min-height: 24px;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid rgba(126, 208, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(5, 13, 26, 0.5);
+  color: #bfd0df;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.motion-toggle:hover {
+  border-color: rgba(126, 208, 255, 0.7);
+  color: #ffffff;
+}
+
+.motion-toggle:focus-visible {
+  outline: 2px solid rgba(114, 232, 255, 0.85);
+  outline-offset: 2px;
+}

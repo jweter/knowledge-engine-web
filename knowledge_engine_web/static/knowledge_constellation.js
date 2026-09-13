@@ -4,8 +4,21 @@
   const body = document.body;
   if (!body || !body.classList.contains("ke-constellation")) return;
 
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const osReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+
+  // WCAG 2.2.2 (Pause, Stop, Hide): this decorative background/graph motion
+  // runs indefinitely and must be user-pausable independent of the
+  // OS-level prefers-reduced-motion setting, not only responsive to it.
+  const MOTION_PAUSE_KEY = "ke-motion-paused";
+  let userPaused = false;
+  try {
+    userPaused = window.localStorage.getItem(MOTION_PAUSE_KEY) === "true";
+  } catch (error) {
+    userPaused = false;
+  }
+
+  const reducedMotion = () => osReducedMotion || userPaused;
 
   const canvas = document.createElement("canvas");
   canvas.id = "knowledge-constellation-field";
@@ -91,14 +104,14 @@
   }
 
   function projectedPoint(point, now) {
-    const motion = reducedMotion ? 0 : 1;
+    const motion = reducedMotion() ? 0 : 1;
     const time = now * 0.00004 * point.drift;
     const wobbleX = Math.sin(time * 1.17 + point.phase) * 11 * motion;
     const wobbleY = Math.cos(time + point.phase * 0.73) * 9 * motion;
     let x = point.x * state.width + wobbleX;
     let y = point.y * state.height + wobbleY;
 
-    if (state.mouse.active && !coarsePointer && !reducedMotion) {
+    if (state.mouse.active && !coarsePointer && !reducedMotion()) {
       const dx = state.mouse.x - x;
       const dy = state.mouse.y - y;
       const distance = Math.hypot(dx, dy);
@@ -129,7 +142,7 @@
         if (distance > connectionRange) continue;
 
         const closeness = 1 - distance / connectionRange;
-        const pulse = reducedMotion
+        const pulse = reducedMotion()
           ? 1
           : 0.78 + Math.sin(now * 0.0012 + left * 0.31 + right * 0.17) * 0.22;
         const alpha = Math.max(0, baseOpacity * closeness * pulse);
@@ -143,7 +156,7 @@
         context.lineTo(b.x, b.y);
         context.stroke();
 
-        if (!reducedMotion && state.researching && (left + right) % 17 === 0) {
+        if (!reducedMotion() && state.researching && (left + right) % 17 === 0) {
           const travel = (now * 0.00023 + (left * 0.07 + right * 0.03)) % 1;
           const px = a.x + (b.x - a.x) * travel;
           const py = a.y + (b.y - a.y) * travel;
@@ -161,7 +174,7 @@
     state.points.forEach((point, index) => {
       const { x, y } = projected[index];
       const [r, g, b] = point.color;
-      const shimmer = reducedMotion ? 1 : 0.76 + Math.sin(now * 0.0009 + point.phase) * 0.24;
+      const shimmer = reducedMotion() ? 1 : 0.76 + Math.sin(now * 0.0009 + point.phase) * 0.24;
       const alpha = point.alpha * shimmer * (state.researching ? 1.12 : 1);
       const radius = point.radius * (state.researching ? 1.08 : 1);
 
@@ -176,7 +189,7 @@
 
     context.restore();
 
-    if (!reducedMotion) {
+    if (!reducedMotion()) {
       state.frame = window.requestAnimationFrame(draw);
     }
   }
@@ -243,10 +256,47 @@
     if (document.hidden && state.frame) {
       window.cancelAnimationFrame(state.frame);
       state.frame = 0;
-    } else if (!document.hidden && !reducedMotion && !state.frame) {
+    } else if (!document.hidden && !reducedMotion() && !state.frame) {
       state.frame = window.requestAnimationFrame(draw);
     }
   });
+
+  const motionToggle = document.getElementById("motion-toggle");
+  if (motionToggle) {
+    const syncMotionToggleLabel = () => {
+      const paused = userPaused;
+      motionToggle.setAttribute("aria-pressed", String(paused));
+      motionToggle.textContent = paused ? "Resume background motion" : "Pause background motion";
+    };
+
+    // Progressive enhancement: only show the control once it can actually
+    // do something (WCAG 2.2.2 requires an operable pause/stop/hide
+    // mechanism for this indefinite decorative motion; an inert button
+    // would be worse than none).
+    motionToggle.hidden = false;
+    syncMotionToggleLabel();
+    body.classList.toggle("motion-paused", userPaused);
+
+    motionToggle.addEventListener("click", () => {
+      userPaused = !userPaused;
+      try {
+        window.localStorage.setItem(MOTION_PAUSE_KEY, String(userPaused));
+      } catch (error) {
+        // Best-effort persistence only; pausing still works for this load.
+      }
+      body.classList.toggle("motion-paused", userPaused);
+      syncMotionToggleLabel();
+      if (userPaused) {
+        if (state.frame) {
+          window.cancelAnimationFrame(state.frame);
+          state.frame = 0;
+        }
+        draw(performance.now());
+      } else if (!osReducedMotion && !document.hidden && !state.frame) {
+        state.frame = window.requestAnimationFrame(draw);
+      }
+    });
+  }
 
   enhanceRealGraphs();
   syncResearchState();
