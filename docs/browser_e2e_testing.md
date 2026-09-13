@@ -164,6 +164,39 @@ list scoped to what axe-core and the scripted keyboard tests above do not
 already establish, plus a place to record dated PASS/FAIL/NOT YET TESTABLE
 results per criterion against an exact build identity.
 
+## Reflow and focus-visible (`tests/test_reflow_and_focus_indicators_e2e.py`)
+
+`docs/manual_accessibility_checklist.md` rows 4 (1.4.10 Reflow) and 10
+(2.4.7 Focus Visible) previously listed both criteria as needing a full
+human pass. Part of each is a plain, objective measurement rather than a
+judgment call, so this module automates that part:
+
+- **Reflow**: at a 320px CSS viewport width (the standard proxy for a
+  1280px layout zoomed to 400%), the homepage, Ask (indexed hit), claim
+  detail, the Evidence Intelligence dashboard, and the graph summary page
+  must not overflow horizontally (`document.documentElement.scrollWidth`
+  must not exceed `clientWidth`).
+- **Focus visible**: on the homepage and Ask (indexed hit), every visible
+  native/ARIA-focusable element -- not only the first text input the
+  keyboard-navigation suite already checks -- must show some computed-style
+  change (outline, box-shadow, border, background, or text-decoration) when
+  focused.
+
+This run's first pass at the reflow check found a real WCAG 1.4.10
+violation, not a test artifact: the generic `code` selector in
+`knowledge_engine_web/static/style.css` had no `overflow-wrap`, so a long
+unbroken token inside a `<code>` element (claim detail's
+`docs/evidence_intelligence_design.md` reference) pushed the claim detail
+page 13px wider than a 320px viewport. Fixed with `overflow-wrap: anywhere`
+on the `code` rule, the same technique already used for `.snapshot-line`
+(see above).
+
+This does not close manual checklist rows 4 and 10 -- it narrows what still
+needs a human to the genuinely subjective remainder: whether reflowed
+content still *reads* sensibly (not just "does it overflow"), and whether a
+focus indicator's *contrast* is actually perceivable (not just "does
+something change").
+
 ## Running it
 
 ```
