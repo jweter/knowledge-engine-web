@@ -7,10 +7,11 @@ All coding, Codex, scheduled, and autonomous agents working in this repository m
 Before selecting or implementing substantial work, read:
 
 1. `docs/agent-development-policy.md` — repository-specific autonomous development rules and the shared Knowledge Engine family policy it references.
-2. `docs/project-status.yaml` — continuity snapshot; reconcile it with live PR, CI, issue, and code state before trusting it.
-3. The active roadmap/design document named by `docs/project-status.yaml`.
-4. `docs/research_report_v1.md` — adopted answer-first, two-layer research-report experience and Monster acceptance contract.
-5. `docs/INDUSTRY_REALITY_CHECK.md` — the current repo-specific gap analysis versus production web/research-software expectations.
+2. `docs/UNATTENDED_VERIFICATION.md` — unattended-first verification policy; routine objective testing is machine-owned and Jeremy is optional milestone acceptance rather than a recurring test executor.
+3. `docs/project-status.yaml` — continuity snapshot; reconcile it with live PR, CI, issue, and code state before trusting it.
+4. The active roadmap/design document named by `docs/project-status.yaml`.
+5. `docs/research_report_v1.md` — adopted answer-first, two-layer research-report experience and Monster acceptance contract.
+6. `docs/INDUSTRY_REALITY_CHECK.md` — the current repo-specific gap analysis versus production web/research-software expectations.
 
 ## Research Report v1 priority
 
