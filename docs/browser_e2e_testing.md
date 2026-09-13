@@ -253,6 +253,46 @@ This closes the automatable half of checklist row 7: whether a screen reader
 announces anything about the motion remains a human judgment call, as does
 any future interaction-triggered animation this repository adds.
 
+## Focus order (`tests/test_focus_order_e2e.py`)
+
+`docs/manual_accessibility_checklist.md` row 8 (2.4.3 Focus Order) previously
+listed the whole criterion as needing a full human pass. Whether a full-page
+Tab traversal *reads* sensibly is a judgment call, but whether the browser's
+actual Tab order matches the page's document order -- the precondition every
+other focus-order judgment depends on -- is a plain, scriptable fact. This
+module checks, on every page/state `tests/test_accessibility_e2e.py` covers:
+
+- no element has a positive `tabindex` (which overrides natural document
+  order, a common real-world 2.4.3 anti-pattern);
+- a real, full-page Tab-key traversal (not just the first few stops
+  `tests/test_keyboard_navigation_e2e.py` already checks) visits every
+  visible focusable element in exactly the same sequence
+  `document.querySelectorAll` returns for the page.
+
+No behavioral bug was found in this repository's pages -- every page's Tab
+order already matches its document order. Building this test did surface a
+real methodology problem worth recording: the first implementation reset
+focus to the top of the page with `document.activeElement.blur()` before
+tabbing. That works for most pages, but per the HTML spec, `blur()` clears
+`document.activeElement` without resetting the browser's *sequential focus
+navigation starting point* -- so on a page that autofocuses an element on
+load (Ask, Discover), a subsequent Tab silently resumed from that
+autofocused element instead of the top of the page, only exercising the tail
+of the order and failing with a misleading "order mismatch" for elements
+that were never actually reachable in the test's traversal. The fix is to
+explicitly `.focus()` the first tagged element directly rather than relying
+on `blur()`, which deterministically starts the walk at position 0 regardless
+of what the page autofocuses. The Roadmap page's embedded concept-preview
+`<iframe>` posed a related wrinkle: Chrome reports the outer `<iframe>`
+element as `document.activeElement` for every tab stop *inside* it, so the
+traversal detects that case and keeps tabbing (without asserting on internal
+order, which the standalone `/static/concept-preview.html` page already
+covers in its own right) until focus re-emerges into the top-level document.
+
+This closes the automatable half of checklist row 8: whether the resulting
+order is a *sensible* reading/interaction order for a real user remains a
+human judgment call.
+
 ## Running it
 
 ```
