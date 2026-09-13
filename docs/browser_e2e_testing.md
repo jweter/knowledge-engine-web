@@ -172,11 +172,14 @@ human pass. Part of each is a plain, objective measurement rather than a
 judgment call, so this module automates that part:
 
 - **Reflow**: at a 320px CSS viewport width (the standard proxy for a
-  1280px layout zoomed to 400%), the homepage, Ask (indexed hit), claim
-  detail, the Evidence Intelligence dashboard, and the graph summary page
-  must not overflow horizontally (`document.documentElement.scrollWidth`
-  must not exceed `clientWidth`).
-- **Focus visible**: on the homepage and Ask (indexed hit), every visible
+  1280px layout zoomed to 400%), every page/state
+  `tests/test_accessibility_e2e.py` covers -- homepage, both Ask states,
+  claim detail, graph summary, the Evidence Intelligence dashboard, claims
+  list, both Discover states, About, Roadmap, the Roadmap concept preview,
+  Demo, Reports index/view, Unconfirmed Claims, Relationship Candidates,
+  and paper detail -- must not overflow horizontally
+  (`document.documentElement.scrollWidth` must not exceed `clientWidth`).
+- **Focus visible**: on that same full page/state set, every visible
   native/ARIA-focusable element -- not only the first text input the
   keyboard-navigation suite already checks -- must show some computed-style
   change (outline, box-shadow, border, background, or text-decoration) when
@@ -190,6 +193,18 @@ unbroken token inside a `<code>` element (claim detail's
 page 13px wider than a 320px viewport. Fixed with `overflow-wrap: anywhere`
 on the `code` rule, the same technique already used for `.snapshot-line`
 (see above).
+
+Extending the reflow check to the remaining `test_accessibility_e2e.py`
+pages found a second real violation: the Roadmap concept preview's standalone
+document (`knowledge_engine_web/static/concept-preview.html`) has a
+`.topbar` flex row containing a `white-space: nowrap` wordmark, a
+`max-width`-only search bar, and an "Ask" button. Flex children default to
+`min-width: auto`, so their combined nowrap content width (well over 600px)
+never shrank below that regardless of viewport width, overflowing a 320px
+viewport by 671px. Fixed with a `@media (max-width: 480px)` rule that wraps
+the topbar (`flex-wrap: wrap`), lets the wordmark text wrap instead of
+forcing nowrap, and gives the search bar `min-width: 0` plus its own
+wrapped row so it can actually shrink.
 
 This does not close manual checklist rows 4 and 10 -- it narrows what still
 needs a human to the genuinely subjective remainder: whether reflowed
