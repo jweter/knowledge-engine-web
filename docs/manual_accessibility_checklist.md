@@ -74,6 +74,7 @@ rows against a faked or partially-configured backend; record them as
 | 5 | 1.4.13 Content on Hover or Focus | Any hover/focus-triggered content (tooltips, the "Inspect" dropdown) is dismissible, hoverable, and persistent | Header "Inspect" dropdown |
 | 6 | 2.1.4 Character Key Shortcuts | No single-character keyboard shortcut fires unexpectedly while a screen reader is active | All pages |
 | 7 | 2.3.3 Animation from Interactions | Any animation triggered by interaction (constellation/neural web face, PR #146) respects `prefers-reduced-motion` | Homepage |
+| 7a | 2.2.2 Pause, Stop, Hide | Any automatically started moving/animated constellation content that persists for more than five seconds can be paused, stopped, or hidden without requiring `prefers-reduced-motion`; verify the control is keyboard and screen-reader operable | Homepage |
 | 8 | 2.4.3 Focus Order | Full-page Tab traversal (not just the first few stops `test_keyboard_navigation_e2e.py` asserts) matches a sensible reading/interaction order end to end | Every covered page, full traversal |
 | 9 | 2.4.6 Headings and Labels | Screen reader users can navigate by heading/landmark and understand each one out of context | All covered pages |
 | 10 | 2.4.7 Focus Visible | Every interactive element (not only the first text input `test_keyboard_navigation_e2e.py` checks) shows a visible focus indicator | All covered pages |
