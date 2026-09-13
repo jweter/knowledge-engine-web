@@ -212,6 +212,47 @@ content still *reads* sensibly (not just "does it overflow"), and whether a
 focus indicator's *contrast* is actually perceivable (not just "does
 something change").
 
+## Reduced motion (`tests/test_reduced_motion_e2e.py`)
+
+`docs/manual_accessibility_checklist.md` row 7 (2.3.3 Animation from
+Interactions) asked whether the constellation/neural-web decorative motion
+(`knowledge_engine_web/static/knowledge_constellation.js`) actually respects
+the OS-level `prefers-reduced-motion: reduce` setting. The only prior
+evidence for this was
+`tests/test_knowledge_constellation_face.py::test_constellation_motion_is_accessibility_safe`,
+which merely asserts that the right strings (`matchMedia(...)`, the CSS media
+query) exist in the source files -- it cannot catch a logic bug that leaves
+the canvas animating anyway, and the canvas motion is driven entirely by a
+`requestAnimationFrame` loop in JavaScript, so axe-core and CSS-only checks
+cannot see it either.
+
+This module instead uses Playwright's `page.emulate_media(reduced_motion=...)`
+against the real running app and compares the canvas's actual rendered pixel
+output (`canvas.toDataURL()`) before and after a wait:
+
+- under `reduce`, the canvas image is byte-identical before and after the
+  wait (the animation loop never restarts itself) and the headline aurora
+  animation's computed `animationDuration` collapses to the same
+  effectively-zero value the existing `#motion-toggle` test already checks;
+- under the default `no-preference` setting, the canvas image visibly
+  changes over the same wait -- a control case proving the comparison
+  technique is actually sensitive to real motion, so the reduced-motion
+  assertion is not vacuously true;
+- the same static-canvas check is repeated on a second, non-homepage page
+  (`/about`) since the constellation layer runs site-wide via `base.html`'s
+  body class, not only on the homepage.
+
+(Note: this module deliberately does not use `page.add_init_script()` to
+instrument `requestAnimationFrame` calls directly -- that approach was tried
+first, but `add_init_script` was found to be a no-op against the Chromium
+build available in this environment, silently leaving `window` unmodified
+before navigation. The pixel-comparison approach above does not depend on it
+and was verified stable across repeated runs.)
+
+This closes the automatable half of checklist row 7: whether a screen reader
+announces anything about the motion remains a human judgment call, as does
+any future interaction-triggered animation this repository adds.
+
 ## Running it
 
 ```
