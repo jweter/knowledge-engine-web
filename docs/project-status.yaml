@@ -88,8 +88,13 @@ automation_contract:
 verified_repository_state:
   checked_at: "2026-09-13T05:10:00Z"
   note: "This run re-verified live GitHub state first: no open PRs, main green at 3ac8971 (Quality run 34738791995). Checked open issue #160 ('Route browser and service verification through unattended worker', opened 2026-09-13T04:48:22Z, anchored on knowledge-engine-core issue #493) by reading Core issue #493 directly (read-only, via add_repo): it explicitly defers the concrete worker request/result contract/schema to future cross-repo coordination and does not yet define one. Per this repository's 'never independently edit another repository' / 'do not assume cross-repository compatibility' rules, issue #160 is genuinely not yet actionable as a Web-side implementation -- there is no contract to consume, and inventing one unilaterally would risk exactly the schema-drift risk docs/agent-development-policy.md warns about. Documented as a dependency-blocked lane (see dependencies below) rather than attempted further; selected other safe Web-only P5 work instead. While reviewing docs/manual_accessibility_checklist.md rows 4 (1.4.10 Reflow) and 10 (2.4.7 Focus Visible) -- both previously 'needs a human pass' -- identified that part of each is a plain objective measurement (does the page overflow horizontally; does some computed style change on focus), not a subjective judgment call, and automated that part in new tests/test_reflow_and_focus_indicators_e2e.py: no horizontal overflow at a 320px CSS width across the homepage, Ask, claim detail, dashboard, and graph pages, and a visible focus-state style change on every visible focusable element on the homepage and Ask (not only the first input the existing keyboard-navigation suite checks). The reflow check immediately found a real WCAG 1.4.10 violation, not a test artifact: knowledge_engine_web/static/style.css's generic `code` rule had no `overflow-wrap`, so claim detail's long `docs/evidence_intelligence_design.md` reference pushed the page 13px past a 320px viewport. Fixed with `overflow-wrap: anywhere` on that rule (same technique as the earlier `.snapshot-line` fix). Updated docs/manual_accessibility_checklist.md rows 4/10, docs/browser_e2e_testing.md, and docs/INDUSTRY_REALITY_CHECK.md to record this honestly: real automated coverage of the objective half of both criteria plus a real fix, not a substitute for the still-open manual pass (reading-order-after-reflow and focus-indicator-contrast judgments remain human-only). Full local preflight (`ruff format --check`, `ruff check`, `mypy knowledge_engine_web tests`, `pytest` -- 524 passed, `pip-audit`, `git diff --check`) is GREEN on the working tree before this commit, including all 42 browser_e2e-marked tests. Fresh CI on the pushed commit not yet observed by this run (see CI FOLLOW-UP HARD RULE)."
-  open_prs: 0
-  open_pr_detail: []
+  open_prs: 1
+  open_pr_detail:
+    - number: 161
+      title: "Automate reflow/focus-visible accessibility checks; fix a real 1.4.10 violation"
+      branch: "claude/magical-curie-7uc8qk"
+      head_sha: "336587b0a69ae0635aa1018ab6f7bde6f71ece48"
+      note: "Opened by this repository's own automation after the work recorded in the note above. CI green (Quality, Docker build, Canonical preflight, Real headless-Chromium Ask + accessibility tests) and mergeable_state clean as of this correction; awaiting merge."
   recently_merged_prs:
     - number: 157
       title: "docs: add manual WCAG 2.2 AA verification checklist"
@@ -146,8 +151,8 @@ verified_repository_state:
       title: "Make Research the default Ask behavior"
   active_research_report_issue: "#107"
   wip_branch: "claude/magical-curie-7uc8qk"
-  wip_branch_has_open_pr: false
-  wip_branch_head: null
+  wip_branch_has_open_pr: true
+  wip_branch_head: "336587b0a69ae0635aa1018ab6f7bde6f71ece48"
   open_research_report_pr: null
   stale_unmerged_branches_without_open_prs: "agent/background-research-polling, automation/status-reconcile, orchestrator/activate-compounding-report, orchestrator/compounding-measurement, orchestrator/compounding-metrics-v2, orchestrator/reconcile-permission-fallback -- none owned by an open PR as of this check; not touched this run (out of scope for the selected task, no PR to repair)."
   ci_workflows:
