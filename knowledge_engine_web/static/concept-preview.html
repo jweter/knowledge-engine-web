@@ -566,6 +566,16 @@
     .seam-divider .label { writing-mode: horizontal-tb; }
   }
 
+  @media (max-width: 480px) {
+    /* At narrow widths the topbar's flex children (wordmark, searchbar,
+       ask button) keep their default min-width: auto, so their combined
+       nowrap content width overflows the viewport instead of shrinking.
+       Wrap the row and let each child shrink/wrap to its own line. */
+    .topbar { flex-wrap: wrap; row-gap: 10px; }
+    .wordmark { white-space: normal; }
+    .searchbar { min-width: 0; flex-basis: 100%; order: 3; }
+  }
+
 </style>
 </head>
 <body>
