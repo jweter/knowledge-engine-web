@@ -31,11 +31,11 @@ from __future__ import annotations
 from typing import cast
 
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, ViewportSize
 
 pytestmark = pytest.mark.browser_e2e
 
-_VIEWPORT = {"width": 800, "height": 600}
+_VIEWPORT: ViewportSize = {"width": 800, "height": 600}
 
 
 def _canvas_data_url(page: Page) -> str:
