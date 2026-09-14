@@ -97,7 +97,10 @@ from knowledge_engine_web.mobile_review_store import (
     read_mobile_review_history,
     record_mobile_review,
 )
-from knowledge_engine_web.observability import RequestObservabilityMiddleware
+from knowledge_engine_web.observability import (
+    RequestObservabilityMiddleware,
+    install_exception_handler_wrappers,
+)
 from knowledge_engine_web.relationship_reader import (
     list_relationship_records_for_evidence_record_id,
 )
@@ -128,6 +131,7 @@ app.add_middleware(AlphaBasicAuthMiddleware)
 # the most-recently-added middleware outermost): every request gets a
 # correlation ID and a logged duration, including responses the auth gate
 # itself produces (e.g. 401), not only requests that reach a route.
+install_exception_handler_wrappers(app)
 app.add_middleware(RequestObservabilityMiddleware)
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
@@ -856,6 +860,7 @@ def ask(
         name="ask.html",
         context={
             "question": question,
+            "empty_query_error": False,
             "results": results,
             "synthesis_available": synthesis_available,
             "synthesize_requested": synthesize_requested,
@@ -1136,6 +1141,7 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
         name="discover.html",
         context={
             "query": query,
+            "empty_query_error": False,
             "discovery_available": capability.available,
             "result": result,
             "provider_rows": [_provider_status_view(status) for status in result.provider_statuses]

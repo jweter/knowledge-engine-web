@@ -15,11 +15,14 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable, Iterator, MutableMapping
+from inspect import iscoroutinefunction
+from typing import Any, cast
 
-from starlette._exception_handler import wrap_app_handling_exceptions
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 REQUEST_ID_HEADER = "X-Request-ID"
@@ -38,6 +41,73 @@ if not logger.handlers:
     logger.addHandler(_handler)
     logger.propagate = False
 
+type ExceptionHandler = Callable[[Request, Any], Response | Awaitable[Response] | None]
+_EXCEPTION_HANDLER_FAILED_KEY = "request_observability_exception_handler_failed"
+_HANDLER_WRAPPED_ATTR = "_ke_request_observability_wrapped"
+_HANDLER_MAP_WRAPPED_ATTR = "_ke_request_observability_handler_map_wrapped"
+
+
+async def _run_exception_handler(
+    handler: ExceptionHandler, request: Request, exc: Exception
+) -> Response | None:
+    if iscoroutinefunction(handler):
+        async_handler = cast(Callable[[Request, Exception], Awaitable[Response | None]], handler)
+        return await async_handler(request, exc)
+    sync_handler = cast(Callable[[Request, Exception], Response | None], handler)
+    return await run_in_threadpool(sync_handler, request, exc)
+
+
+def _wrap_exception_handler(handler: ExceptionHandler) -> ExceptionHandler:
+    if getattr(handler, _HANDLER_WRAPPED_ATTR, False):
+        return handler
+
+    async def wrapped_handler(request: Request, exc: Exception) -> Response | None:
+        try:
+            return await _run_exception_handler(handler, request, exc)
+        except Exception:
+            request.scope.setdefault("state", {})[_EXCEPTION_HANDLER_FAILED_KEY] = True
+            raise
+
+    setattr(wrapped_handler, _HANDLER_WRAPPED_ATTR, True)
+    return cast(ExceptionHandler, wrapped_handler)
+
+
+class WrappedExceptionHandlerMap(MutableMapping[Any, Any]):
+    def __init__(self, handlers: MutableMapping[Any, Any]) -> None:
+        self._handlers = handlers
+        for key, handler in list(handlers.items()):
+            self[key] = handler
+
+    def __getitem__(self, key: Any) -> Any:
+        return self._handlers[key]
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        self._handlers[key] = (
+            _wrap_exception_handler(cast(ExceptionHandler, value)) if callable(value) else value
+        )
+
+    def __delitem__(self, key: Any) -> None:
+        del self._handlers[key]
+
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self._handlers)
+
+    def __len__(self) -> int:
+        return len(self._handlers)
+
+
+def install_exception_handler_wrappers(app: object) -> None:
+    exception_handlers = getattr(app, "exception_handlers", None)
+    if not isinstance(exception_handlers, MutableMapping):
+        return
+
+    if getattr(exception_handlers, _HANDLER_MAP_WRAPPED_ATTR, False):
+        return
+
+    wrapped_handlers = WrappedExceptionHandlerMap(exception_handlers)
+    setattr(wrapped_handlers, _HANDLER_MAP_WRAPPED_ATTR, True)
+    cast(Any, app).exception_handlers = wrapped_handlers
+
 
 class RequestObservabilityMiddleware:
     """Log method/path/status/duration and propagate a request-correlation ID.
@@ -49,7 +119,10 @@ class RequestObservabilityMiddleware:
     gate itself produces (e.g. 401), not only successful ones.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+    ) -> None:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -62,11 +135,13 @@ class RequestObservabilityMiddleware:
         method = str(scope.get("method", ""))
         path = str(scope.get("path", ""))
         started_at = time.monotonic()
+        response_started = False
         status_code: int | None = None
 
         async def send_with_observability_headers(message: Message) -> None:
-            nonlocal status_code
+            nonlocal response_started, status_code
             if message["type"] == "http.response.start":
+                response_started = True
                 status_code = int(message["status"])
                 headers = MutableHeaders(raw=message["headers"])
                 headers[REQUEST_ID_HEADER] = request_id
@@ -75,7 +150,7 @@ class RequestObservabilityMiddleware:
 
         try:
             await self.app(scope, receive, send_with_observability_headers)
-        except Exception as exc:
+        except Exception:
             duration_ms = (time.monotonic() - started_at) * 1000
             logger.exception(
                 "request_id=%s method=%s path=%s status=unhandled_exception duration_ms=%.1f",
@@ -84,21 +159,14 @@ class RequestObservabilityMiddleware:
                 path,
                 duration_ms,
             )
-            connection = Request(scope, receive=receive)
-            captured_exc = exc
+            if scope.setdefault("state", {}).pop(_EXCEPTION_HANDLER_FAILED_KEY, False):
+                raise
 
-            async def _raise(
-                scope: Scope, receive: Receive, send: Send, exception: Exception = captured_exc
-            ) -> None:
-                raise exception
+            if response_started:
+                raise
 
-            try:
-                await wrap_app_handling_exceptions(_raise, connection)(
-                    scope, receive, send_with_observability_headers
-                )
-            except Exception:
-                fallback_response = PlainTextResponse("Internal Server Error", status_code=500)
-                await fallback_response(scope, receive, send_with_observability_headers)
+            fallback_response = PlainTextResponse("Internal Server Error", status_code=500)
+            await fallback_response(scope, receive, send_with_observability_headers)
             return
 
         duration_ms = (time.monotonic() - started_at) * 1000

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from pathlib import Path
@@ -8,12 +9,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
+from starlette.types import Message, Receive, Scope, Send
 
 from knowledge_engine_web.main import app
 from knowledge_engine_web.observability import (
     REQUEST_ID_HEADER,
     RESPONSE_TIME_HEADER,
     RequestObservabilityMiddleware,
+    install_exception_handler_wrappers,
     logger,
 )
 from tests._fixtures import build_engine
@@ -86,11 +89,13 @@ def test_a_response_the_alpha_auth_gate_itself_produces_still_gets_a_request_id_
 
 def test_unhandled_exception_response_still_gets_request_id_header() -> None:
     isolated_app = FastAPI()
-    isolated_app.add_middleware(RequestObservabilityMiddleware)
+    install_exception_handler_wrappers(isolated_app)
 
     @isolated_app.get("/boom")
     def _boom() -> None:
         raise RuntimeError("boom")
+
+    isolated_app.add_middleware(RequestObservabilityMiddleware)
 
     response = TestClient(isolated_app, raise_server_exceptions=False).get(
         "/boom",
@@ -105,7 +110,7 @@ def test_unhandled_exception_response_still_gets_request_id_header() -> None:
 
 def test_unhandled_exception_preserves_a_registered_exception_handler_response() -> None:
     isolated_app = FastAPI()
-    isolated_app.add_middleware(RequestObservabilityMiddleware)
+    install_exception_handler_wrappers(isolated_app)
 
     @isolated_app.exception_handler(RuntimeError)
     async def _runtime_error_handler(*_: object) -> JSONResponse:
@@ -115,8 +120,87 @@ def test_unhandled_exception_preserves_a_registered_exception_handler_response()
     def _boom() -> None:
         raise RuntimeError("boom")
 
+    install_exception_handler_wrappers(isolated_app)
+    isolated_app.add_middleware(RequestObservabilityMiddleware)
+
     response = TestClient(isolated_app, raise_server_exceptions=False).get("/boom")
 
     assert response.status_code == 500
     assert response.json() == {"detail": "custom-runtime-error"}
     assert REQUEST_ID_HEADER in response.headers
+
+
+def test_exception_handler_failures_are_not_swallowed_by_the_middleware() -> None:
+    isolated_app = FastAPI()
+    install_exception_handler_wrappers(isolated_app)
+
+    @isolated_app.exception_handler(RuntimeError)
+    async def _runtime_error_handler(*_: object) -> JSONResponse:
+        raise ValueError("handler boom")
+
+    @isolated_app.get("/boom")
+    def _boom() -> None:
+        raise RuntimeError("boom")
+
+    install_exception_handler_wrappers(isolated_app)
+    isolated_app.add_middleware(RequestObservabilityMiddleware)
+
+    with pytest.raises(ValueError, match="handler boom"):
+        TestClient(isolated_app).get("/boom")
+
+
+def test_unhandled_exception_with_context_still_uses_the_fallback_response() -> None:
+    isolated_app = FastAPI()
+    install_exception_handler_wrappers(isolated_app)
+
+    @isolated_app.get("/boom")
+    def _boom() -> None:
+        try:
+            raise ValueError("inner")
+        except ValueError as exc:
+            raise RuntimeError("boom") from exc
+
+    isolated_app.add_middleware(RequestObservabilityMiddleware)
+
+    response = TestClient(isolated_app, raise_server_exceptions=False).get("/boom")
+
+    assert response.status_code == 500
+    assert response.text == "Internal Server Error"
+    assert REQUEST_ID_HEADER in response.headers
+
+
+def test_started_response_is_not_followed_by_a_fallback_response() -> None:
+    async def _partial_response_then_fail(scope: Scope, receive: Receive, send: Send) -> None:
+        await send({"type": "http.response.start", "status": 500, "headers": []})
+        raise RuntimeError("boom after start")
+
+    middleware = RequestObservabilityMiddleware(_partial_response_then_fail)
+    scope: Scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/boom",
+        "raw_path": b"/boom",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [],
+        "client": ("testclient", 123),
+        "server": ("testserver", 80),
+    }
+    sent_messages: list[Message] = []
+
+    async def _receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def _send(message: Message) -> None:
+        sent_messages.append(message)
+
+    with pytest.raises(RuntimeError, match="boom after start"):
+        asyncio.run(middleware(scope, _receive, _send))
+
+    assert [message["type"] for message in sent_messages] == ["http.response.start"]
+    raw_headers = dict(sent_messages[0]["headers"])
+    assert b"x-request-id" in raw_headers
+    assert b"x-response-time-ms" in raw_headers
