@@ -103,6 +103,58 @@ def live_app(tmp_path: Path) -> Iterator[str]:
 
 
 @pytest.fixture
+def live_app_with_research_available(tmp_path: Path) -> Iterator[str]:
+    """Run the real Web app with static Research prerequisites available.
+
+    The fixture supplies only local, inert prerequisites needed for the Ask UI
+    to render its Research controls. It does not contact Ollama, Core, or any
+    scholarly provider, and the test route does not start a Research run.
+    """
+    _, evidence_path = seed_fixture_data(tmp_path)
+    sources_path = tmp_path / "sources.csv"
+    sources_path.write_text("source_id\nfixture\n", encoding="utf-8")
+    research_papers_dir = tmp_path / "research_papers"
+    research_papers_dir.mkdir()
+
+    port = free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    env = isolated_server_env(tmp_path, evidence_path, port)
+    env.update(
+        {
+            "KE_WEB_LLM_MODEL": "browser-e2e-fixture-model",
+            "KE_WEB_SOURCES_PATH": str(sources_path),
+            "KE_WEB_KE_EXECUTABLE": sys.executable,
+            "KE_WEB_RESEARCH_PAPERS_DIR": str(research_papers_dir),
+        }
+    )
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "knowledge_engine_web.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    try:
+        wait_until_serving(base_url, process)
+        yield base_url
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+@pytest.fixture
 def live_app_with_alpha_auth(tmp_path: Path) -> Iterator[str]:
     """Same real Web app as `live_app`, with the alpha Basic Auth gate turned on."""
     _, evidence_path = seed_fixture_data(tmp_path)
