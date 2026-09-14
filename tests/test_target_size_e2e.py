@@ -93,8 +93,7 @@ def _assert_current_viewport(page: Page, page_label: str, viewport_label: str) -
     assert not failures, (
         f"{page_label} at {viewport_label} has {len(failures)} pointer target(s) smaller than "
         f"{_MINIMUM_SIZE}x{_MINIMUM_SIZE} CSS px without the mechanically verified "
-        "Inline exception (WCAG 2.5.8 Target Size Minimum):\n\n"
-        + "\n".join(failures)
+        "Inline exception (WCAG 2.5.8 Target Size Minimum):\n\n" + "\n".join(failures)
     )
 
 
