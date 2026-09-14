@@ -5,10 +5,17 @@ import re
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.responses import JSONResponse
 
 from knowledge_engine_web.main import app
-from knowledge_engine_web.observability import REQUEST_ID_HEADER, RESPONSE_TIME_HEADER, logger
+from knowledge_engine_web.observability import (
+    REQUEST_ID_HEADER,
+    RESPONSE_TIME_HEADER,
+    RequestObservabilityMiddleware,
+    logger,
+)
 from tests._fixtures import build_engine
 
 _UUID4_RE = re.compile(
@@ -75,3 +82,41 @@ def test_a_response_the_alpha_auth_gate_itself_produces_still_gets_a_request_id_
     assert _UUID4_RE.match(response.headers[REQUEST_ID_HEADER])
     assert len(caplog.records) == 1
     assert "status=401" in caplog.records[0].message
+
+
+def test_unhandled_exception_response_still_gets_request_id_header() -> None:
+    isolated_app = FastAPI()
+    isolated_app.add_middleware(RequestObservabilityMiddleware)
+
+    @isolated_app.get("/boom")
+    def _boom() -> None:
+        raise RuntimeError("boom")
+
+    response = TestClient(isolated_app, raise_server_exceptions=False).get(
+        "/boom",
+        headers={REQUEST_ID_HEADER: "caller-supplied-id-3"},
+    )
+
+    assert response.status_code == 500
+    assert response.text == "Internal Server Error"
+    assert response.headers[REQUEST_ID_HEADER] == "caller-supplied-id-3"
+    assert float(response.headers[RESPONSE_TIME_HEADER]) >= 0.0
+
+
+def test_unhandled_exception_preserves_a_registered_exception_handler_response() -> None:
+    isolated_app = FastAPI()
+    isolated_app.add_middleware(RequestObservabilityMiddleware)
+
+    @isolated_app.exception_handler(RuntimeError)
+    async def _runtime_error_handler(*_: object) -> JSONResponse:
+        return JSONResponse({"detail": "custom-runtime-error"}, status_code=500)
+
+    @isolated_app.get("/boom")
+    def _boom() -> None:
+        raise RuntimeError("boom")
+
+    response = TestClient(isolated_app, raise_server_exceptions=False).get("/boom")
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "custom-runtime-error"}
+    assert REQUEST_ID_HEADER in response.headers
