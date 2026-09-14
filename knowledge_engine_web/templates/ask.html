@@ -38,6 +38,12 @@
   </p>
 </form>
 
+{% if empty_query_error %}
+<p class="empty-state" id="ask-empty-query-error" role="alert">
+  Enter a question before pressing Ask — the search box was empty.
+</p>
+{% endif %}
+
 {% if synthesis_unavailable_notice %}
 <p class="empty-state">{{ synthesis_unavailable_notice }}</p>
 {% endif %}

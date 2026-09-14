@@ -98,6 +98,16 @@ def test_discover_page_renders_the_empty_state_with_no_query() -> None:
     assert response.status_code == 200
     assert "Live discovery" in response.text
     assert "Results for" not in response.text
+    assert "discover-empty-query-error" not in response.text
+
+
+def test_discover_page_shows_an_announced_error_when_the_query_is_submitted_blank() -> None:
+    response = TestClient(app).get("/discover", params={"q": "   "})
+
+    assert response.status_code == 200
+    assert 'id="discover-empty-query-error"' in response.text
+    assert 'role="alert"' in response.text
+    assert "the search box was empty" in response.text
 
 
 def test_discover_form_shows_unavailable_notice_when_runtime_is_missing(

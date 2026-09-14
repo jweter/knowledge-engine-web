@@ -1430,6 +1430,21 @@ def test_ask_page_renders_the_empty_state_with_no_question(
     assert response.status_code == 200
     assert "Ask Knowledge Engine" in response.text
     assert "Results for" not in response.text
+    assert "ask-empty-query-error" not in response.text
+
+
+def test_ask_page_shows_an_announced_error_when_the_question_is_submitted_blank(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_engine(tmp_path)
+    monkeypatch.setenv("KE_WEB_DATABASE_URL", _database_url(tmp_path))
+
+    response = TestClient(app).get("/ask", params={"q": "   "})
+
+    assert response.status_code == 200
+    assert 'id="ask-empty-query-error"' in response.text
+    assert 'role="alert"' in response.text
+    assert "the search box was empty" in response.text
 
 
 def test_ask_page_reports_no_relevant_papers_found(

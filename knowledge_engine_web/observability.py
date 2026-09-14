@@ -16,9 +16,11 @@ import logging
 import time
 import uuid
 
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette._exception_handler import wrap_app_handling_exceptions
+from starlette.datastructures import Headers, MutableHeaders
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import PlainTextResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 REQUEST_ID_HEADER = "X-Request-ID"
 RESPONSE_TIME_HEADER = "X-Response-Time-Ms"
@@ -37,7 +39,7 @@ if not logger.handlers:
     logger.propagate = False
 
 
-class RequestObservabilityMiddleware(BaseHTTPMiddleware):
+class RequestObservabilityMiddleware:
     """Log method/path/status/duration and propagate a request-correlation ID.
 
     Reuses an inbound `X-Request-ID` if a caller already minted one, so a
@@ -47,31 +49,65 @@ class RequestObservabilityMiddleware(BaseHTTPMiddleware):
     gate itself produces (e.g. 401), not only successful ones.
     """
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request_id = request.headers.get(REQUEST_ID_HEADER) or str(uuid.uuid4())
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = Headers(scope=scope).get(REQUEST_ID_HEADER) or str(uuid.uuid4())
+        scope.setdefault("state", {})["request_id"] = request_id
+        method = str(scope.get("method", ""))
+        path = str(scope.get("path", ""))
         started_at = time.monotonic()
+        status_code: int | None = None
+
+        async def send_with_observability_headers(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = int(message["status"])
+                headers = MutableHeaders(raw=message["headers"])
+                headers[REQUEST_ID_HEADER] = request_id
+                headers[RESPONSE_TIME_HEADER] = f"{(time.monotonic() - started_at) * 1000:.1f}"
+            await send(message)
+
         try:
-            response = await call_next(request)
-        except Exception:
+            await self.app(scope, receive, send_with_observability_headers)
+        except Exception as exc:
             duration_ms = (time.monotonic() - started_at) * 1000
             logger.exception(
                 "request_id=%s method=%s path=%s status=unhandled_exception duration_ms=%.1f",
                 request_id,
-                request.method,
-                request.url.path,
+                method,
+                path,
                 duration_ms,
             )
-            raise
+            connection = Request(scope, receive=receive)
+            captured_exc = exc
+
+            async def _raise(
+                scope: Scope, receive: Receive, send: Send, exception: Exception = captured_exc
+            ) -> None:
+                raise exception
+
+            try:
+                await wrap_app_handling_exceptions(_raise, connection)(
+                    scope, receive, send_with_observability_headers
+                )
+            except Exception:
+                fallback_response = PlainTextResponse("Internal Server Error", status_code=500)
+                await fallback_response(scope, receive, send_with_observability_headers)
+            return
 
         duration_ms = (time.monotonic() - started_at) * 1000
-        response.headers[REQUEST_ID_HEADER] = request_id
-        response.headers[RESPONSE_TIME_HEADER] = f"{duration_ms:.1f}"
+        rendered_status = status_code if status_code is not None else 0
         logger.info(
             "request_id=%s method=%s path=%s status=%d duration_ms=%.1f",
             request_id,
-            request.method,
-            request.url.path,
-            response.status_code,
+            method,
+            path,
+            rendered_status,
             duration_ms,
         )
-        return response
