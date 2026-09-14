@@ -187,7 +187,9 @@ def test_discover_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     _assert_targets_meet_minimum_size(page, "Discover")
 
 
-def test_discover_with_unavailable_capability_targets_meet_minimum_size(page: Page, live_app: str) -> None:
+def test_discover_with_unavailable_capability_targets_meet_minimum_size(
+    page: Page, live_app: str
+) -> None:
     page.goto(live_app + "/discover?q=GLP-1+receptor+agonist+weight+loss")
     _assert_targets_meet_minimum_size(page, "Discover (capability unavailable)")
 
