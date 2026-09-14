@@ -12,12 +12,15 @@ Before selecting or implementing substantial work, read:
 4. The active roadmap/design document named by `docs/project-status.yaml`.
 5. `docs/research_report_v1.md` — adopted answer-first, two-layer research-report experience and Monster acceptance contract.
 6. `docs/INDUSTRY_REALITY_CHECK.md` — the current repo-specific gap analysis versus production web/research-software expectations.
+7. `docs/EMERGING_COMPUTE_UI_READINESS.md` — required when work presents quantum, quantum-inspired, simulator, QPU, photonic, neuromorphic, or other emerging-compute evidence.
 
 ## Research Report v1 priority
 
 Until the Monster Energy / one-year blood-pressure acceptance case passes on the deployed Ask path, treat Research Report v1 as a standing product constraint. Prefer work that directly improves answer-first presentation, conclusion/certainty rendering, evidence/methodology inspection, provenance, counter-evidence visibility, missing-evidence disclosure, or durable research progress over purely decorative UI work.
 
 Do not hide provider degradation, missing evidence, or source provenance to make the page look cleaner.
+
+For emerging-compute UI work, preserve upstream evidence semantics. Show the substrate/backend, classical comparator, measurement contract, uncertainty/repeatability, cost, and verification context when available. `ELIGIBLE_FOR_BOUNDED_EXPERIMENT` means safe to test, not known to be superior, and a local benchmark win must not be rendered as general quantum advantage.
 
 ## How to use the reality check
 
