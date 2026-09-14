@@ -10,6 +10,8 @@ layouts. It recognizes two mechanically verifiable exceptions:
   diameter circle centered on its bounding box does not intersect another
   target, or the corresponding circle for another undersized target.
 
+For checkbox/radio controls wrapped by a label, the labelled region is the
+effective pointer target and is measured instead of the native control glyph.
 The contextual Equivalent and Essential exceptions remain human judgment and
 are intentionally not inferred here.
 """
@@ -28,7 +30,7 @@ pytestmark = pytest.mark.browser_e2e
 
 _TARGET_SELECTOR = (
     "a[href], button:not([disabled]), "
-    "input:not([disabled]):not([type='hidden']):not([type='checkbox']):not([type='radio']), "
+    "input:not([disabled]):not([type='hidden']), "
     "select:not([disabled]), textarea:not([disabled]), "
     "[tabindex]:not([tabindex='-1']), summary"
 )
@@ -53,7 +55,10 @@ def _target_metrics(locator: Locator) -> _TargetMetrics:
         locator.evaluate(
             """element => {
                 const style = getComputedStyle(element);
-                const box = element.getBoundingClientRect();
+                const isChoice =
+                    element.matches('input[type="checkbox"], input[type="radio"]');
+                const labelledTarget = isChoice ? element.closest('label') : null;
+                const box = (labelledTarget || element).getBoundingClientRect();
                 const parent = element.parentNode;
                 const inlineTextFlow =
                     element.tagName === 'A' &&
@@ -155,6 +160,15 @@ def test_homepage_targets_meet_minimum_size(page: Page, live_app: str) -> None:
 def test_ask_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/ask?q=" + QUESTION.replace(" ", "+").replace("?", "%3F"))
     _assert_targets_meet_minimum_size(page, "Ask (indexed hit)")
+
+
+def test_ask_research_checkbox_target_meets_minimum_size(
+    page: Page, live_app_with_research_available: str
+) -> None:
+    page.goto(live_app_with_research_available + "/ask")
+    checkbox = page.locator('input[type="checkbox"][name="quick"]')
+    assert checkbox.is_visible(), "Research-available Ask state did not render the quick checkbox"
+    _assert_targets_meet_minimum_size(page, "Ask (Research available)")
 
 
 def test_ask_no_match_targets_meet_minimum_size(page: Page, live_app: str) -> None:
