@@ -97,17 +97,16 @@ def _has_spacing_exception(index: int, targets: list[_TargetMetrics]) -> bool:
         if other_index == index:
             continue
 
+        nearest_x = min(max(center_x, other["x"]), other["x"] + other["width"])
+        nearest_y = min(max(center_y, other["y"]), other["y"] + other["height"])
+        if hypot(center_x - nearest_x, center_y - nearest_y) < _MINIMUM_RADIUS:
+            return False
+
         if _is_undersized(other):
             other_center_x = other["x"] + other["width"] / 2
             other_center_y = other["y"] + other["height"] / 2
             if hypot(center_x - other_center_x, center_y - other_center_y) < _MINIMUM_SIZE:
                 return False
-            continue
-
-        nearest_x = min(max(center_x, other["x"]), other["x"] + other["width"])
-        nearest_y = min(max(center_y, other["y"]), other["y"] + other["height"])
-        if hypot(center_x - nearest_x, center_y - nearest_y) < _MINIMUM_RADIUS:
-            return False
 
     return True
 
