@@ -1,24 +1,14 @@
-"""Automated coverage for the objectively-checkable part of one more WCAG
-2.2 AA criterion `docs/manual_accessibility_checklist.md` (row 11) previously
-listed as needing a human pass:
+"""Automated coverage for the objectively-checkable part of WCAG 2.2 AA
+criterion 2.5.8 (Target Size Minimum).
 
-- 2.5.8 Target Size (Minimum): pointer-activatable targets should be at
-  least 24x24 CSS px, unless an exception applies. The exceptions that need
-  human/contextual judgment (Equivalent, Essential, adequate Spacing between
-  undersized targets) are out of scope here, but the "Inline" exception --
-  a target that is a plain link inside a sentence or block of text, whose
-  size is dictated by the surrounding text's line-height rather than
-  deliberate touch-target sizing -- is mechanically detectable: such a link
-  renders with `display: inline` (the browser default for `<a>`), whereas
-  every button-styled or nav-styled control in this codebase is deliberately
-  given a block/inline-block/flex display. Checkbox/radio inputs are
-  excluded too (the "User agent control" exception covers an unrestyled
-  native control), though this codebase's only checkbox is gated behind
-  Research capability and does not appear in this fixture environment.
+Pointer-activatable targets should be at least 24x24 CSS px unless a defined
+exception applies. This module exercises both desktop and narrow/mobile
+layouts. It recognizes the Inline exception only when an inline anchor is
+actually embedded in running text, rather than treating CSS `display:inline`
+as sufficient evidence by itself.
 
-This does not close row 11 -- it narrows it to the exceptions that remain
-genuinely contextual (Equivalent, Essential, Spacing) and to drag-style
-interactions (2.5.7), neither of which this module attempts to judge.
+The contextual Equivalent, Essential, and Spacing exceptions remain human
+judgment and are intentionally not inferred here.
 """
 
 from __future__ import annotations
@@ -32,11 +22,6 @@ from tests._browser_e2e_support import EVIDENCE_RECORD_ID, QUESTION
 
 pytestmark = pytest.mark.browser_e2e
 
-# Same focusable-element scope as tests/test_reflow_and_focus_indicators_e2e.py,
-# minus checkbox/radio inputs (WCAG 2.5.8's "User agent control" exception
-# covers an unrestyled native control; this codebase's only checkbox --
-# Ask's Research quick-toggle -- is gated behind Research capability and
-# does not render in this fixture environment).
 _TARGET_SELECTOR = (
     "a[href], button:not([disabled]), "
     "input:not([disabled]):not([type='hidden']):not([type='checkbox']):not([type='radio']), "
@@ -45,12 +30,14 @@ _TARGET_SELECTOR = (
 )
 
 _MINIMUM_SIZE = 24
+_VIEWPORTS = ((1280, 720), (375, 812))
 
 
 class _TargetMetrics(TypedDict):
     display: str
     width: float
     height: float
+    inline_text_flow: bool
 
 
 def _target_metrics(locator: Locator) -> _TargetMetrics:
@@ -60,13 +47,29 @@ def _target_metrics(locator: Locator) -> _TargetMetrics:
             """element => {
                 const style = getComputedStyle(element);
                 const box = element.getBoundingClientRect();
-                return { display: style.display, width: box.width, height: box.height };
+                const parent = element.parentNode;
+                const inlineTextFlow =
+                    element.tagName === 'A' &&
+                    style.display === 'inline' &&
+                    parent &&
+                    Array.from(parent.childNodes).some(node =>
+                        node !== element &&
+                        node.nodeType === Node.TEXT_NODE &&
+                        node.textContent &&
+                        node.textContent.trim().length > 0
+                    );
+                return {
+                    display: style.display,
+                    width: box.width,
+                    height: box.height,
+                    inline_text_flow: Boolean(inlineTextFlow),
+                };
             }"""
         ),
     )
 
 
-def _assert_no_undersized_non_inline_targets(page: Page, page_label: str) -> None:
+def _assert_current_viewport(page: Page, page_label: str, viewport_label: str) -> None:
     handles = page.locator(_TARGET_SELECTOR)
     count = handles.count()
     assert count > 0, f"{page_label} has no pointer targets to check"
@@ -76,10 +79,10 @@ def _assert_no_undersized_non_inline_targets(page: Page, page_label: str) -> Non
         if not element.is_visible():
             continue
         metrics = _target_metrics(element)
-        if metrics["display"] == "inline":
-            # WCAG 2.5.8 "Inline" exception: a plain link inside running
-            # text, sized by line-height rather than deliberate touch-target
-            # sizing.
+        if metrics["inline_text_flow"]:
+            # WCAG 2.5.8 Inline exception: this is specifically an anchor
+            # embedded in surrounding running text, not merely any element
+            # whose computed display happens to be `inline`.
             continue
         if metrics["width"] < _MINIMUM_SIZE or metrics["height"] < _MINIMUM_SIZE:
             description = cast(str, element.evaluate("element => element.outerHTML.slice(0, 120)"))
@@ -88,99 +91,106 @@ def _assert_no_undersized_non_inline_targets(page: Page, page_label: str) -> Non
                 f"display={metrics['display']})"
             )
     assert not failures, (
-        f"{page_label} has {len(failures)} non-inline pointer target(s) smaller than "
-        f"{_MINIMUM_SIZE}x{_MINIMUM_SIZE} CSS px (WCAG 2.5.8 Target Size Minimum):\n\n"
+        f"{page_label} at {viewport_label} has {len(failures)} pointer target(s) smaller than "
+        f"{_MINIMUM_SIZE}x{_MINIMUM_SIZE} CSS px without the mechanically verified "
+        "Inline exception (WCAG 2.5.8 Target Size Minimum):\n\n"
         + "\n".join(failures)
     )
 
 
+def _assert_targets_meet_minimum_size(page: Page, page_label: str) -> None:
+    for width, height in _VIEWPORTS:
+        page.set_viewport_size({"width": width, "height": height})
+        _assert_current_viewport(page, page_label, f"{width}x{height}")
+
+
 def test_homepage_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/")
-    _assert_no_undersized_non_inline_targets(page, "Homepage")
+    _assert_targets_meet_minimum_size(page, "Homepage")
 
 
 def test_ask_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/ask?q=" + QUESTION.replace(" ", "+").replace("?", "%3F"))
-    _assert_no_undersized_non_inline_targets(page, "Ask (indexed hit)")
+    _assert_targets_meet_minimum_size(page, "Ask (indexed hit)")
 
 
 def test_ask_no_match_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/ask?q=does+topical+minoxidil+regrow+hair%3F")
-    _assert_no_undersized_non_inline_targets(page, "Ask (no match)")
+    _assert_targets_meet_minimum_size(page, "Ask (no match)")
 
 
 def test_claim_detail_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/claims/" + EVIDENCE_RECORD_ID)
-    _assert_no_undersized_non_inline_targets(page, "Claim detail")
+    _assert_targets_meet_minimum_size(page, "Claim detail")
 
 
 def test_dashboard_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/dashboard")
-    _assert_no_undersized_non_inline_targets(page, "Evidence Intelligence dashboard")
+    _assert_targets_meet_minimum_size(page, "Evidence Intelligence dashboard")
 
 
 def test_graph_summary_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/graph")
-    _assert_no_undersized_non_inline_targets(page, "Graph summary")
+    _assert_targets_meet_minimum_size(page, "Graph summary")
 
 
 def test_claims_list_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/claims")
-    _assert_no_undersized_non_inline_targets(page, "Claims list")
+    _assert_targets_meet_minimum_size(page, "Claims list")
 
 
 def test_discover_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/discover")
-    _assert_no_undersized_non_inline_targets(page, "Discover")
+    _assert_targets_meet_minimum_size(page, "Discover")
 
 
 def test_discover_with_unavailable_capability_targets_meet_minimum_size(
     page: Page, live_app: str
 ) -> None:
     page.goto(live_app + "/discover?q=GLP-1+receptor+agonist+weight+loss")
-    _assert_no_undersized_non_inline_targets(page, "Discover (capability unavailable)")
+    _assert_targets_meet_minimum_size(page, "Discover (capability unavailable)")
 
 
 def test_about_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/about")
-    _assert_no_undersized_non_inline_targets(page, "About")
+    _assert_targets_meet_minimum_size(page, "About")
 
 
 def test_roadmap_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/roadmap")
-    _assert_no_undersized_non_inline_targets(page, "Roadmap")
+    _assert_targets_meet_minimum_size(page, "Roadmap")
 
 
 def test_roadmap_concept_preview_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/static/concept-preview.html")
-    _assert_no_undersized_non_inline_targets(page, "Roadmap concept preview")
+    _assert_targets_meet_minimum_size(page, "Roadmap concept preview")
 
 
 def test_demo_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/demo")
-    _assert_no_undersized_non_inline_targets(page, "Demo")
+    _assert_targets_meet_minimum_size(page, "Demo")
 
 
 def test_reports_index_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/reports")
-    _assert_no_undersized_non_inline_targets(page, "Reports index")
+    _assert_targets_meet_minimum_size(page, "Reports index")
 
 
 def test_report_view_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/reports/graph")
-    _assert_no_undersized_non_inline_targets(page, "Report view (graph)")
+    _assert_targets_meet_minimum_size(page, "Report view (graph)")
 
 
 def test_unconfirmed_claims_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/unconfirmed-claims")
-    _assert_no_undersized_non_inline_targets(page, "Unconfirmed claims")
+    _assert_targets_meet_minimum_size(page, "Unconfirmed claims")
 
 
 def test_relationship_candidates_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/relationship-candidates")
-    _assert_no_undersized_non_inline_targets(page, "Relationship candidates")
+    _assert_targets_meet_minimum_size(page, "Relationship candidates")
 
 
 def test_paper_detail_targets_meet_minimum_size(page: Page, live_app: str) -> None:
     page.goto(live_app + "/papers/1")
-    _assert_no_undersized_non_inline_targets(page, "Paper detail")
+    _assert_targets_meet_minimum_size(page, "Paper detail")
