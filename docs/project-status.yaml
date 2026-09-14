@@ -95,6 +95,11 @@ verified_repository_state:
       branch: "claude/magical-curie-njjwfl"
       head_sha: "404c23afabdf8164ece7d9feda884641d586bd11"
       note: "Opened by a separate concurrent session, not this repository's continuity automation lineage in this run. All CI green, but 2 unresolved Codex review findings (log injection via unvalidated X-Request-ID; unhandled-exception 500 responses missing correlation headers) block merge per this repository's blocking-comments-resolved policy. This run verified both findings are real and replied with concrete fixes, but could not push to this branch (session branch restriction). A following run (or Jeremy) should apply the two patches from the PR review thread replies, re-run preflight, and merge once green."
+    - number: 167
+      title: "Show an announced error when Ask/Discover is submitted blank"
+      branch: "claude/magical-curie-u5e2tp"
+      head_sha: "bd7c83e"
+      note: "Opened by this run. Full local preflight was GREEN (578 tests) against this exact head before opening. Fresh CI on the pushed commit not yet observed by this run (see CI FOLLOW-UP HARD RULE) -- a following run should check it and merge once genuinely green and mergeable."
     - number: 163
       title: "Add real-browser regression coverage for reduced-motion accessibility"
       note: "Merged as commit 1f59eeb (squash). CI green on merge commit."
@@ -160,7 +165,7 @@ verified_repository_state:
   active_research_report_issue: "#107"
   wip_branch: "claude/magical-curie-u5e2tp"
   wip_branch_has_open_pr: true
-  wip_branch_head: "PENDING_PUSH -- see this run's PR for the exact head SHA; PR number to be reconciled by the follow-up commit below or the next run"
+  wip_branch_head: "bd7c83e"
   open_research_report_pr: null
   stale_unmerged_branches_without_open_prs: "agent/background-research-polling, automation/status-reconcile, orchestrator/activate-compounding-report, orchestrator/compounding-measurement, orchestrator/compounding-metrics-v2, orchestrator/reconcile-permission-fallback -- none owned by an open PR as of this check; not touched this run (out of scope for the selected task, no PR to repair)."
   ci_workflows:
