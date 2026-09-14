@@ -23,7 +23,7 @@ interactions (2.5.7), neither of which this module attempts to judge.
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TypedDict, cast
 
 import pytest
 from playwright.sync_api import Locator, Page
@@ -47,9 +47,15 @@ _TARGET_SELECTOR = (
 _MINIMUM_SIZE = 24
 
 
-def _target_metrics(locator: Locator) -> dict[str, float | str]:
+class _TargetMetrics(TypedDict):
+    display: str
+    width: float
+    height: float
+
+
+def _target_metrics(locator: Locator) -> _TargetMetrics:
     return cast(
-        dict[str, float | str],
+        _TargetMetrics,
         locator.evaluate(
             """element => {
                 const style = getComputedStyle(element);
