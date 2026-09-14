@@ -293,6 +293,31 @@ This closes the automatable half of checklist row 8: whether the resulting
 order is a *sensible* reading/interaction order for a real user remains a
 human judgment call.
 
+## Content on hover or focus (`tests/test_hover_focus_disclosure_e2e.py`)
+
+`docs/manual_accessibility_checklist.md` row 5 (1.4.13 Content on Hover or
+Focus) previously listed the header "Inspect" dropdown as needing a full
+human pass. Whether hover/focus-triggered content is dismissible, hoverable,
+and persistent needs a real user judgment call, but whether the Inspect menu
+is hover/focus-triggered *at all* is a plain, scriptable fact: it is a
+native `<details>/<summary>` disclosure with no `:hover` CSS rule and no
+hover/focus JavaScript listener anywhere in this codebase. This module
+verifies, on the homepage and a second page:
+
+- hovering the `<summary>` never opens the menu;
+- focusing the `<summary>` alone (without an explicit activation) never
+  opens the menu;
+- clicking, and separately pressing Enter while focused, does open it and
+  toggles it back closed.
+
+No violation was found -- the menu only ever opens on an explicit
+activation, which places it outside 1.4.13's scope entirely (content whose
+visibility follows a deliberate user action, not hover or focus, is not what
+this criterion governs). This closes the automatable half of checklist row
+5: if a future addition made *new* content appear from hover or focus (a
+tooltip, a preview), that content's dismissible/hoverable/persistent
+behavior would still need a human pass.
+
 ## Running it
 
 ```
