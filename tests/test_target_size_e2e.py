@@ -3,16 +3,20 @@ criterion 2.5.8 (Target Size Minimum).
 
 Pointer-activatable targets should be at least 24x24 CSS px unless a defined
 exception applies. This module exercises both desktop and narrow/mobile
-layouts. It recognizes the Inline exception only when an inline anchor is
-actually embedded in running text, rather than treating CSS `display:inline`
-as sufficient evidence by itself.
+layouts. It recognizes two mechanically verifiable exceptions:
 
-The contextual Equivalent, Essential, and Spacing exceptions remain human
-judgment and are intentionally not inferred here.
+* Inline: an inline anchor embedded in surrounding running text.
+* Spacing: an undersized target has enough separation that a 24 CSS pixel
+  diameter circle centered on its bounding box does not intersect another
+  target, or the corresponding circle for another undersized target.
+
+The contextual Equivalent and Essential exceptions remain human judgment and
+are intentionally not inferred here.
 """
 
 from __future__ import annotations
 
+from math import hypot
 from typing import TypedDict, cast
 
 import pytest
@@ -30,11 +34,14 @@ _TARGET_SELECTOR = (
 )
 
 _MINIMUM_SIZE = 24
+_MINIMUM_RADIUS = _MINIMUM_SIZE / 2
 _VIEWPORTS = ((1280, 720), (375, 812))
 
 
 class _TargetMetrics(TypedDict):
     display: str
+    x: float
+    y: float
     width: float
     height: float
     inline_text_flow: bool
@@ -60,6 +67,8 @@ def _target_metrics(locator: Locator) -> _TargetMetrics:
                     );
                 return {
                     display: style.display,
+                    x: box.x,
+                    y: box.y,
                     width: box.width,
                     height: box.height,
                     inline_text_flow: Boolean(inlineTextFlow),
@@ -69,31 +78,68 @@ def _target_metrics(locator: Locator) -> _TargetMetrics:
     )
 
 
+def _is_undersized(metrics: _TargetMetrics) -> bool:
+    return metrics["width"] < _MINIMUM_SIZE or metrics["height"] < _MINIMUM_SIZE
+
+
+def _has_spacing_exception(index: int, targets: list[_TargetMetrics]) -> bool:
+    """Return whether target ``index`` meets WCAG 2.5.8's Spacing exception."""
+    target = targets[index]
+    center_x = target["x"] + target["width"] / 2
+    center_y = target["y"] + target["height"] / 2
+
+    for other_index, other in enumerate(targets):
+        if other_index == index:
+            continue
+
+        if _is_undersized(other):
+            other_center_x = other["x"] + other["width"] / 2
+            other_center_y = other["y"] + other["height"] / 2
+            if hypot(center_x - other_center_x, center_y - other_center_y) < _MINIMUM_SIZE:
+                return False
+            continue
+
+        nearest_x = min(max(center_x, other["x"]), other["x"] + other["width"])
+        nearest_y = min(max(center_y, other["y"]), other["y"] + other["height"])
+        if hypot(center_x - nearest_x, center_y - nearest_y) < _MINIMUM_RADIUS:
+            return False
+
+    return True
+
+
 def _assert_current_viewport(page: Page, page_label: str, viewport_label: str) -> None:
     handles = page.locator(_TARGET_SELECTOR)
     count = handles.count()
     assert count > 0, f"{page_label} has no pointer targets to check"
-    failures: list[str] = []
+
+    visible: list[tuple[Locator, _TargetMetrics]] = []
     for index in range(count):
         element = handles.nth(index)
-        if not element.is_visible():
+        if element.is_visible():
+            visible.append((element, _target_metrics(element)))
+
+    targets = [metrics for _, metrics in visible]
+    failures: list[str] = []
+    for index, (element, metrics) in enumerate(visible):
+        if not _is_undersized(metrics):
             continue
-        metrics = _target_metrics(element)
         if metrics["inline_text_flow"]:
-            # WCAG 2.5.8 Inline exception: this is specifically an anchor
-            # embedded in surrounding running text, not merely any element
-            # whose computed display happens to be `inline`.
+            # WCAG 2.5.8 Inline exception: specifically an anchor embedded in
+            # surrounding running text, not merely any display:inline target.
             continue
-        if metrics["width"] < _MINIMUM_SIZE or metrics["height"] < _MINIMUM_SIZE:
-            description = cast(str, element.evaluate("element => element.outerHTML.slice(0, 120)"))
-            failures.append(
-                f"{description} ({metrics['width']:.1f}x{metrics['height']:.1f}px, "
-                f"display={metrics['display']})"
-            )
+        if _has_spacing_exception(index, targets):
+            continue
+
+        description = cast(str, element.evaluate("element => element.outerHTML.slice(0, 120)"))
+        failures.append(
+            f"{description} ({metrics['width']:.1f}x{metrics['height']:.1f}px, "
+            f"display={metrics['display']})"
+        )
+
     assert not failures, (
         f"{page_label} at {viewport_label} has {len(failures)} pointer target(s) smaller than "
-        f"{_MINIMUM_SIZE}x{_MINIMUM_SIZE} CSS px without the mechanically verified "
-        "Inline exception (WCAG 2.5.8 Target Size Minimum):\n\n" + "\n".join(failures)
+        f"{_MINIMUM_SIZE}x{_MINIMUM_SIZE} CSS px without a mechanically verified Inline or "
+        "Spacing exception (WCAG 2.5.8 Target Size Minimum):\n\n" + "\n".join(failures)
     )
 
 
