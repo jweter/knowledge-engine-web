@@ -151,6 +151,12 @@
   </p>
 </form>
 
+{% if empty_query_error %}
+<p class="empty-state" id="discover-empty-query-error" role="alert">
+  Enter a query before pressing Search — the search box was empty.
+</p>
+{% endif %}
+
 {% if error %}
 <p class="empty-state">{{ error }}</p>
 {% endif %}

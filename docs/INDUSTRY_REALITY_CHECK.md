@@ -26,7 +26,7 @@ This is above the level of a portfolio mockup and below the level of a polished,
 | Browser end-to-end testing | 6.0 | `tests/test_browser_e2e.py` (added 2026-09-11) drives the real app with real headless Chromium for the Ask critical path -- homepage load, indexed direct match, citation navigation, no-fabrication miss state, mobile viewport, and (added same day) indexed-path refresh/resume. `tests/test_browser_e2e_auth.py` (added same day) closes real-browser authentication coverage: a real Chromium network stack refuses to render the alpha-gated page with no or wrong credentials and loads it normally with correct ones, complementing the existing `TestClient`-level `tests/test_alpha_auth.py`. Both are wired into `.github/workflows/browser-e2e.yml` on every PR. This pass already caught and fixed two real rendering bugs (see `docs/browser_e2e_testing.md`). Still narrow: research-required/partial-answer/degraded-provider states and durable async-Research-session resume remain unaddressed because exercising them honestly requires real Research capability, which this repository will not fake for coverage; `tests/test_accessibility_e2e.py` and `tests/test_keyboard_navigation_e2e.py` now extend Playwright coverage to `/discover` as well as Ask (see the Accessibility row above), and the CI job is advisory, not yet a required check. |
 | CI / release hygiene | 8.0 | Ruff, mypy, pytest, pip-audit, Docker build and container smoke test are strong. |
 | Security posture | 7.5 | Read-only architecture, password-gated alpha and secret scanning are solid for alpha. Production identity/access control is not yet demonstrated. |
-| Observability / performance | 5.0 | Latency/bottleneck work is recognized but not yet productized. |
+| Observability / performance | 5.5 | `RequestObservabilityMiddleware` (`knowledge_engine_web/observability.py`, added 2026-09-14) now logs method/path/status/duration and stamps every response with an `X-Request-ID`/`X-Response-Time-Ms` pair, independent of Research/AI capability -- previously a plain indexed Ask, Discover, or any other route got zero timing or correlation ID at all, since the only existing latency/funnel reporting (BT-2/BT-6 in `research_jobs.py`/`ask.html`) is gated entirely on an active Research session. Still missing: aggregated first-grounded-evidence/synthesis-ready/provider-degradation timing outside the Research path, and joining this generic request ID with a Research session's own `research_session_id` when both exist on the same request. |
 | Production readiness | 5.0 | Alpha-quality deployment, not a dependable public research service. |
 
 ## What is already professionally strong
@@ -126,7 +126,7 @@ Do not overbuild this before the product flow is ready, but do not confuse alpha
 
 The Web layer should expose client-visible and operator-visible timing for:
 
-- request intake;
+- request intake (now closed generically -- see below);
 - first rendered progress state;
 - first grounded evidence;
 - synthesis ready;
@@ -135,7 +135,18 @@ The Web layer should expose client-visible and operator-visible timing for:
 - retries/timeouts;
 - session resume/reuse.
 
-Frontend and backend telemetry should share a research-session ID so a slow user experience can be traced end to end.
+`RequestObservabilityMiddleware` (added 2026-09-14) closes the "request
+intake" item for every request, not only Research ones: a correlation ID
+(`X-Request-ID`, reusing one the caller supplied or minting a fresh one)
+and a duration (`X-Response-Time-Ms` plus a server log line with
+method/path/status/duration) now exist independent of Research/AI
+capability. The remaining items -- first grounded evidence, synthesis
+ready, final report, provider degradation, retries/timeouts, session
+resume/reuse -- stay Research-path-specific and already have partial
+coverage via BT-2/BT-6 (`research_jobs.py`, rendered in `ask.html`) once a
+Research session exists; they are not yet joined with this generic
+request-level ID. Frontend and backend telemetry should still share one
+ID end to end once that join exists.
 
 ## User-experience standard to aim for
 

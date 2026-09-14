@@ -97,6 +97,7 @@ from knowledge_engine_web.mobile_review_store import (
     read_mobile_review_history,
     record_mobile_review,
 )
+from knowledge_engine_web.observability import RequestObservabilityMiddleware
 from knowledge_engine_web.relationship_reader import (
     list_relationship_records_for_evidence_record_id,
 )
@@ -123,6 +124,11 @@ _STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="Knowledge Engine Web")
 app.add_middleware(AlphaBasicAuthMiddleware)
+# Registered after the auth gate so it wraps outside it (Starlette applies
+# the most-recently-added middleware outermost): every request gets a
+# correlation ID and a logged duration, including responses the auth gate
+# itself produces (e.g. 401), not only requests that reach a route.
+app.add_middleware(RequestObservabilityMiddleware)
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 
@@ -730,11 +736,17 @@ def ask(
     async_research_enabled = settings.async_research_enabled
     question = q.strip()
     if not question:
+        # "q" present in the query string means the visitor actually submitted
+        # the form with a blank/whitespace-only question -- that deserves an
+        # announced error (WCAG 3.3.1), not the same silent blank form a
+        # first-time visit to /ask renders.
+        empty_query_error = "q" in request.query_params
         return templates.TemplateResponse(
             request=request,
             name="ask.html",
             context={
                 "question": "",
+                "empty_query_error": empty_query_error,
                 "results": None,
                 "synthesis_available": synthesis_available,
                 "synthesize_requested": False,
@@ -1036,11 +1048,17 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
     capability = evaluate_discovery_capability(settings)
     query = q.strip()
     if not query:
+        # "q" present in the query string means the visitor actually submitted
+        # the form with a blank/whitespace-only query -- that deserves an
+        # announced error (WCAG 3.3.1), not the same silent blank form a
+        # first-time visit to /discover renders.
+        empty_query_error = "q" in request.query_params
         return templates.TemplateResponse(
             request=request,
             name="discover.html",
             context={
                 "query": "",
+                "empty_query_error": empty_query_error,
                 "discovery_available": capability.available,
                 "result": None,
                 "error": None,
