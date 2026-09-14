@@ -293,6 +293,33 @@ This closes the automatable half of checklist row 8: whether the resulting
 order is a *sensible* reading/interaction order for a real user remains a
 human judgment call.
 
+## Target size (`tests/test_target_size_e2e.py`)
+
+`docs/manual_accessibility_checklist.md` row 11 (2.5.8 Target Size Minimum)
+previously listed the whole criterion as needing a human pass. WCAG's
+24x24 CSS px minimum has several exceptions that genuinely need contextual
+judgment (Equivalent, Essential, Spacing between undersized targets), but
+one -- "Inline," a plain link inside a sentence or block of text whose size
+is dictated by the surrounding text's line-height rather than deliberate
+touch-target sizing -- is mechanically detectable: such a link's computed
+`display` is `inline` (the browser default for an unstyled `<a>`), while
+every button-styled or nav-styled control in this codebase is deliberately
+given a block/inline-block/flex display. This module checks, on every
+page/state `tests/test_accessibility_e2e.py` covers: every visible,
+non-inline pointer target (buttons, nav/footer links, form controls --
+excluding checkbox/radio inputs, which the "User agent control" exception
+covers for an unrestyled native control) is at least 24x24 CSS px.
+
+No real violation was found -- every button/nav/footer control in this
+codebase already meets the minimum size, and the elements initially
+flagged as undersized before the `display: inline` exclusion was added
+were confirmed (by inspecting their computed style directly) to be exactly
+the plain in-sentence links the "Inline" exception describes, not a real
+gap. This closes the automatable half of checklist row 11: the "Equivalent,"
+"Essential," and "Spacing" exceptions, and 2.5.7 Dragging Movements (this
+codebase has no drag-style interaction today, but that has not been
+verified against every future addition), remain human judgment calls.
+
 ## Running it
 
 ```
