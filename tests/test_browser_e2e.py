@@ -72,3 +72,31 @@ def test_ask_page_is_usable_at_a_mobile_viewport(page: Page, live_app: str) -> N
     assert citation_link.is_visible()
     body_width = page.evaluate("document.documentElement.scrollWidth")
     assert body_width <= 390, f"page overflows a 390px viewport (scrollWidth={body_width})"
+
+
+def test_submitting_ask_with_a_blank_question_shows_an_announced_error(
+    page: Page, live_app: str
+) -> None:
+    """Submitting the form with no question previously re-rendered the exact
+    same blank form with zero feedback -- a real first-time visitor gets no
+    indication anything happened. WCAG 3.3.1 (Error Identification) requires
+    the error to be identified, and `role="alert"` requires it be announced
+    to assistive technology, not just visually present.
+    """
+    page.goto(live_app + "/ask")
+    page.get_by_role("button", name="Ask").click()
+    error = page.locator("#ask-empty-query-error")
+    assert error.is_visible()
+    assert error.get_attribute("role") == "alert"
+    assert "search box was empty" in error.inner_text()
+
+
+def test_submitting_discover_with_a_blank_query_shows_an_announced_error(
+    page: Page, live_app: str
+) -> None:
+    page.goto(live_app + "/discover")
+    page.get_by_role("button", name="Search").click()
+    error = page.locator("#discover-empty-query-error")
+    assert error.is_visible()
+    assert error.get_attribute("role") == "alert"
+    assert "search box was empty" in error.inner_text()

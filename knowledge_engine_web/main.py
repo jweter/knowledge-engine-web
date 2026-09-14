@@ -730,11 +730,17 @@ def ask(
     async_research_enabled = settings.async_research_enabled
     question = q.strip()
     if not question:
+        # "q" present in the query string means the visitor actually submitted
+        # the form with a blank/whitespace-only question -- that deserves an
+        # announced error (WCAG 3.3.1), not the same silent blank form a
+        # first-time visit to /ask renders.
+        empty_query_error = "q" in request.query_params
         return templates.TemplateResponse(
             request=request,
             name="ask.html",
             context={
                 "question": "",
+                "empty_query_error": empty_query_error,
                 "results": None,
                 "synthesis_available": synthesis_available,
                 "synthesize_requested": False,
@@ -1036,11 +1042,17 @@ def discover(request: Request, q: str = "") -> HTMLResponse:
     capability = evaluate_discovery_capability(settings)
     query = q.strip()
     if not query:
+        # "q" present in the query string means the visitor actually submitted
+        # the form with a blank/whitespace-only query -- that deserves an
+        # announced error (WCAG 3.3.1), not the same silent blank form a
+        # first-time visit to /discover renders.
+        empty_query_error = "q" in request.query_params
         return templates.TemplateResponse(
             request=request,
             name="discover.html",
             context={
                 "query": "",
+                "empty_query_error": empty_query_error,
                 "discovery_available": capability.available,
                 "result": None,
                 "error": None,
