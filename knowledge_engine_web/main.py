@@ -812,6 +812,7 @@ def ask(
                     client_key=client_key,
                     session_id=research_job_session_id,
                     research_question_id=derive_research_question_id(question),
+                    request_id=getattr(request.state, "request_id", None),
                 )
             except RuntimeError:
                 research_job_session_id = None

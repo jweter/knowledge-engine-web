@@ -140,13 +140,22 @@ intake" item for every request, not only Research ones: a correlation ID
 (`X-Request-ID`, reusing one the caller supplied or minting a fresh one)
 and a duration (`X-Response-Time-Ms` plus a server log line with
 method/path/status/duration) now exist independent of Research/AI
-capability. The remaining items -- first grounded evidence, synthesis
-ready, final report, provider degradation, retries/timeouts, session
-resume/reuse -- stay Research-path-specific and already have partial
-coverage via BT-2/BT-6 (`research_jobs.py`, rendered in `ask.html`) once a
-Research session exists; they are not yet joined with this generic
-request-level ID. Frontend and backend telemetry should still share one
-ID end to end once that join exists.
+capability. `research_jobs.py` (updated 2026-09-15) now carries that same
+correlation ID into an async Research job: the `/ask` route that starts a
+job passes its own `request.state.request_id` through to
+`submit_research_job`, which persists it on `web_research_jobs.request_id`
+and logs it (via `RequestObservabilityMiddleware`'s own logger/stream) on
+job creation and again on the job's terminal outcome
+(`completed`/`failed`) -- so an operator can now trace "which inbound
+request started this Research session, and how did it end" from the
+generic request log alone. The remaining items -- first grounded evidence,
+synthesis ready, provider degradation, retries/timeouts, session
+resume/reuse, and every intermediate progress poll in between creation and
+the terminal outcome -- stay Research-path-specific and already have
+partial coverage via BT-2/BT-6 (`research_jobs.py`, rendered in
+`ask.html`) once a Research session exists, but are not yet themselves
+logged with the correlated request ID; only the two durable milestones
+(job start, job end) are joined so far.
 
 ## User-experience standard to aim for
 

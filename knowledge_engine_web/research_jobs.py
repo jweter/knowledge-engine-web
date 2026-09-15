@@ -34,6 +34,7 @@ from knowledge_engine_web.ai_orchestration import (
     run_guarded_ai_orchestration,
 )
 from knowledge_engine_web.config import Settings
+from knowledge_engine_web.observability import logger as request_logger
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS web_research_jobs (
@@ -44,7 +45,8 @@ CREATE TABLE IF NOT EXISTS web_research_jobs (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     visitor_error TEXT,
-    result_json TEXT
+    result_json TEXT,
+    request_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_web_research_jobs_question
     ON web_research_jobs(research_question_id, created_at);
@@ -72,6 +74,7 @@ class ResearchJobView:
     updated_at: str
     visitor_error: str | None
     result: dict[str, Any] | None
+    request_id: str | None = None
 
     @property
     def terminal(self) -> bool:
@@ -84,8 +87,16 @@ def create_research_job(
     session_id: str,
     research_question_id: str,
     question: str,
+    request_id: str | None = None,
 ) -> ResearchJobView:
-    """Persist a queued job before any background execution starts."""
+    """Persist a queued job before any background execution starts.
+
+    ``request_id`` carries the inbound HTTP correlation ID
+    (`RequestObservabilityMiddleware`'s `X-Request-ID`, when the caller runs
+    behind it) so an operator can join "which request started this Research
+    session" across the generic request log and this durable job -- see
+    `docs/INDUSTRY_REALITY_CHECK.md`'s observability gap #7.
+    """
 
     now = _utc_now()
     connection = _new_connection(session_db_path)
@@ -96,10 +107,10 @@ def create_research_job(
                 """
                 INSERT INTO web_research_jobs (
                     session_id, research_question_id, question, status,
-                    created_at, updated_at, visitor_error, result_json
-                ) VALUES (?, ?, ?, 'queued', ?, ?, NULL, NULL)
+                    created_at, updated_at, visitor_error, result_json, request_id
+                ) VALUES (?, ?, ?, 'queued', ?, ?, NULL, NULL, ?)
                 """,
-                (session_id, research_question_id, question, now, now),
+                (session_id, research_question_id, question, now, now, request_id),
             )
         except sqlite3.IntegrityError as exc:
             raise DuplicateResearchJobError(
@@ -108,6 +119,12 @@ def create_research_job(
         connection.commit()
     finally:
         connection.close()
+
+    request_logger.info(
+        "request_id=%s research_session_id=%s event=research_job_created",
+        request_id,
+        session_id,
+    )
 
     return ResearchJobView(
         session_id=session_id,
@@ -118,6 +135,7 @@ def create_research_job(
         updated_at=now,
         visitor_error=None,
         result=None,
+        request_id=request_id,
     )
 
 
@@ -150,6 +168,12 @@ def read_research_job(session_db_path: str, session_id: str) -> ResearchJobView 
         return None
     result_json = row["result_json"]
     result = json.loads(str(result_json)) if result_json else None
+    # `request_id` was added after this table's original schema; a database
+    # file created before that migration ran (and never since written to,
+    # which is the only thing that triggers `_ensure_schema`) may still lack
+    # the column, so read it defensively rather than assuming it is present.
+    row_keys = row.keys()
+    request_id = row["request_id"] if "request_id" in row_keys else None
     return ResearchJobView(
         session_id=str(row["session_id"]),
         research_question_id=str(row["research_question_id"]),
@@ -159,6 +183,7 @@ def read_research_job(session_db_path: str, session_id: str) -> ResearchJobView 
         updated_at=str(row["updated_at"]),
         visitor_error=str(row["visitor_error"]) if row["visitor_error"] is not None else None,
         result=result,
+        request_id=str(request_id) if request_id is not None else None,
     )
 
 
@@ -169,6 +194,7 @@ def submit_research_job(
     client_key: str,
     session_id: str,
     research_question_id: str,
+    request_id: str | None = None,
 ) -> ResearchJobView:
     """Create a durable queued job and execute the existing AI path in the background."""
 
@@ -177,6 +203,7 @@ def submit_research_job(
         session_id=session_id,
         research_question_id=research_question_id,
         question=question,
+        request_id=request_id,
     )
     with _ACTIVE_LOCK:
         _ACTIVE_SESSION_IDS.add(session_id)
@@ -187,6 +214,7 @@ def submit_research_job(
             question,
             client_key,
             session_id,
+            request_id,
         )
     except RuntimeError:
         with _ACTIVE_LOCK:
@@ -212,8 +240,10 @@ def _execute_research_job(
     question: str,
     client_key: str,
     session_id: str,
+    request_id: str | None = None,
 ) -> None:
     _mark_running(settings.session_db_path, session_id)
+    outcome = "failed"
     try:
         result = run_guarded_ai_orchestration(
             settings,
@@ -222,6 +252,7 @@ def _execute_research_job(
             session_id=session_id,
         )
         _mark_completed(settings.session_db_path, session_id, _presentation_payload(result))
+        outcome = "completed"
     except AIAdmissionError as exc:
         _mark_failed(settings.session_db_path, session_id, exc.visitor_message)
     except AIOrchestrationError as exc:
@@ -237,6 +268,12 @@ def _execute_research_job(
     finally:
         with _ACTIVE_LOCK:
             _ACTIVE_SESSION_IDS.discard(session_id)
+        request_logger.info(
+            "request_id=%s research_session_id=%s event=research_job_%s",
+            request_id,
+            session_id,
+            outcome,
+        )
 
 
 def _presentation_payload(result: WebResearchResult) -> dict[str, Any]:
@@ -319,6 +356,13 @@ def _new_connection(session_db_path: str) -> sqlite3.Connection:
 
 def _ensure_schema(connection: sqlite3.Connection) -> None:
     connection.executescript(_SCHEMA)
+    # `request_id` was added to `web_research_jobs` after this table shipped.
+    # `CREATE TABLE IF NOT EXISTS` above only creates the column for a brand
+    # new database; a table an earlier deploy already created keeps its old
+    # shape until migrated here. Idempotent and safe to run on every write.
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(web_research_jobs)")}
+    if "request_id" not in columns:
+        connection.execute("ALTER TABLE web_research_jobs ADD COLUMN request_id TEXT")
 
 
 def _utc_now() -> str:
