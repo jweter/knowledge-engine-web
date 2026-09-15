@@ -30,11 +30,19 @@ def test_plain_ask_starts_bounded_research_by_default(
         return SimpleNamespace(question=kwargs["question"])
 
     monkeypatch.setattr(main, "submit_research_job", submit)
-    response = TestClient(main.app).get("/ask", params={"q": "a fresh unseen question"})
+    response = TestClient(main.app).get(
+        "/ask",
+        params={"q": "a fresh unseen question"},
+        headers={"X-Request-ID": "caller-supplied-ask-request-id"},
+    )
 
     assert response.status_code == 200
     assert len(calls) == 1
     assert calls[0]["question"] == "a fresh unseen question"
+    # The Research job is correlated with the request that started it (see
+    # `docs/INDUSTRY_REALITY_CHECK.md`'s observability gap #7) so an operator
+    # can join the generic request log with this durable session.
+    assert calls[0]["request_id"] == "caller-supplied-ask-request-id"
     assert "Research is on by default." in response.text
     assert "Research session running" in response.text
     assert "Fast indexed search only" in response.text
