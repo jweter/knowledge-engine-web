@@ -1,6 +1,6 @@
 """Shared pytest fixtures.
 
-Only the real-server/real-Chromium browser E2E fixtures live here today
+Only the real-server/real-Chromium browser E2E fixtures live here
 (`page`, `live_app`). They are defined here, rather than imported into each
 browser E2E test module, so pytest injects them by parameter name without
 ruff's F811 flagging the import as an unused-name "redefinition" -- a known
@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from _pytest.tmpdir import TempPathFactory
 from playwright.sync_api import Browser, Page, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
 
@@ -69,9 +70,17 @@ def page(_browser: Browser) -> Iterator[Page]:
         new_page.close()
 
 
-@pytest.fixture
-def live_app(tmp_path: Path) -> Iterator[str]:
-    """Run the real Web app against isolated, fail-closed fixture authority."""
+@pytest.fixture(scope="module")
+def live_app(tmp_path_factory: TempPathFactory) -> Iterator[str]:
+    """Run one isolated real Web app per browser-test module.
+
+    Browser tests in a module are read-only against the seeded fixture authority,
+    so restarting uvicorn for every individual assertion added substantial CI
+    latency without increasing isolation. A module-scoped server preserves a
+    clean database between modules while keeping the critical-path browser gate
+    small enough to run as required CI.
+    """
+    tmp_path = tmp_path_factory.mktemp("browser-e2e-app")
     _, evidence_path = seed_fixture_data(tmp_path)
     port = free_port()
     base_url = f"http://127.0.0.1:{port}"
