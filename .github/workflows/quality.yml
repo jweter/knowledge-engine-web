@@ -107,6 +107,24 @@ jobs:
           cat pytest.log
           exit 1
 
+      # Keep the complete browser/accessibility suite in Browser E2E (advisory),
+      # but make the minimum real-browser Ask correctness path part of the
+      # existing required Python quality context. The normal unit test step runs
+      # before Chromium installation, so it still self-skips browser_e2e tests
+      # instead of accidentally paying for the full advisory suite twice.
+      - name: Install Chromium for critical browser gate
+        run: poetry run playwright install --with-deps chromium
+
+      - name: Critical real-browser Ask gate
+        run: |
+          poetry run pytest -q \
+            tests/test_browser_e2e.py::test_homepage_loads_the_real_application \
+            tests/test_browser_e2e.py::test_ask_shows_a_direct_indexed_match_and_an_honest_capability_notice \
+            tests/test_browser_e2e.py::test_citation_link_navigates_to_a_real_evidence_record_detail_page \
+            tests/test_browser_e2e.py::test_ask_with_no_matching_evidence_does_not_fabricate_an_answer \
+            tests/test_browser_e2e.py::test_ask_page_is_usable_at_a_mobile_viewport \
+            tests/test_browser_e2e.py::test_submitting_ask_with_a_blank_question_shows_an_announced_error
+
       - name: Audit Python dependencies
         run: poetry run pip-audit
 
