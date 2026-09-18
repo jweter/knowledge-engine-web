@@ -1,7 +1,7 @@
 schema_version: 1
 project: knowledge-engine-web
-updated_at: "2026-09-15T07:50:00Z"
-status_source: "Live GitHub state re-verified 2026-09-15T07:20:00Z (this update, superseding the 2026-09-14T23:40:00Z update). Since that update: PR #174 (WCAG 1.4.1 Use of Color status-text coverage) merged; main's tip was 0aa71f4 (Quality/Docker/Browser-E2E/Control-Plane/Golden-Verification/TruffleHog all green on that exact head) at this run's start, and no PRs were open. This run selected a bounded P5 observability slice instead of continuing the WCAG-checklist pattern: docs/INDUSTRY_REALITY_CHECK.md's item 7 (Observability) explicitly named the remaining gap after PR #166's RequestObservabilityMiddleware landed -- 'Frontend and backend telemetry should still share one ID end to end' between the generic per-request X-Request-ID and the async Research job's own durable session state. Source inspection confirmed research_jobs.py's web_research_jobs table and submit_research_job/create_research_job had no way to carry that ID through, and main.py's /ask route already has request.state.request_id available (set by the already-registered RequestObservabilityMiddleware) at the exact point it calls submit_research_job. Added an optional request_id parameter threaded through create_research_job/submit_research_job/_execute_research_job, persisted it on a new nullable web_research_jobs.request_id column (with a PRAGMA table_info-based idempotent migration in _ensure_schema for a database created before this column existed, and a defensive read in read_research_job for a database that predates the migration and has never since been written to), and added a correlated INFO log line (request_id=... research_session_id=... event=research_job_created/completed/failed) reusing RequestObservabilityMiddleware's own logger/stream. Added 5 new tests (tests/test_research_jobs.py: round-trip, omitted-defaults-to-None, legacy-schema migration, job-creation log correlation, terminal-outcome log correlation; tests/test_ask_research_default.py: the /ask route actually forwards the inbound X-Request-ID). Full local preflight was GREEN (645 tests, format/lint/mypy/pip-audit/diff-hygiene all clean) against the exact head (572203f) before opening this run's PR #175. Per the CI follow-up hard rule, this run confirmed fresh CI triggered on PR #175's head and then stopped -- no subscribe_pr_activity, no self-check-in scheduled. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
+updated_at: "2026-09-18T19:40:00Z"
+status_source: "Live GitHub state re-verified 2026-09-18T18:50:00Z (this update, superseding the stale 2026-09-15T07:50:00Z update, which predated three merges this file had not recorded). Since that update: PR #175 (request-ID/Research-session correlation), #176 (promoted the critical real-browser Ask path into the required Quality workflow), and #177 (bound the Monster runtime-acceptance doc to a machine-checked exact-evidence contract) all merged; main's tip is e15c409 with Quality/Docker/Browser-E2E(advisory)/Control-Plane/Golden-Verification/Reconcile-Live-Status/TruffleHog all green on that exact head, and no PRs are open. This run re-verified all 4 open issues (#93, #107, #140, #160) and found every one blocked on something outside this session's reach, not on unfinished Web code: #93/#107 (Research Report v1 / Monster #79 acceptance) need a real Core+Ollama runtime (paid Render infra is deliberately deferred per the 2026-09-11 product decision; a zero-cost/local runtime is the authoritative path but this sandboxed session has no ollama binary, no local Core checkout, and no way to stand one up -- confirmed by direct check, not assumed); #140 (Mobile Product Reality) needs a human with a physical iPhone; #160 (unattended verification worker) is explicitly held by Core's own in-progress #493 worker-runtime reconciliation per the maintainer's 2026-09-13 comment on that issue, and implementing a competing Web-side adapter now would risk duplicating that work. Per the anti-stall rule this run did not re-attempt any of those four (no new evidence existed since the last documented attempt) and instead ran a full local quality_preflight.py against the exact head (646 tests, format/lint/mypy/pip-audit/diff-hygiene all clean, ~24 min including the Chromium-backed browser-E2E suite) to confirm main is genuinely healthy, then fixed two real doc/reality mismatches PR #176 introduced and never corrected: docs/browser_e2e_testing.md and docs/INDUSTRY_REALITY_CHECK.md's Browser end-to-end testing row both still claimed the browser-E2E CI job was advisory-only, when #176 had already promoted the critical real-browser Ask path into the required Quality workflow itself. This file is a continuity cache and never overrides live repository state, CI, code, or higher-authority roadmap contracts."
 
 product_decisions:
   - decided_at: "2026-09-11"
@@ -86,15 +86,19 @@ automation_contract:
   advisory_review_unavailable_is_not_failure: true
 
 verified_repository_state:
-  checked_at: "2026-09-15T07:20:00Z"
-  note: "This run re-verified live GitHub state first: no PRs were open at start; main's tip was 0aa71f4 with Quality/Docker/Browser-E2E/Control-Plane/Golden-Verification/TruffleHog all green on that exact head. PR #174 (WCAG 1.4.1 Use of Color) merged since the prior update. This run selected docs/INDUSTRY_REALITY_CHECK.md's item 7 (Observability) remaining gap -- joining RequestObservabilityMiddleware's per-request X-Request-ID with the async Research job's durable session -- rather than another manual_accessibility_checklist.md row, since the prior run's own note observed the remaining checklist rows (9, 12, and most of 1/3) are screen-reader judgment calls resisting further mechanical automation. Added an optional request_id parameter on create_research_job/submit_research_job/_execute_research_job, a new nullable web_research_jobs.request_id column with an idempotent PRAGMA table_info migration, a correlated INFO log line on job creation and terminal outcome, and wired main.py's /ask route to pass request.state.request_id through. 5 new tests. Full local preflight was GREEN (645 tests, format/lint/mypy/pip-audit/diff-hygiene all clean) against the exact head (572203f) before opening. Fresh CI was confirmed triggered on PR #175's head; per the CI follow-up hard rule this run then stopped without subscribing or scheduling a check-in."
-  open_prs: 1
+  checked_at: "2026-09-18T18:50:00Z"
+  note: "This run re-verified live GitHub state first: no PRs were open at start; main's tip was e15c409 (PR #177) with Quality/Docker/Browser-E2E(advisory)/Control-Plane/Golden-Verification/Reconcile-Live-Status/TruffleHog all green on that exact head. #175, #176, #177 all merged since the prior (2026-09-15) update, which this file had not recorded. All 4 open issues (#93, #107, #140, #160) were re-checked and found genuinely blocked outside this session's reach -- see status_source above for the exact blocker per issue. This run made no code change; it ran a full local quality_preflight.py against the exact head (646 tests, full gate suite clean, ~24 min) as verification evidence, then corrected two stale doc claims (docs/browser_e2e_testing.md, docs/INDUSTRY_REALITY_CHECK.md) that PR #176 left inconsistent with the CI config it actually shipped. Per the CI follow-up hard rule this run then stopped after confirming fresh CI triggered on this run's PR -- no subscribing, no self-check-in scheduled."
+  open_prs: 0
   open_pr_detail:
+    - number: 177
+      title: "Bind Monster runtime acceptance to exact product evidence"
+      note: "Merged."
+    - number: 176
+      title: "Make critical Ask browser path merge-blocking"
+      note: "Merged. Promoted the minimum real-browser Ask correctness subset of tests/test_browser_e2e.py into the required Quality workflow's checks job; the full advisory browser-e2e.yml suite is unchanged. docs/browser_e2e_testing.md and docs/INDUSTRY_REALITY_CHECK.md were not updated in this PR to reflect that -- fixed by this run (2026-09-18)."
     - number: 175
       title: "Join the request-correlation-ID with async Research sessions"
-      branch: "claude/magical-curie-f5s1cu"
-      head_sha: "572203f"
-      note: "Opened by this run. Full local preflight was GREEN (645 tests) against this exact head before opening. Fresh CI on the pushed commit confirmed triggered but not yet observed complete by this run (see CI FOLLOW-UP HARD RULE) -- a following run should check it and merge once genuinely green and mergeable."
+      note: "Merged."
     - number: 174
       title: "Add regression coverage for WCAG 1.4.1 Use of Color status text"
       note: "Merged."
@@ -186,11 +190,10 @@ verified_repository_state:
     - number: 113
       title: "Make Research the default Ask behavior"
   active_research_report_issue: "#107"
-  wip_branch: "claude/magical-curie-r8slft"
-  wip_branch_has_open_pr: true
-  wip_branch_head: "38afd76"
+  wip_branch: null
+  wip_branch_has_open_pr: false
   open_research_report_pr: null
-  stale_unmerged_branches_without_open_prs: "agent/background-research-polling, automation/status-reconcile, orchestrator/activate-compounding-report, orchestrator/compounding-measurement, orchestrator/compounding-metrics-v2, orchestrator/reconcile-permission-fallback -- none owned by an open PR as of this check; not touched this run (out of scope for the selected task, no PR to repair)."
+  stale_unmerged_branches_without_open_prs: "agent/background-research-polling, automation/status-reconcile, claude/magical-curie-8pr9xe, orchestrator/activate-compounding-report, orchestrator/compounding-measurement, orchestrator/compounding-metrics-v2, orchestrator/reconcile-permission-fallback, rescue/pr-168-head-89de3f35 -- none owned by an open PR as of this check (re-verified 2026-09-18); not touched this run, consistent with branch/ownership discipline (do not modify a branch unless repairing its exact open PR is the selected task)."
   ci_workflows:
     - ".github/workflows/quality.yml"
     - ".github/workflows/browser-e2e.yml"

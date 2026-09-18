@@ -332,11 +332,21 @@ once, or point `KE_WEB_TEST_CHROMIUM_PATH` at an existing Chromium binary.
 ## CI
 
 `.github/workflows/browser-e2e.yml` installs Playwright's Chromium and runs
-this module for real on every PR and push to `main`. It is deliberately
-**not** part of the required `Quality`/`Docker build` checks yet (see
+this module for real on every PR and push to `main`. The full advisory
+suite (indexed-path refresh/resume, mobile viewport, accessibility, keyboard
+navigation, and the rest of this document's coverage) is deliberately
+**not** part of the required `Quality`/`Docker build` checks (see
 `docs/agent-development-policy.md` section 3 and
 `docs/project-status.yaml`'s `automation_contract.required_pr_workflows`):
-this is new infrastructure with a heavier, slower job than the rest of the
-Quality gate, so it runs and reports on every PR without blocking merge
-until it has proven itself stable. Promote it to required once it has run
-green across several PRs.
+it is a heavier, slower job than the rest of the Quality gate, so it runs
+and reports on every PR without blocking merge.
+
+**Update (PR #176):** the minimum real-browser Ask correctness path --
+homepage load, indexed direct match, citation navigation, no-fabrication
+miss state, mobile viewport, and the blank-question error announcement --
+was promoted into the required `Quality` workflow itself (`quality.yml`'s
+`checks` job, "Critical real-browser Ask gate" step), not left waiting on
+"several green runs" of the separate advisory job. That subset of
+`tests/test_browser_e2e.py` now blocks merge; the remainder of this
+module and every other browser-E2E/accessibility module listed above
+remain advisory-only via `browser-e2e.yml`.
