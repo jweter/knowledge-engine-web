@@ -61,8 +61,13 @@ Infrastructure is not considered complete merely because both services show "Liv
 
 ### Definitive acceptance case
 
-Run `jweter/knowledge-engine-ai#79` (Monster Energy / approximately one-year blood-pressure question) through the normal deployed Ask form. Record:
+Run `jweter/knowledge-engine-ai#79` (Monster Energy / approximately one-year blood-pressure question) through the normal deployed Ask form. Before submission, record the exact **Core commit SHA**, **Web commit SHA**, and **AI commit SHA** actually loaded by the runtime; a result without all three component identities is stale/ambiguous evidence and cannot satisfy Product Reality.
 
+For that exact component set, record:
+
+- Core commit SHA;
+- Web commit SHA;
+- AI commit SHA;
 - session ID;
 - time to first grounded information;
 - time to final report;
@@ -74,6 +79,8 @@ Run `jweter/knowledge-engine-ai#79` (Monster Energy / approximately one-year blo
 - explicit missing approximately-one-year direct evidence, if still absent;
 - counter/null evidence;
 - resolved citations and evidence-detail navigation.
+
+The acceptance record must remain fail-closed: missing component identity, missing durable session identity, an unreleased ResearchState, unresolved citations, or absent required evidence disclosures is not a PASS. This manifest is intended to make the unattended/local acceptance lane deterministic about *what evidence must be collected* while leaving scientific synthesis and Product Reality truth with the existing Core/AI/Web authorities.
 
 Research Report v1 is not complete until that deployed case passes the documented acceptance contract.
 
