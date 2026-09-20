@@ -32,3 +32,36 @@ Browser/API integration, grounded-answer rendering, accessibility checks, servic
 Jeremy may test milestones whenever useful, but routine launch checks, repeated browser walkthroughs, log copying, regression verification, and service-connectivity checks should be engineered out of his workflow.
 
 Every recurring manual test is therefore a candidate automation defect: prefer a deterministic assertion, browser automation, fixture/simulator, CI job, unattended worker task, machine-readable result, and durable regression guard over another manual request.
+
+## Implementation status (issue #160)
+
+`knowledge_engine_web/unattended_worker.py` consumes the coordinated `WorkerRequest`/`WorkerResult`
+contract anchored by `knowledge-engine-core` issue #493. Web vendors the contract in
+`knowledge_engine_web/unattended_verification_contract.py` (field-for-field identical to Core's copy)
+rather than importing Core as a library, so a request/result JSON document produced by either
+repository's worker validates against the other's schema unchanged; keep both copies in sync.
+
+Given a `WorkerRequest` naming `jweter/knowledge-engine-web`, an exact branch/SHA, and an
+`environment_id`, the worker binds to that exact local checkout (refusing a wrong branch, a
+mismatched SHA, or any dirty/untracked file before attesting identity), then executes the
+requested checks:
+
+- `preflight` — runs `engineering/preflight.py` (the same canonical gate this document's
+  `FAST_GATE -> exact-head preflight` path already requires) and reports `PASS`/`FAIL` plus a
+  sanitized log tail on failure.
+- `ollama_health` — probes the loopback Ollama service Research capability depends on and reports
+  `PASS`/`ENVIRONMENT_FAILURE`.
+
+A stale process lock is reclaimed automatically; secrets, absolute local paths, and the home
+directory are stripped from every summary before it is written or published. A sanitized
+`PASS`/`FAIL`/`REVIEW_REQUIRED`/`PRODUCT_REALITY_REQUIRED`/`ENVIRONMENT_FAILURE` result (exact
+commit, status, failure class, completed-at timestamp, bounded summary — never the request ID,
+environment ID, or raw logs) is posted to issue #160 as best-effort remote observability when a
+Windows worker has `gh` available (`unattended_worker_publication.py`, mirroring Core's own
+issue-#493 publisher).
+
+This is a deliberately bounded first slice: automating real browser launch, service-connectivity,
+grounded-answer rendering, accessibility/DOM assertions, and screenshot evidence against a live Ask
+flow (this issue's full acceptance scope) is materially larger and remains a separate follow-up,
+matching Core issue #493's own precedent of starting with `preflight`/`ollama_health` before adding
+checks incrementally.
