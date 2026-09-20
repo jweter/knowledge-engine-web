@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "authority": {
+    "vision_completion": [
+      "README.md"
+    ],
+    "roadmap": [
+      "docs/federated_discovery_transparency_roadmap.md",
+      "docs/ask_synthesis_availability_plan.md"
+    ],
+    "architecture": [
+      "README.md"
+    ]
+  }
+}
