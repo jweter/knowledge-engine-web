@@ -86,6 +86,18 @@ def test_sanitize_text_removes_url_embedded_credentials(tmp_path: Path) -> None:
     assert "<REDACTED>" in sanitized
 
 
+def test_sanitize_text_removes_unquoted_bearer_token(tmp_path: Path) -> None:
+    # Raw HTTP header traces (curl -v, requests/urllib debug logs, git's
+    # GIT_CURL_VERBOSE output) render "Authorization: Bearer <token>" unquoted.
+    # The unquoted fallback previously only consumed the "Bearer" scheme word,
+    # leaving the actual credential exposed in the sanitized text.
+    text = 'curl -H "Authorization: Bearer example-not-a-real-secret-000111"'
+    sanitized = worker.sanitize_text(text, repo_root=tmp_path)
+    assert "example-not-a-real-secret-000111" not in sanitized
+    assert "Bearer" not in sanitized
+    assert "<REDACTED>" in sanitized
+
+
 def test_sanitize_text_leaves_unrelated_key_value_text_alone(tmp_path: Path) -> None:
     text = "primary_key: 42 tokenizer_output=fine"
     sanitized = worker.sanitize_text(text, repo_root=tmp_path)
