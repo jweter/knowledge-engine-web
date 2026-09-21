@@ -28,19 +28,22 @@ OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 # Ollama reachability probe (Research capability depends on a local Ollama runtime).
 # "browser_ask" (below) is the second slice: real browser launch, real service
 # connectivity, and grounded-answer/DOM assertions against the critical Ask path.
-# Full accessibility/auth/keyboard-navigation browser coverage and a live deployed
-# target (rather than an isolated local fixture server) remain a further follow-up,
-# matching knowledge-engine-core issue #493's own precedent of adding checks
+# "browser_e2e" is the third slice: the full `browser_e2e`-marked suite (accessibility/
+# axe-core, alpha-auth, keyboard navigation, focus order, reduced motion, target size,
+# and the rest of the same real-headless-Chromium coverage already run advisory-only by
+# .github/workflows/browser-e2e.yml). Screenshot evidence and exercising a live
+# *deployed* target (rather than an isolated local fixture server) remain a further
+# follow-up, matching knowledge-engine-core issue #493's own precedent of adding checks
 # incrementally rather than in one unbounded slice.
-AUTHORIZED_CHECKS = frozenset({"preflight", "ollama_health", "browser_ask"})
+AUTHORIZED_CHECKS = frozenset({"preflight", "ollama_health", "browser_ask", "browser_e2e"})
 WINDOWS_CREATE_NEW_PROCESS_GROUP = 0x00000200
 
 # The critical real-browser Ask-path subset already promoted to required CI in
 # .github/workflows/quality.yml's `checks` job. Kept identical to that list so the
 # unattended worker exercises exactly the same merge-blocking evidence locally;
 # update both together. The broader browser_e2e marker (accessibility, alpha-auth,
-# keyboard navigation) runs only in the separate advisory browser-e2e.yml workflow
-# and is out of scope for this bounded slice.
+# keyboard navigation, and the rest of .github/workflows/browser-e2e.yml's advisory
+# suite) is covered separately by the "browser_e2e" check/run_browser_e2e below.
 BROWSER_ASK_TESTS = (
     "tests/test_browser_e2e.py::test_homepage_loads_the_real_application",
     "tests/test_browser_e2e.py::test_ask_shows_a_direct_indexed_match_and_an_honest_capability_notice",
@@ -443,6 +446,77 @@ def run_browser_ask(
     )
 
 
+def run_browser_e2e(
+    repo_root: Path, state_dir: Path, timeout_seconds: int
+) -> tuple[WorkerResultStatus, str, str | None]:
+    """Run the full ``browser_e2e``-marked suite with a real headless-Chromium browser.
+
+    Issue #160's third bounded slice: runs every test carrying ``pytest.mark.browser_e2e``
+    (the same marker ``.github/workflows/browser-e2e.yml`` already runs advisory-only),
+    covering accessibility/axe-core, alpha-auth, keyboard navigation, focus order, reduced
+    motion, target size, and the rest of ``run_browser_ask``'s critical-path subset. Uses
+    the same self-skip-vs-fail distinction ``run_browser_ask`` established: those tests
+    self-skip (not fail) when no usable Chromium executable is present, so the worker
+    parses the run's JUnit report rather than trusting the bare exit code.
+    """
+
+    log_path = state_dir / "logs" / "browser-e2e.log"
+    junit_path = state_dir / "browser-e2e-junit.xml"
+    code, duration, timed_out = run_logged(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-p",
+            "no:cacheprovider",
+            f"--junitxml={junit_path}",
+            "-v",
+            "-m",
+            "browser_e2e",
+        ],
+        cwd=repo_root,
+        log_path=log_path,
+        timeout_seconds=float(timeout_seconds),
+    )
+    if timed_out:
+        return "ENVIRONMENT_FAILURE", "Browser E2E suite check timed out.", "ENVIRONMENT_FAILURE"
+
+    counts = _parse_junit_counts(junit_path)
+    if counts is None:
+        tail = log_tail(log_path, repo_root=repo_root)
+        summary = (
+            f"Browser E2E suite check produced no readable JUnit report after {duration:.3f}s."
+        )
+        if tail:
+            summary += f" Last output: {tail[:1200]}"
+        return "ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"
+
+    tests, failures, errors, skipped = counts
+    if tests == 0 or skipped >= tests:
+        tail = log_tail(log_path, repo_root=repo_root)
+        summary = (
+            f"Browser E2E suite check found no usable Chromium; all {tests} test(s) skipped "
+            f"after {duration:.3f}s."
+        )
+        if tail:
+            summary += f" Last output: {tail[:1200]}"
+        return "ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"
+    if code != 0 or failures or errors:
+        tail = log_tail(log_path, repo_root=repo_root)
+        summary = (
+            f"Browser E2E suite check failed after {duration:.3f}s "
+            f"({failures} failure(s), {errors} error(s) of {tests})."
+        )
+        if tail:
+            summary += f" Last output: {tail[:1200]}"
+        return "FAIL", summary, "TEST_FAILURE"
+    return (
+        "PASS",
+        f"Browser E2E suite check passed in {duration:.3f}s ({tests} real-browser test(s)).",
+        None,
+    )
+
+
 def _aggregate_status(statuses: list[WorkerResultStatus]) -> WorkerResultStatus:
     if "FAIL" in statuses:
         return "FAIL"
@@ -500,6 +574,8 @@ def execute_request(
             status, summary, failure_class = run_preflight(repo_root, state_dir, timeout_seconds)
         elif check == "browser_ask":
             status, summary, failure_class = run_browser_ask(repo_root, state_dir, timeout_seconds)
+        elif check == "browser_e2e":
+            status, summary, failure_class = run_browser_e2e(repo_root, state_dir, timeout_seconds)
         else:
             status, summary, failure_class = run_ollama_health(timeout_seconds)
         statuses.append(status)
