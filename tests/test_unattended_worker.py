@@ -98,6 +98,41 @@ def test_sanitize_text_removes_unquoted_bearer_token(tmp_path: Path) -> None:
     assert "<REDACTED>" in sanitized
 
 
+@pytest.mark.parametrize(
+    "auth_header",
+    [
+        # Basic auth: base64(user:pass) is the actual credential.
+        "Authorization: Basic dXNlcjpzdXBlcnNlY3JldHBhc3N3b3Jk",
+        # Digest auth: the response hash is proof of password knowledge.
+        'Authorization: Digest username="x", response="deadbeefcafefeed"',
+        # AWS SigV4: multi-token scheme, credential/signature after the scheme word.
+        "Authorization: AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/"
+        "20260921/us-east-1/s3/aws4_request, SignedHeaders=host, "
+        "Signature=abcdef0123456789",
+        # NTLM: base64 security-blob credential.
+        "Authorization: NTLM TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAGAbEdAAAADw==",
+    ],
+)
+def test_sanitize_text_removes_unquoted_non_bearer_scheme_credentials(
+    tmp_path: Path, auth_header: str
+) -> None:
+    # PR #184 fixed the leak for the "Bearer" scheme specifically, but the same
+    # unquoted "Authorization: <scheme> <credential>" shape leaks the credential
+    # for every other scheme word too -- the fallback must not special-case one
+    # scheme name.
+    text = f'curl -H "{auth_header}"'
+    sanitized = worker.sanitize_text(text, repo_root=tmp_path)
+    assert "REDACTED" in sanitized
+    for leaked in (
+        "dXNlcjpzdXBlcnNlY3JldHBhc3N3b3Jk",
+        "deadbeefcafefeed",
+        "AKIAIOSFODNN7EXAMPLE",
+        "abcdef0123456789",
+        "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAGAbEdAAAADw==",
+    ):
+        assert leaked not in sanitized
+
+
 def test_sanitize_text_leaves_unrelated_key_value_text_alone(tmp_path: Path) -> None:
     text = "primary_key: 42 tokenizer_output=fine"
     sanitized = worker.sanitize_text(text, repo_root=tmp_path)

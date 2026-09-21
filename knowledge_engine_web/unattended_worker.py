@@ -58,13 +58,20 @@ BROWSER_ASK_TESTS = (
 # whether the key/value pair is written bare ("token=abc"), as a JSON member
 # ('"token": "abc"'), or as a Python dict repr ("'token': 'abc'"). The value
 # alternation prefers a quoted span (which may contain internal whitespace,
-# e.g. "Bearer <token>"); the unquoted fallback also swallows a leading
-# "Bearer " scheme (as raw, unquoted HTTP header traces render it, e.g. from
-# curl/requests debug logs) so the actual credential after it is not left
-# exposed as trailing unmatched text.
+# e.g. "Bearer <token>"); the unquoted fallback consumes the rest of the line
+# rather than a single whitespace-delimited token. Raw, unquoted HTTP header
+# traces (curl -v, requests/urllib debug logs, GIT_CURL_VERBOSE output) render
+# "Authorization: <scheme> <credential>" with a scheme word before the actual
+# secret -- and that scheme is not always "Bearer" (Basic, Digest, NTLM,
+# Negotiate, and multi-token schemes like "AWS4-HMAC-SHA256 Credential=..."
+# all appear in the wild). Special-casing one scheme word left every other
+# scheme's credential exposed as trailing unmatched text, so once a line is
+# known to carry an unquoted secret assignment the whole remainder of that
+# line is treated as sensitive and redacted, matching this file's fail-closed
+# posture elsewhere (see validate_checkout).
 _SECRET_KEY_VALUE = re.compile(
     r"(?i)([\"']?)((?:[A-Za-z0-9]+[_-])*(?:authorization|api[_-]?key|token|password))(?(1)\1)"
-    r"\s*[:=]\s*(?:([\"'])(.*?)\3|(?:bearer\s+)?\S+)"
+    r"\s*[:=]\s*(?:([\"'])(.*?)\3|\S[^\r\n]*)"
 )
 # Strips credentials embedded in a URL's userinfo component (scheme://user:pass@host).
 _URL_CREDENTIALS = re.compile(r"(?i)(://)[^\s/@]+:[^\s/@]+@")
