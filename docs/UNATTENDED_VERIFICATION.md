@@ -60,6 +60,12 @@ requested checks:
   worker parses the run's JUnit report rather than trusting the bare exit code: if every test
   skipped (no usable Chromium) or no report was produced at all, the check reports
   `ENVIRONMENT_FAILURE` rather than a false `PASS`; a real assertion failure reports `FAIL`.
+- `browser_e2e` — runs every test carrying `pytest.mark.browser_e2e` (the same marker
+  `.github/workflows/browser-e2e.yml` already runs advisory-only): accessibility/axe-core, alpha-auth,
+  keyboard navigation, character-key shortcuts, focus order, focus/hover disclosure, reduced motion,
+  reflow/focus indicators, target size, and heading/landmark structure, on top of the same base
+  real-browser Ask-path coverage `browser_ask` exercises. Uses the identical self-skip-vs-fail JUnit
+  distinction `browser_ask` established.
 
 A stale process lock is reclaimed automatically; secrets, absolute local paths, and the home
 directory are stripped from every summary before it is written or published. A sanitized
@@ -69,8 +75,8 @@ environment ID, or raw logs) is posted to issue #160 as best-effort remote obser
 Windows worker has `gh` available (`unattended_worker_publication.py`, mirroring Core's own
 issue-#493 publisher).
 
-`preflight` and `ollama_health` were a deliberately bounded first slice; `browser_ask` is the second,
-matching Core issue #493's own precedent of adding checks incrementally rather than in one unbounded
-slice. Remaining scope this issue still names but `browser_ask` does not cover: the broader
-`browser_e2e` marker's accessibility/alpha-auth/keyboard-navigation coverage, screenshot evidence,
-and exercising a live *deployed* target rather than an isolated local fixture server.
+`preflight` and `ollama_health` were a deliberately bounded first slice; `browser_ask` was the
+second; `browser_e2e` is the third, matching Core issue #493's own precedent of adding checks
+incrementally rather than in one unbounded slice. Remaining scope this issue still names but no
+current check covers: screenshot evidence and exercising a live *deployed* target rather than an
+isolated local fixture server.

@@ -417,6 +417,114 @@ def test_browser_ask_check_is_dispatched_in_execute_request(
     assert result.summary == "browser_ask: browser ask ok"
 
 
+def test_run_browser_e2e_all_skipped_is_environment_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-e2e-junit.xml", tests=120, skipped=120)
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (0, 1.0, False))
+
+    status, summary, failure_class = worker.run_browser_e2e(tmp_path, state_dir, 30)
+
+    assert status == "ENVIRONMENT_FAILURE"
+    assert failure_class == "ENVIRONMENT_FAILURE"
+    assert "no usable Chromium" in summary
+
+
+def test_run_browser_e2e_missing_report_is_environment_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (0, 1.0, False))
+
+    status, summary, failure_class = worker.run_browser_e2e(tmp_path, tmp_path / "state", 30)
+
+    assert status == "ENVIRONMENT_FAILURE"
+    assert failure_class == "ENVIRONMENT_FAILURE"
+    assert "no readable JUnit report" in summary
+
+
+def test_run_browser_e2e_timeout_is_environment_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (124, 30.0, True))
+
+    status, summary, failure_class = worker.run_browser_e2e(tmp_path, tmp_path / "state", 30)
+
+    assert status == "ENVIRONMENT_FAILURE"
+    assert failure_class == "ENVIRONMENT_FAILURE"
+    assert "timed out" in summary
+
+
+def test_run_browser_e2e_reports_fail_on_real_assertion_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-e2e-junit.xml", tests=120, failures=2, skipped=0)
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (1, 5.0, False))
+
+    status, summary, failure_class = worker.run_browser_e2e(tmp_path, state_dir, 30)
+
+    assert status == "FAIL"
+    assert failure_class == "TEST_FAILURE"
+    assert "2 failure(s), 0 error(s) of 120" in summary
+
+
+def test_run_browser_e2e_reports_pass_when_every_test_ran(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-e2e-junit.xml", tests=120, skipped=0)
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (0, 5.0, False))
+
+    status, summary, failure_class = worker.run_browser_e2e(tmp_path, state_dir, 30)
+
+    assert status == "PASS"
+    assert failure_class is None
+    assert "120 real-browser test(s)" in summary
+
+
+def test_run_browser_e2e_uses_the_browser_e2e_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-e2e-junit.xml", tests=1, skipped=0)
+    captured: dict[str, object] = {}
+
+    def fake_run_logged(command: list[str], **kwargs: object) -> tuple[int, float, bool]:
+        captured["command"] = command
+        return (0, 1.0, False)
+
+    monkeypatch.setattr(worker, "run_logged", fake_run_logged)
+
+    worker.run_browser_e2e(tmp_path, state_dir, 30)
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert command[-2:] == ["-m", "browser_e2e"]
+
+
+def test_browser_e2e_check_is_dispatched_in_execute_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(worker, "validate_checkout", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        worker,
+        "run_browser_e2e",
+        lambda repo_root, state_dir, timeout: ("PASS", "browser e2e ok", None),
+    )
+
+    result = worker.execute_request(
+        request(requested_checks=("browser_e2e",)),
+        repo_root=tmp_path,
+        state_dir=tmp_path / "state",
+        environment_id="jeremy-laptop",
+        timeout_seconds=30,
+    )
+
+    assert result.status == "PASS"
+    assert result.summary == "browser_e2e: browser e2e ok"
+
+
 def test_unsupported_check_returns_review_required_without_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
