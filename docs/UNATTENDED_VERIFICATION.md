@@ -51,6 +51,15 @@ requested checks:
   sanitized log tail on failure.
 - `ollama_health` — probes the loopback Ollama service Research capability depends on and reports
   `PASS`/`ENVIRONMENT_FAILURE`.
+- `browser_ask` — runs the critical real-Chromium Ask-path tests already promoted to required CI
+  (`BROWSER_ASK_TESTS` in `unattended_worker.py`, kept identical to the subset named in
+  `.github/workflows/quality.yml`'s `checks` job): real browser launch, a real local server against
+  an isolated fixture corpus, grounded "Direct match" answer rendering, citation navigation, an
+  honest no-match response, mobile-viewport rendering, and an announced blank-submission error.
+  Those tests self-skip rather than fail when no usable Chromium executable is present, so the
+  worker parses the run's JUnit report rather than trusting the bare exit code: if every test
+  skipped (no usable Chromium) or no report was produced at all, the check reports
+  `ENVIRONMENT_FAILURE` rather than a false `PASS`; a real assertion failure reports `FAIL`.
 
 A stale process lock is reclaimed automatically; secrets, absolute local paths, and the home
 directory are stripped from every summary before it is written or published. A sanitized
@@ -60,8 +69,8 @@ environment ID, or raw logs) is posted to issue #160 as best-effort remote obser
 Windows worker has `gh` available (`unattended_worker_publication.py`, mirroring Core's own
 issue-#493 publisher).
 
-This is a deliberately bounded first slice: automating real browser launch, service-connectivity,
-grounded-answer rendering, accessibility/DOM assertions, and screenshot evidence against a live Ask
-flow (this issue's full acceptance scope) is materially larger and remains a separate follow-up,
-matching Core issue #493's own precedent of starting with `preflight`/`ollama_health` before adding
-checks incrementally.
+`preflight` and `ollama_health` were a deliberately bounded first slice; `browser_ask` is the second,
+matching Core issue #493's own precedent of adding checks incrementally rather than in one unbounded
+slice. Remaining scope this issue still names but `browser_ask` does not cover: the broader
+`browser_e2e` marker's accessibility/alpha-auth/keyboard-navigation coverage, screenshot evidence,
+and exercising a live *deployed* target rather than an isolated local fixture server.

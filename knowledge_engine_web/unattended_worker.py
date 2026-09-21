@@ -11,6 +11,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ElementTree
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,11 +26,29 @@ MAX_TIMEOUT_SECONDS = 7200
 OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 # Bounded first slice of issue #160: canonical repository preflight plus a loopback
 # Ollama reachability probe (Research capability depends on a local Ollama runtime).
-# Browser/service Ask-flow automation is materially larger scope and is a deliberate,
-# separate follow-up slice, matching knowledge-engine-core issue #493's own precedent
-# of starting with "preflight"/"ollama_health" before adding checks incrementally.
-AUTHORIZED_CHECKS = frozenset({"preflight", "ollama_health"})
+# "browser_ask" (below) is the second slice: real browser launch, real service
+# connectivity, and grounded-answer/DOM assertions against the critical Ask path.
+# Full accessibility/auth/keyboard-navigation browser coverage and a live deployed
+# target (rather than an isolated local fixture server) remain a further follow-up,
+# matching knowledge-engine-core issue #493's own precedent of adding checks
+# incrementally rather than in one unbounded slice.
+AUTHORIZED_CHECKS = frozenset({"preflight", "ollama_health", "browser_ask"})
 WINDOWS_CREATE_NEW_PROCESS_GROUP = 0x00000200
+
+# The critical real-browser Ask-path subset already promoted to required CI in
+# .github/workflows/quality.yml's `checks` job. Kept identical to that list so the
+# unattended worker exercises exactly the same merge-blocking evidence locally;
+# update both together. The broader browser_e2e marker (accessibility, alpha-auth,
+# keyboard navigation) runs only in the separate advisory browser-e2e.yml workflow
+# and is out of scope for this bounded slice.
+BROWSER_ASK_TESTS = (
+    "tests/test_browser_e2e.py::test_homepage_loads_the_real_application",
+    "tests/test_browser_e2e.py::test_ask_shows_a_direct_indexed_match_and_an_honest_capability_notice",
+    "tests/test_browser_e2e.py::test_citation_link_navigates_to_a_real_evidence_record_detail_page",
+    "tests/test_browser_e2e.py::test_ask_with_no_matching_evidence_does_not_fabricate_an_answer",
+    "tests/test_browser_e2e.py::test_ask_page_is_usable_at_a_mobile_viewport",
+    "tests/test_browser_e2e.py::test_submitting_ask_with_a_blank_question_shows_an_announced_error",
+)
 
 # Matches a secret-flavored key (optionally prefixed with other identifier
 # segments, e.g. "GITHUB_TOKEN" or "DATABASE_PASSWORD") followed by its value,
@@ -330,6 +349,100 @@ def run_ollama_health(timeout_seconds: int) -> tuple[WorkerResultStatus, str, st
     )
 
 
+def _parse_junit_counts(path: Path) -> tuple[int, int, int, int] | None:
+    """Return ``(tests, failures, errors, skipped)`` from a pytest JUnit XML report.
+
+    Returns ``None`` when the report is missing or unreadable (the run crashed
+    before pytest could write it), which callers must treat as unproven rather
+    than assuming pass or fail.
+    """
+
+    try:
+        root = ElementTree.parse(path).getroot()
+    except (OSError, ElementTree.ParseError):
+        return None
+    suite = root if root.tag == "testsuite" else root.find("testsuite")
+    if suite is None:
+        return None
+    try:
+        return (
+            int(suite.get("tests", "0")),
+            int(suite.get("failures", "0")),
+            int(suite.get("errors", "0")),
+            int(suite.get("skipped", "0")),
+        )
+    except ValueError:
+        return None
+
+
+def run_browser_ask(
+    repo_root: Path, state_dir: Path, timeout_seconds: int
+) -> tuple[WorkerResultStatus, str, str | None]:
+    """Exercise the real Ask flow with a real headless-Chromium browser.
+
+    Issue #160's second bounded slice: runs the same critical real-browser Ask-path
+    tests promoted to required CI (``BROWSER_ASK_TESTS``) against an isolated local
+    server/fixture corpus, the same pattern ``tests/test_browser_e2e.py`` already
+    uses. Those tests self-skip (not fail) when no usable Chromium executable is
+    present, so a naive exit-code check cannot tell a genuine pass from an
+    environment with no browser at all; the JUnit report's per-outcome counts make
+    that distinction explicit.
+    """
+
+    log_path = state_dir / "logs" / "browser-ask.log"
+    junit_path = state_dir / "browser-ask-junit.xml"
+    code, duration, timed_out = run_logged(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-p",
+            "no:cacheprovider",
+            f"--junitxml={junit_path}",
+            "-v",
+            *BROWSER_ASK_TESTS,
+        ],
+        cwd=repo_root,
+        log_path=log_path,
+        timeout_seconds=float(timeout_seconds),
+    )
+    if timed_out:
+        return "ENVIRONMENT_FAILURE", "Browser Ask-flow check timed out.", "ENVIRONMENT_FAILURE"
+
+    counts = _parse_junit_counts(junit_path)
+    if counts is None:
+        tail = log_tail(log_path, repo_root=repo_root)
+        summary = f"Browser Ask-flow check produced no readable JUnit report after {duration:.3f}s."
+        if tail:
+            summary += f" Last output: {tail[:1200]}"
+        return "ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"
+
+    tests, failures, errors, skipped = counts
+    if tests == 0 or skipped >= tests:
+        tail = log_tail(log_path, repo_root=repo_root)
+        summary = (
+            f"Browser Ask-flow check found no usable Chromium; all {tests} test(s) skipped "
+            f"after {duration:.3f}s."
+        )
+        if tail:
+            summary += f" Last output: {tail[:1200]}"
+        return "ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"
+    if code != 0 or failures or errors:
+        tail = log_tail(log_path, repo_root=repo_root)
+        summary = (
+            f"Browser Ask-flow check failed after {duration:.3f}s "
+            f"({failures} failure(s), {errors} error(s) of {tests})."
+        )
+        if tail:
+            summary += f" Last output: {tail[:1200]}"
+        return "FAIL", summary, "TEST_FAILURE"
+    return (
+        "PASS",
+        f"Browser Ask-flow check passed in {duration:.3f}s ({tests} real-browser test(s)).",
+        None,
+    )
+
+
 def _aggregate_status(statuses: list[WorkerResultStatus]) -> WorkerResultStatus:
     if "FAIL" in statuses:
         return "FAIL"
@@ -385,6 +498,8 @@ def execute_request(
     for check in request.requested_checks:
         if check == "preflight":
             status, summary, failure_class = run_preflight(repo_root, state_dir, timeout_seconds)
+        elif check == "browser_ask":
+            status, summary, failure_class = run_browser_ask(repo_root, state_dir, timeout_seconds)
         else:
             status, summary, failure_class = run_ollama_health(timeout_seconds)
         statuses.append(status)

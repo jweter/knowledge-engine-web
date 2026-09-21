@@ -302,6 +302,121 @@ def test_run_preflight_missing_script_is_review_required(tmp_path: Path) -> None
     assert "engineering/preflight.py is missing" in summary
 
 
+def _write_junit_report(
+    path: Path, *, tests: int, failures: int = 0, errors: int = 0, skipped: int = 0
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f'<testsuites><testsuite tests="{tests}" failures="{failures}" '
+        f'errors="{errors}" skipped="{skipped}"></testsuite></testsuites>',
+        encoding="utf-8",
+    )
+
+
+def test_parse_junit_counts_reads_testsuite_totals(tmp_path: Path) -> None:
+    path = tmp_path / "report.xml"
+    _write_junit_report(path, tests=6, failures=1, errors=0, skipped=2)
+    assert worker._parse_junit_counts(path) == (6, 1, 0, 2)
+
+
+def test_parse_junit_counts_missing_file_returns_none(tmp_path: Path) -> None:
+    assert worker._parse_junit_counts(tmp_path / "missing.xml") is None
+
+
+def test_parse_junit_counts_malformed_xml_returns_none(tmp_path: Path) -> None:
+    path = tmp_path / "report.xml"
+    path.write_text("not xml", encoding="utf-8")
+    assert worker._parse_junit_counts(path) is None
+
+
+def test_run_browser_ask_all_skipped_is_environment_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-ask-junit.xml", tests=6, skipped=6)
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (0, 1.0, False))
+
+    status, summary, failure_class = worker.run_browser_ask(tmp_path, state_dir, 30)
+
+    assert status == "ENVIRONMENT_FAILURE"
+    assert failure_class == "ENVIRONMENT_FAILURE"
+    assert "no usable Chromium" in summary
+
+
+def test_run_browser_ask_missing_report_is_environment_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (0, 1.0, False))
+
+    status, summary, failure_class = worker.run_browser_ask(tmp_path, tmp_path / "state", 30)
+
+    assert status == "ENVIRONMENT_FAILURE"
+    assert failure_class == "ENVIRONMENT_FAILURE"
+    assert "no readable JUnit report" in summary
+
+
+def test_run_browser_ask_timeout_is_environment_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (124, 30.0, True))
+
+    status, summary, failure_class = worker.run_browser_ask(tmp_path, tmp_path / "state", 30)
+
+    assert status == "ENVIRONMENT_FAILURE"
+    assert failure_class == "ENVIRONMENT_FAILURE"
+    assert "timed out" in summary
+
+
+def test_run_browser_ask_reports_fail_on_real_assertion_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-ask-junit.xml", tests=6, failures=1, skipped=0)
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (1, 2.0, False))
+
+    status, summary, failure_class = worker.run_browser_ask(tmp_path, state_dir, 30)
+
+    assert status == "FAIL"
+    assert failure_class == "TEST_FAILURE"
+    assert "1 failure(s), 0 error(s) of 6" in summary
+
+
+def test_run_browser_ask_reports_pass_when_every_test_ran(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-ask-junit.xml", tests=6, skipped=0)
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (0, 2.0, False))
+
+    status, summary, failure_class = worker.run_browser_ask(tmp_path, state_dir, 30)
+
+    assert status == "PASS"
+    assert failure_class is None
+    assert "6 real-browser test(s)" in summary
+
+
+def test_browser_ask_check_is_dispatched_in_execute_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(worker, "validate_checkout", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        worker,
+        "run_browser_ask",
+        lambda repo_root, state_dir, timeout: ("PASS", "browser ask ok", None),
+    )
+
+    result = worker.execute_request(
+        request(requested_checks=("browser_ask",)),
+        repo_root=tmp_path,
+        state_dir=tmp_path / "state",
+        environment_id="jeremy-laptop",
+        timeout_seconds=30,
+    )
+
+    assert result.status == "PASS"
+    assert result.summary == "browser_ask: browser ask ok"
+
+
 def test_unsupported_check_returns_review_required_without_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
