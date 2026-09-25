@@ -31,12 +31,19 @@ OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 # "browser_e2e" is the third slice: the full `browser_e2e`-marked suite (accessibility/
 # axe-core, alpha-auth, keyboard navigation, focus order, reduced motion, target size,
 # and the rest of the same real-headless-Chromium coverage already run advisory-only by
-# .github/workflows/browser-e2e.yml). Screenshot evidence and exercising a live
-# *deployed* target (rather than an isolated local fixture server) remain a further
-# follow-up, matching knowledge-engine-core issue #493's own precedent of adding checks
+# .github/workflows/browser-e2e.yml). Both browser checks also collect per-test
+# screenshot evidence (SCREENSHOT_DIR_ENV_VAR, below). Exercising a live *deployed*
+# target (rather than an isolated local fixture server) remains a further follow-up,
+# matching knowledge-engine-core issue #493's own precedent of adding checks
 # incrementally rather than in one unbounded slice.
 AUTHORIZED_CHECKS = frozenset({"preflight", "ollama_health", "browser_ask", "browser_e2e"})
 WINDOWS_CREATE_NEW_PROCESS_GROUP = 0x00000200
+
+# Must match tests/_browser_e2e_support.py's SCREENSHOT_DIR_ENV_VAR: setting this in the
+# pytest subprocess's environment makes the shared `page` fixture capture a best-effort
+# screenshot per test into the named directory. This is issue #160's "screenshot
+# evidence" scope for browser_ask/browser_e2e.
+SCREENSHOT_DIR_ENV_VAR = "KE_WEB_BROWSER_E2E_SCREENSHOT_DIR"
 
 # The critical real-browser Ask-path subset already promoted to required CI in
 # .github/workflows/quality.yml's `checks` job. Kept identical to that list so the
@@ -252,7 +259,12 @@ def _terminate_process_tree(proc: subprocess.Popen[str]) -> None:
 
 
 def run_logged(
-    args: list[str], *, cwd: Path, log_path: Path, timeout_seconds: float
+    args: list[str],
+    *,
+    cwd: Path,
+    log_path: Path,
+    timeout_seconds: float,
+    env: dict[str, str] | None = None,
 ) -> tuple[int, float, bool]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
@@ -265,6 +277,7 @@ def run_logged(
                 stdout=handle,
                 stderr=subprocess.STDOUT,
                 text=True,
+                env=env,
                 creationflags=WINDOWS_CREATE_NEW_PROCESS_GROUP,
             )
         else:
@@ -274,6 +287,7 @@ def run_logged(
                 stdout=handle,
                 stderr=subprocess.STDOUT,
                 text=True,
+                env=env,
                 start_new_session=True,
             )
         try:
@@ -385,6 +399,26 @@ def _parse_junit_counts(path: Path) -> tuple[int, int, int, int] | None:
         return None
 
 
+def _screenshot_evidence_dir(state_dir: Path, check_name: str) -> Path:
+    directory = state_dir / "screenshots" / check_name
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _with_screenshot_evidence(
+    result: tuple[WorkerResultStatus, str, str | None],
+    screenshot_dir: Path,
+    *,
+    repo_root: Path,
+) -> tuple[WorkerResultStatus, str, str | None]:
+    status, summary, failure_class = result
+    count = len(list(screenshot_dir.glob("*.png")))
+    if count == 0:
+        return status, summary, failure_class
+    sanitized_dir = sanitize_text(str(screenshot_dir), repo_root=repo_root)
+    return status, f"{summary} Captured {count} screenshot(s) at {sanitized_dir}.", failure_class
+
+
 def run_browser_ask(
     repo_root: Path, state_dir: Path, timeout_seconds: int
 ) -> tuple[WorkerResultStatus, str, str | None]:
@@ -396,11 +430,16 @@ def run_browser_ask(
     uses. Those tests self-skip (not fail) when no usable Chromium executable is
     present, so a naive exit-code check cannot tell a genuine pass from an
     environment with no browser at all; the JUnit report's per-outcome counts make
-    that distinction explicit.
+    that distinction explicit. Also requests per-test screenshot evidence (issue
+    #160's remaining "screenshot evidence" scope) via SCREENSHOT_DIR_ENV_VAR; the
+    shared `page` fixture captures a best-effort screenshot into that directory.
     """
 
     log_path = state_dir / "logs" / "browser-ask.log"
     junit_path = state_dir / "browser-ask-junit.xml"
+    screenshot_dir = _screenshot_evidence_dir(state_dir, "browser_ask")
+    env = dict(os.environ)
+    env[SCREENSHOT_DIR_ENV_VAR] = str(screenshot_dir)
     code, duration, timed_out = run_logged(
         [
             sys.executable,
@@ -415,9 +454,18 @@ def run_browser_ask(
         cwd=repo_root,
         log_path=log_path,
         timeout_seconds=float(timeout_seconds),
+        env=env,
     )
+
+    def with_evidence(
+        result: tuple[WorkerResultStatus, str, str | None],
+    ) -> tuple[WorkerResultStatus, str, str | None]:
+        return _with_screenshot_evidence(result, screenshot_dir, repo_root=repo_root)
+
     if timed_out:
-        return "ENVIRONMENT_FAILURE", "Browser Ask-flow check timed out.", "ENVIRONMENT_FAILURE"
+        return with_evidence(
+            ("ENVIRONMENT_FAILURE", "Browser Ask-flow check timed out.", "ENVIRONMENT_FAILURE")
+        )
 
     counts = _parse_junit_counts(junit_path)
     if counts is None:
@@ -425,7 +473,7 @@ def run_browser_ask(
         summary = f"Browser Ask-flow check produced no readable JUnit report after {duration:.3f}s."
         if tail:
             summary += f" Last output: {tail[:1200]}"
-        return "ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"
+        return with_evidence(("ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"))
 
     tests, failures, errors, skipped = counts
     if tests == 0 or skipped >= tests:
@@ -436,7 +484,7 @@ def run_browser_ask(
         )
         if tail:
             summary += f" Last output: {tail[:1200]}"
-        return "ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"
+        return with_evidence(("ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"))
     if code != 0 or failures or errors:
         tail = log_tail(log_path, repo_root=repo_root)
         summary = (
@@ -445,11 +493,13 @@ def run_browser_ask(
         )
         if tail:
             summary += f" Last output: {tail[:1200]}"
-        return "FAIL", summary, "TEST_FAILURE"
-    return (
-        "PASS",
-        f"Browser Ask-flow check passed in {duration:.3f}s ({tests} real-browser test(s)).",
-        None,
+        return with_evidence(("FAIL", summary, "TEST_FAILURE"))
+    return with_evidence(
+        (
+            "PASS",
+            f"Browser Ask-flow check passed in {duration:.3f}s ({tests} real-browser test(s)).",
+            None,
+        )
     )
 
 
@@ -464,11 +514,17 @@ def run_browser_e2e(
     motion, target size, and the rest of ``run_browser_ask``'s critical-path subset. Uses
     the same self-skip-vs-fail distinction ``run_browser_ask`` established: those tests
     self-skip (not fail) when no usable Chromium executable is present, so the worker
-    parses the run's JUnit report rather than trusting the bare exit code.
+    parses the run's JUnit report rather than trusting the bare exit code. Also requests
+    per-test screenshot evidence (issue #160's remaining "screenshot evidence" scope) via
+    SCREENSHOT_DIR_ENV_VAR; the shared `page` fixture captures a best-effort screenshot
+    into that directory.
     """
 
     log_path = state_dir / "logs" / "browser-e2e.log"
     junit_path = state_dir / "browser-e2e-junit.xml"
+    screenshot_dir = _screenshot_evidence_dir(state_dir, "browser_e2e")
+    env = dict(os.environ)
+    env[SCREENSHOT_DIR_ENV_VAR] = str(screenshot_dir)
     code, duration, timed_out = run_logged(
         [
             sys.executable,
@@ -484,9 +540,18 @@ def run_browser_e2e(
         cwd=repo_root,
         log_path=log_path,
         timeout_seconds=float(timeout_seconds),
+        env=env,
     )
+
+    def with_evidence(
+        result: tuple[WorkerResultStatus, str, str | None],
+    ) -> tuple[WorkerResultStatus, str, str | None]:
+        return _with_screenshot_evidence(result, screenshot_dir, repo_root=repo_root)
+
     if timed_out:
-        return "ENVIRONMENT_FAILURE", "Browser E2E suite check timed out.", "ENVIRONMENT_FAILURE"
+        return with_evidence(
+            ("ENVIRONMENT_FAILURE", "Browser E2E suite check timed out.", "ENVIRONMENT_FAILURE")
+        )
 
     counts = _parse_junit_counts(junit_path)
     if counts is None:
@@ -496,7 +561,7 @@ def run_browser_e2e(
         )
         if tail:
             summary += f" Last output: {tail[:1200]}"
-        return "ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"
+        return with_evidence(("ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"))
 
     tests, failures, errors, skipped = counts
     if tests == 0 or skipped >= tests:
@@ -507,7 +572,7 @@ def run_browser_e2e(
         )
         if tail:
             summary += f" Last output: {tail[:1200]}"
-        return "ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"
+        return with_evidence(("ENVIRONMENT_FAILURE", summary, "ENVIRONMENT_FAILURE"))
     if code != 0 or failures or errors:
         tail = log_tail(log_path, repo_root=repo_root)
         summary = (
@@ -516,11 +581,13 @@ def run_browser_e2e(
         )
         if tail:
             summary += f" Last output: {tail[:1200]}"
-        return "FAIL", summary, "TEST_FAILURE"
-    return (
-        "PASS",
-        f"Browser E2E suite check passed in {duration:.3f}s ({tests} real-browser test(s)).",
-        None,
+        return with_evidence(("FAIL", summary, "TEST_FAILURE"))
+    return with_evidence(
+        (
+            "PASS",
+            f"Browser E2E suite check passed in {duration:.3f}s ({tests} real-browser test(s)).",
+            None,
+        )
     )
 
 

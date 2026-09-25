@@ -24,6 +24,7 @@ from playwright.sync_api import Error as PlaywrightError
 
 from tests._browser_e2e_support import (
     candidate_chromium_executables,
+    capture_page_screenshot,
     free_port,
     isolated_server_env,
     isolated_server_env_with_alpha_auth,
@@ -62,11 +63,12 @@ def _browser() -> Iterator[Browser]:
 
 
 @pytest.fixture
-def page(_browser: Browser) -> Iterator[Page]:
+def page(_browser: Browser, request: pytest.FixtureRequest) -> Iterator[Page]:
     new_page = _browser.new_page()
     try:
         yield new_page
     finally:
+        capture_page_screenshot(new_page, nodeid=request.node.nodeid)
         new_page.close()
 
 
