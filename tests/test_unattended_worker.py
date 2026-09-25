@@ -430,6 +430,44 @@ def test_run_browser_ask_reports_pass_when_every_test_ran(
     assert "6 real-browser test(s)" in summary
 
 
+def test_run_browser_ask_requests_screenshot_evidence_via_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-ask-junit.xml", tests=6, skipped=0)
+    captured: dict[str, object] = {}
+
+    def fake_run_logged(*args: object, **kwargs: object) -> tuple[int, float, bool]:
+        captured["env"] = kwargs.get("env")
+        return (0, 2.0, False)
+
+    monkeypatch.setattr(worker, "run_logged", fake_run_logged)
+
+    worker.run_browser_ask(tmp_path, state_dir, 30)
+
+    env = captured["env"]
+    assert isinstance(env, dict)
+    assert env[worker.SCREENSHOT_DIR_ENV_VAR] == str(state_dir / "screenshots" / "browser_ask")
+
+
+def test_run_browser_ask_reports_captured_screenshot_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-ask-junit.xml", tests=6, skipped=0)
+    screenshot_dir = state_dir / "screenshots" / "browser_ask"
+    screenshot_dir.mkdir(parents=True)
+    (screenshot_dir / "test_a.png").write_bytes(b"fake-png")
+    (screenshot_dir / "test_b.png").write_bytes(b"fake-png")
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (0, 2.0, False))
+
+    status, summary, failure_class = worker.run_browser_ask(tmp_path, state_dir, 30)
+
+    assert status == "PASS"
+    assert failure_class is None
+    assert "Captured 2 screenshot(s)" in summary
+
+
 def test_browser_ask_check_is_dispatched_in_execute_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -516,6 +554,43 @@ def test_run_browser_e2e_reports_pass_when_every_test_ran(
     assert status == "PASS"
     assert failure_class is None
     assert "120 real-browser test(s)" in summary
+
+
+def test_run_browser_e2e_requests_screenshot_evidence_via_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-e2e-junit.xml", tests=120, skipped=0)
+    captured: dict[str, object] = {}
+
+    def fake_run_logged(*args: object, **kwargs: object) -> tuple[int, float, bool]:
+        captured["env"] = kwargs.get("env")
+        return (0, 5.0, False)
+
+    monkeypatch.setattr(worker, "run_logged", fake_run_logged)
+
+    worker.run_browser_e2e(tmp_path, state_dir, 30)
+
+    env = captured["env"]
+    assert isinstance(env, dict)
+    assert env[worker.SCREENSHOT_DIR_ENV_VAR] == str(state_dir / "screenshots" / "browser_e2e")
+
+
+def test_run_browser_e2e_reports_captured_screenshot_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_dir = tmp_path / "state"
+    _write_junit_report(state_dir / "browser-e2e-junit.xml", tests=120, skipped=0)
+    screenshot_dir = state_dir / "screenshots" / "browser_e2e"
+    screenshot_dir.mkdir(parents=True)
+    (screenshot_dir / "test_a.png").write_bytes(b"fake-png")
+    monkeypatch.setattr(worker, "run_logged", lambda *args, **kwargs: (0, 5.0, False))
+
+    status, summary, failure_class = worker.run_browser_e2e(tmp_path, state_dir, 30)
+
+    assert status == "PASS"
+    assert failure_class is None
+    assert "Captured 1 screenshot(s)" in summary
 
 
 def test_run_browser_e2e_uses_the_browser_e2e_marker(

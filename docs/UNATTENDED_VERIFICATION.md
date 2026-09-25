@@ -67,6 +67,15 @@ requested checks:
   real-browser Ask-path coverage `browser_ask` exercises. Uses the identical self-skip-vs-fail JUnit
   distinction `browser_ask` established.
 
+Both `browser_ask` and `browser_e2e` also collect screenshot evidence: each sets
+`SCREENSHOT_DIR_ENV_VAR` (`KE_WEB_BROWSER_E2E_SCREENSHOT_DIR`) in the pytest subprocess's
+environment, and the shared `page` fixture (`tests/conftest.py`, via
+`tests/_browser_e2e_support.py::capture_page_screenshot`) captures a best-effort PNG screenshot of
+that test's final page state into `<state_dir>/screenshots/<check_name>/<test-nodeid>.png` on
+teardown. A capture failure never fails the underlying test. The check's summary reports how many
+screenshots were captured and their sanitized directory; the images themselves stay on the worker's
+local disk (never uploaded to the issue) alongside the existing per-check log/JUnit artifacts.
+
 A stale process lock is reclaimed automatically; secrets, absolute local paths, and the home
 directory are stripped from every summary before it is written or published. A sanitized
 `PASS`/`FAIL`/`REVIEW_REQUIRED`/`PRODUCT_REALITY_REQUIRED`/`ENVIRONMENT_FAILURE` result (exact
@@ -76,7 +85,7 @@ Windows worker has `gh` available (`unattended_worker_publication.py`, mirroring
 issue-#493 publisher).
 
 `preflight` and `ollama_health` were a deliberately bounded first slice; `browser_ask` was the
-second; `browser_e2e` is the third, matching Core issue #493's own precedent of adding checks
-incrementally rather than in one unbounded slice. Remaining scope this issue still names but no
-current check covers: screenshot evidence and exercising a live *deployed* target rather than an
-isolated local fixture server.
+second; `browser_e2e` was the third; screenshot evidence on both browser checks is the fourth,
+matching Core issue #493's own precedent of adding checks incrementally rather than in one
+unbounded slice. Remaining scope this issue still names but no current check covers: exercising a
+live *deployed* target rather than an isolated local fixture server.

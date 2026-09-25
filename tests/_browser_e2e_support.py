@@ -15,12 +15,16 @@ re-deriving the live-server/fixture-data setup. See
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import re
 import socket
 import subprocess
 from pathlib import Path
 
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import Page
 from sqlalchemy import Engine, MetaData, Table, insert, text
 
 from tests._fixtures import build_engine, create_graph_tables, create_papers_table
@@ -30,6 +34,29 @@ EVIDENCE_RECORD_ID = "ev-iq-1"
 PAPER_DOI = "10.1000/cognitive"
 PAPER_TITLE = "Semaglutide and cognitive outcomes"
 PAPER_ABSTRACT = "A study evaluated whether semaglutide increased IQ scores in participants."
+
+# Must match knowledge_engine_web.unattended_worker.SCREENSHOT_DIR_ENV_VAR: the worker
+# sets this to request screenshot evidence for its browser_ask/browser_e2e checks
+# (issue #160's remaining "screenshot evidence" scope). Unset in ordinary local/CI
+# test runs, so capture_page_screenshot is a no-op there.
+SCREENSHOT_DIR_ENV_VAR = "KE_WEB_BROWSER_E2E_SCREENSHOT_DIR"
+
+
+def capture_page_screenshot(page: Page, *, nodeid: str) -> None:
+    """Best-effort screenshot capture for unattended-worker Product Reality evidence.
+
+    Only active when ``SCREENSHOT_DIR_ENV_VAR`` is set. A capture failure (e.g. the
+    page already crashed or closed) is swallowed -- this is evidence collection, not
+    part of the test's own pass/fail contract, and must never turn a passing test red.
+    """
+    directory = os.environ.get(SCREENSHOT_DIR_ENV_VAR)
+    if not directory:
+        return
+    target_dir = Path(directory)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", nodeid)
+    with contextlib.suppress(PlaywrightError, OSError):
+        page.screenshot(path=str(target_dir / f"{safe_name}.png"))
 
 
 def candidate_chromium_executables() -> list[str]:
