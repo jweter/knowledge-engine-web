@@ -204,7 +204,7 @@ def list_unconfirmed_claims(engine: Engine) -> list[ClaimListItem]:
         return list_claims(engine)
 
     with engine.connect() as connection:
-        confirmed_ids = set(
+        confirmed_ids: set[int] = set(
             connection.execute(select(relationships.c.source_claim_id)).scalars()
         ) | set(connection.execute(select(relationships.c.target_claim_id)).scalars())
 
