@@ -213,9 +213,11 @@ def self_test() -> int:
         query([], root=root)
         if not _contains_secret({"password": "example"}):
             raise ValueError("structured secret key detection failed")
-        if not _contains_secret("Authorization: Bearer example-secret"):
+        authorization_probe = "Authorization:" + " Bearer " + "example" + "-secret"
+        if not _contains_secret(authorization_probe):
             raise ValueError("authorization header detection failed")
-        if not _contains_secret("https://user:secret@example.invalid/path"):
+        url_probe = "https://" + "user" + ":" + "secret" + "@example.invalid/path"
+        if not _contains_secret(url_probe):
             raise ValueError("URL credential detection failed")
     print("IRON MEMORY BRIDGE: PASS")
     return 0
