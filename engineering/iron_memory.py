@@ -17,6 +17,8 @@ SECRET_PATTERNS = [
     re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"),
     re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"(?i)authorization\s*:\s*(?:bearer|basic)\s+[^\s]+"),
+    re.compile(r"(?i)https?://[^\s/:@]+:[^\s/@]+@"),
     re.compile(r"(?i)(password|api[_-]?key|secret|token)\s*[:=]\s*[^\s]+"),
 ]
 TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_./-]{1,}")
@@ -211,6 +213,10 @@ def self_test() -> int:
         query([], root=root)
         if not _contains_secret({"password": "example"}):
             raise ValueError("structured secret key detection failed")
+        if not _contains_secret("Authorization: Bearer example-secret"):
+            raise ValueError("authorization header detection failed")
+        if not _contains_secret("https://user:secret@example.invalid/path"):
+            raise ValueError("URL credential detection failed")
     print("IRON MEMORY BRIDGE: PASS")
     return 0
 
