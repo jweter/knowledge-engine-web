@@ -70,6 +70,19 @@ def verified_events(memory: dict[str, Any]) -> list[dict[str, Any]]:
         verification = raw.get("verification")
         if not isinstance(verification, str) or not verification.strip():
             continue
+        normalized_verification = verification.strip().casefold()
+        if normalized_verification in {
+            "unknown",
+            "not run",
+            "not-run",
+            "not_run",
+            "pending",
+            "unverified",
+            "none",
+            "n/a",
+            "na",
+        }:
+            continue
         event = dict(raw)
         event["repository"] = str(event.get("repository") or repo)
         event["evidence_state"] = "VERIFIED"
@@ -211,6 +224,16 @@ def self_test() -> int:
         malformed = root / "memory.json"
         malformed.write_text('{"entries": null}', encoding="utf-8")
         query([], root=root)
+        placeholder_memory = {
+            "events": [
+                {"verification": "UNKNOWN", "fix": "must not publish"},
+                {"verification": "not run", "fix": "must not publish"},
+                {"verification": "pytest tests/test_example.py -q: PASS", "fix": "verified"},
+            ]
+        }
+        projected = verified_events(placeholder_memory)
+        if len(projected) != 1 or projected[0].get("fix") != "verified":
+            raise ValueError("placeholder verification must fail closed")
         if not _contains_secret({"password": "example"}):
             raise ValueError("structured secret key detection failed")
         authorization_probe = "Authorization:" + " Bearer " + "example" + "-secret"
