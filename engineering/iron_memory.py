@@ -20,6 +20,9 @@ SECRET_PATTERNS = [
     re.compile(r"(?i)(password|api[_-]?key|secret|token)\s*[:=]\s*[^\s]+"),
 ]
 TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_./-]{1,}")
+SECRET_KEY_RE = re.compile(
+    r"(?i)^(?:password|passwd|pwd|api[_-]?key|access[_-]?token|refresh[_-]?token|secret|token|credential|private[_-]?key)$"
+)
 
 
 def shared_root() -> Path:
@@ -33,8 +36,18 @@ def repository_identity() -> str:
 
 
 def _contains_secret(value: Any) -> bool:
-    text = json.dumps(value, sort_keys=True)
-    return any(pattern.search(text) for pattern in SECRET_PATTERNS)
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if SECRET_KEY_RE.match(str(key).strip()):
+                return True
+            if _contains_secret(item):
+                return True
+        return False
+    if isinstance(value, (list, tuple, set)):
+        return any(_contains_secret(item) for item in value)
+    if isinstance(value, str):
+        return any(pattern.search(value) for pattern in SECRET_PATTERNS)
+    return False
 
 
 def load_local_memory() -> dict[str, Any]:
@@ -115,7 +128,10 @@ def query(
 
     central = _load_json(destination / "memory.json")
     if isinstance(central, dict):
-        for lesson in central.get("entries", []):
+        central_entries = central.get("entries")
+        if not isinstance(central_entries, list):
+            central_entries = []
+        for lesson in central_entries:
             if not isinstance(lesson, dict) or lesson.get("evidence_state") != "VERIFIED":
                 continue
             if target_repo and lesson.get("repository") != target_repo:
@@ -154,7 +170,10 @@ def query(
                 continue
             if target_repo and snapshot.get("repository") != target_repo:
                 continue
-            for event in snapshot.get("events", []):
+            snapshot_events = snapshot.get("events")
+            if not isinstance(snapshot_events, list):
+                continue
+            for event in snapshot_events:
                 if not isinstance(event, dict) or event.get("evidence_state") != "VERIFIED":
                     continue
                 text = " ".join(str(v) for v in event.values() if isinstance(v, (str, int, float)))
@@ -187,7 +206,11 @@ def self_test() -> int:
         result = publish(root)
         if result["state"] != "PUBLISHED":
             raise ValueError("publish failed")
+        malformed = root / "memory.json"
+        malformed.write_text('{"entries": null}', encoding="utf-8")
         query([], root=root)
+        if not _contains_secret({"password": "example"}):
+            raise ValueError("structured secret key detection failed")
     print("IRON MEMORY BRIDGE: PASS")
     return 0
 
