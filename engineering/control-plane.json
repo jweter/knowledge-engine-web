@@ -4,7 +4,9 @@
   "repository": "jweter/knowledge-engine-web",
   "repository_role": "web",
   "source_of_truth": "GitHub repository state plus authoritative documents listed below",
+  "capability_graph": "engineering/capability-graph.json",
   "authoritative_documents": [
+    "engineering/capability-graph.json",
     "docs/project-status.yaml",
     "docs/agent-development-policy.md",
     "docs/web_design.md",

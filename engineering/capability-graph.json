@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "repository": "jweter/knowledge-engine-web",
+  "capabilities": [
+    {
+      "id": "research-report-v1-web-local-acceptance",
+      "capability": "Complete the explicitly tracked local Research Report v1 Web integration and acceptance path while preserving evidence visibility and Product Reality gates.",
+      "state": "IN_PROGRESS",
+      "completion_evidence": [
+        "docs/project-status.yaml current_milestone and exact_next_sequence",
+        "docs/research_report_v1.md",
+        "GitHub issue #107 and companion AI issue #129"
+      ],
+      "depends_on": [],
+      "slices": [
+        {
+          "id": "research-report-web-local-acceptance-next",
+          "state": "PLANNED",
+          "objective": "Advance the next bounded Web-side defect demonstrated by exact-current local Research acceptance evidence. Prefer local runtime identity, Ask/Research integration, evidence navigation, report rendering, or fail-closed behavior required by the existing milestone.",
+          "acceptance": [
+            "The normal Ask path remains evidence-grounded and Research state remains durable.",
+            "Missing evidence, provider degradation, provenance, and source links remain visible.",
+            "No paid hosted infrastructure is enabled by this slice.",
+            "Repository-native regression coverage protects any demonstrated Web-side correction."
+          ],
+          "allowed_paths": [
+            "app/**",
+            "tests/**",
+            "engineering/**",
+            "docs/**"
+          ],
+          "forbidden_paths": [
+            "render.research.yaml",
+            ".env",
+            "**/*.pem",
+            "**/*.key"
+          ],
+          "runner_requirements": [
+            "code",
+            "local",
+            "windows"
+          ],
+          "runtime_requirements": []
+        }
+      ]
+    }
+  ],
+  "roadmap": [
+    "research-report-v1-web-local-acceptance"
+  ]
+}
