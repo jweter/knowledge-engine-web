@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -27,7 +28,10 @@ def test_full_research_blueprint_is_operator_gated_and_complete() -> None:
 def test_private_ollama_image_is_version_pinned() -> None:
     dockerfile = (ROOT / "Dockerfile.ollama").read_text(encoding="utf-8")
 
-    assert "FROM ollama/ollama:0.35.0" in dockerfile
+    # Require a reviewed, explicit semantic-version tag without freezing the test to one release.
+    from_lines = [line.strip() for line in dockerfile.splitlines() if line.startswith("FROM ")]
+    assert len(from_lines) == 1
+    assert re.fullmatch(r"FROM ollama/ollama:[0-9]+\.[0-9]+\.[0-9]+", from_lines[0])
     assert "ollama/ollama:latest" not in dockerfile
 
 
