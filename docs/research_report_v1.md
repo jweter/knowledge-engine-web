@@ -1,5 +1,10 @@
 # Research Report v1 — Web Experience Contract
 
+## Owner-approved architecture (2026-10-25)
+
+The default Ask/Research Report flow must accept one user question and orchestrate local processing with online, on-demand source retrieval. It must not require a pre-ingested local corpus or large persistent local document storage. Preserve the existing answer-first, evidence-inspection, and progressive-report contracts. See `docs/OWNER_APPROVED_ROADMAP_2026-10-25.md`.
+
+
 Status: active roadmap contract  
 Date: 2026-08-31  
 Parent product contract: `knowledge-engine-core/docs/roadmap/research_report_v1.md`
