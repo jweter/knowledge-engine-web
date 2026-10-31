@@ -12,6 +12,8 @@ MIN_SYSTEM_REINVESTMENT = 0.05
 
 def load_report(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise SystemExit("compounding report must be a JSON object")
     if payload.get("schema_version") != 2:
         raise SystemExit("compounding report schema_version must be 2")
     if not isinstance(payload.get("windows"), dict):
