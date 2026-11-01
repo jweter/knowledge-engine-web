@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "repository": "jweter/knowledge-engine-web",
+  "authority_note": "Compiled by hand from docs/OWNER_APPROVED_ROADMAP_2026-10-25.md (owner-approved, standing development authorization). The roadmap states what to achieve; slices are bounded, ordered steps toward it.",
+  "capabilities": [
+    {
+      "id": "web-one-request-research-report",
+      "state": "PLANNED",
+      "capability": "One submitted research question runs the complete local-compute / online-source Research Report workflow in the Web UI with progress, evidence, source links, citation provenance, uncertainty, a final report and useful errors, without a pre-ingested corpus or a mandatory Ollama.",
+      "completion_evidence": [
+        "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md Research Report user experience and Next slices",
+        "docs/web_design.md"
+      ],
+      "depends_on": [],
+      "slices": [
+        {
+          "id": "web-audit-local-corpus-dependencies",
+          "state": "PLANNED",
+          "objective": "Audit /ask and the Research Report flow for mandatory local-corpus or Ollama dependencies and pin the findings in a test that fails if the default flow requires them.",
+          "acceptance": [
+            "docs/web_ask_report_dependency_audit.md lists each dependency with file references, or states there is none",
+            "a test shows the default report flow runs with no local document database and no Ollama available",
+            "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
+          ],
+          "allowed_paths": [
+            "docs/**",
+            "tests/**"
+          ],
+          "forbidden_paths": [
+            "engineering/**",
+            ".github/**",
+            "pyproject.toml",
+            "poetry.lock",
+            "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
+          ]
+        },
+        {
+          "id": "web-one-request-report-orchestration",
+          "state": "PLANNED",
+          "objective": "Add one-request report orchestration to the Web UI with observable progress, source links, citation provenance, uncertainty and useful error states.",
+          "acceptance": [
+            "a single submitted question drives discovery, retrieval, analysis and the final report",
+            "progress, evidence, source links, citations, uncertainty and errors are visible in the UI",
+            "no persistent bulk storage is required and temporary data is bounded and cleaned up",
+            "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
+          ],
+          "allowed_paths": [
+            "knowledge_engine_web/**",
+            "tests/**",
+            "docs/**"
+          ],
+          "forbidden_paths": [
+            "engineering/**",
+            ".github/**",
+            "pyproject.toml",
+            "poetry.lock",
+            "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
+          ],
+          "depends_on": [
+            "web-audit-local-corpus-dependencies"
+          ]
+        },
+        {
+          "id": "web-online-report-acceptance",
+          "state": "PLANNED",
+          "objective": "Verify a real online-source report and its cleanup through product-native acceptance tests.",
+          "acceptance": [
+            "an acceptance test runs a report from online sources and checks citations and uncertainty",
+            "temporary data retention is bounded and cleanup is asserted",
+            "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
+          ],
+          "allowed_paths": [
+            "tests/**",
+            "docs/**"
+          ],
+          "forbidden_paths": [
+            "engineering/**",
+            ".github/**",
+            "pyproject.toml",
+            "poetry.lock",
+            "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
+          ],
+          "depends_on": [
+            "web-one-request-report-orchestration"
+          ]
+        }
+      ]
+    }
+  ],
+  "roadmap": [
+    "web-one-request-research-report"
+  ]
+}
