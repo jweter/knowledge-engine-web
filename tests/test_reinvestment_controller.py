@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from engineering.reinvestment_controller import (
     MAX_SYSTEM_REINVESTMENT,
     MIN_SYSTEM_REINVESTMENT,
+    load_report,
     recommend,
     self_test,
 )
@@ -67,3 +72,11 @@ def test_unknown_metrics_increase_measurement_not_claims() -> None:
     assert result["confidence"] == "EVIDENCE_LIMITED"
     assert result["system_reinvestment_fraction"] > MIN_SYSTEM_REINVESTMENT
     assert all(row["kind"] == "MEASUREMENT" for row in result["actions"])
+
+
+def test_a_report_that_is_not_a_json_object_is_rejected_clearly(tmp_path: Path) -> None:
+    report = tmp_path / "report.json"
+    report.write_text("[2]", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="must be a JSON object"):
+        load_report(report)
