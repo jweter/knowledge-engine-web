@@ -32,7 +32,8 @@
             "pyproject.toml",
             "poetry.lock",
             "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
-          ]
+          ],
+          "capability_level": 3
         },
         {
           "id": "web-one-request-report-orchestration",
@@ -58,7 +59,8 @@
           ],
           "depends_on": [
             "web-audit-local-corpus-dependencies"
-          ]
+          ],
+          "capability_level": 4
         },
         {
           "id": "web-online-report-acceptance",
@@ -82,7 +84,8 @@
           ],
           "depends_on": [
             "web-one-request-report-orchestration"
-          ]
+          ],
+          "capability_level": 3
         }
       ]
     }
