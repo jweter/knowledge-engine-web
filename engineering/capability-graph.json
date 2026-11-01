@@ -16,10 +16,10 @@
         {
           "id": "web-audit-local-corpus-dependencies",
           "state": "PLANNED",
-          "objective": "Audit /ask and the Research Report flow for mandatory local-corpus or Ollama dependencies and pin the findings in a test that fails if the default flow requires them.",
+          "objective": "Audit /ask and the Research Report flow for mandatory local-corpus or Ollama dependencies, record each one with its file references, and pin each in a characterization test so the orchestration slice removes it deliberately. This slice changes docs and tests only and does not remove dependencies.",
           "acceptance": [
-            "docs/web_ask_report_dependency_audit.md lists each dependency with file references, or states there is none",
-            "a test shows the default report flow runs with no local document database and no Ollama available",
+            "docs/web_ask_report_dependency_audit.md lists every mandatory local-corpus or Ollama dependency with file references, or states there is none",
+            "a characterization test pins each recorded dependency as it exists today (for example a configured model being required), so removing it in the orchestration slice is an explicit test change",
             "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
           ],
           "allowed_paths": [
