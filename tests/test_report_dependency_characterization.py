@@ -1,7 +1,8 @@
 """Characterization of today's mandatory dependencies for a one-request research report.
 
-These tests PIN CURRENT BEHAVIOUR; they do not endorse it. See docs/web_ask_report_dependency_audit.md. A later
-slice that removes a dependency (for example the mandatory local model) must change the matching test deliberately.
+These tests PIN CURRENT BEHAVIOUR; they do not endorse it.
+See docs/web_ask_report_dependency_audit.md. A later slice that removes a dependency
+(for example the mandatory local model) must change the matching test deliberately.
 """
 
 from __future__ import annotations
