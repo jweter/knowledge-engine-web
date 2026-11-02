@@ -137,6 +137,41 @@ def test_route_preserves_unavailable_source_without_inventing_report(
     assert body["evidence"]["claims"] == []
 
 
+@pytest.mark.parametrize(
+    ("reason_code", "expected"),
+    [
+        ("concurrency_limit_reached", "busy processing requests"),
+        ("rate_limit_reached", "too many requests"),
+        ("unexpected_reason", "cannot accept this request"),
+    ],
+)
+def test_route_admission_error_uses_json_specific_sanitized_message(
+    monkeypatch: pytest.MonkeyPatch, reason_code: str, expected: str
+) -> None:
+    monkeypatch.setattr(main, "Settings", lambda: _settings(online_evidence_enabled=True))
+    monkeypatch.setattr(
+        main,
+        "evaluate_online_evidence_capability",
+        lambda settings: online.OnlineEvidenceCapability(True),
+    )
+
+    def reject(*args: object, **kwargs: object) -> None:
+        raise AIAdmissionError(
+            reason_code,
+            "SECRET: Deterministic retrieval results are still shown below.",
+        )
+
+    monkeypatch.setattr(main, "run_guarded_online_evidence", reject)
+    response = TestClient(main.app).post(
+        "/research/online-evidence", json={"question": "What is known?"}
+    )
+    assert response.status_code == 429
+    detail = response.json()["detail"]
+    assert expected in detail
+    assert "SECRET" not in detail
+    assert "shown below" not in detail
+
+
 def test_route_rejects_blank_input_without_running_retrieval(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
