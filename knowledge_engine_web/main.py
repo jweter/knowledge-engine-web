@@ -1066,7 +1066,15 @@ def online_evidence_preview(payload: OnlineEvidenceQuestion, request: Request) -
             client_key=request.client.host if request.client else "unknown",
         )
     except AIAdmissionError as exc:
-        raise HTTPException(status_code=429, detail=exc.visitor_message) from exc
+        # This JSON endpoint has no deterministic results displayed beneath errors.
+        # Keep Ask's existing visitor messages unchanged and never expose raw details.
+        if exc.reason_code == "concurrency_limit_reached":
+            detail = "Online evidence is busy processing requests. Please try again shortly."
+        elif exc.reason_code == "rate_limit_reached":
+            detail = "Online evidence has received too many requests. Please try again later."
+        else:
+            detail = "Online evidence cannot accept this request right now. Please try again."
+        raise HTTPException(status_code=429, detail=detail) from exc
     except OnlineEvidenceOrchestrationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {
