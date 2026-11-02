@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import shutil
 from dataclasses import dataclass
+from typing import TypedDict
 
 from knowledge_engine_ai.execution import ExecutionBudget, ExecutionBudgetExceeded
 from knowledge_engine_ai.ke_client import (
@@ -30,6 +31,19 @@ class OnlineEvidenceCapability:
 
 class OnlineEvidenceOrchestrationError(RuntimeError):
     """Sanitized failure at the Core CLI / provider boundary."""
+
+
+class ObservedProviderSourceStatus(TypedDict):
+    provider: str
+    source_count: int
+    status_counts: dict[str, int]
+
+
+class ObservedOnlineSourceSummary(TypedDict):
+    scope: str
+    source_count: int
+    status_counts: dict[str, int]
+    providers: list[ObservedProviderSourceStatus]
 
 
 def evaluate_online_evidence_capability(settings: Settings) -> OnlineEvidenceCapability:
@@ -81,7 +95,9 @@ def run_guarded_online_evidence(
             ) from exc
 
 
-def summarize_returned_online_sources(result: OnlineResearchEvidenceResult) -> dict[str, object]:
+def summarize_returned_online_sources(
+    result: OnlineResearchEvidenceResult,
+) -> ObservedOnlineSourceSummary:
     """Count only sources actually returned by Core, not providers searched.
 
     These are retrieval statuses, never scientific certainty, exhaustive
@@ -96,16 +112,17 @@ def summarize_returned_online_sources(result: OnlineResearchEvidenceResult) -> d
         totals[source.status] += 1
         counts = by_provider.setdefault(source.provider, dict.fromkeys(statuses, 0))
         counts[source.status] += 1
+    providers: list[ObservedProviderSourceStatus] = [
+        {
+            "provider": provider,
+            "source_count": sum(counts.values()),
+            "status_counts": counts,
+        }
+        for provider, counts in sorted(by_provider.items())
+    ]
     return {
         "scope": "returned_sources_only_not_exhaustive_provider_coverage",
         "source_count": len(result.evidence.sources),
         "status_counts": totals,
-        "providers": [
-            {
-                "provider": provider,
-                "source_count": sum(counts.values()),
-                "status_counts": counts,
-            }
-            for provider, counts in sorted(by_provider.items())
-        ],
+        "providers": providers,
     }
