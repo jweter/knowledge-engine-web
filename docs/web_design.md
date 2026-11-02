@@ -665,3 +665,26 @@ they go. What's been added since, following the same patterns:
 **2026-08-30 follow-up (pinned-commit bump):** bumped the pinned `knowledge-engine-ai` commit from `6fa7db5` to `aab9b22` (PR #126, "Allow durable callers to supply research session IDs"). `run_research_question`/`run_ai_orchestration` now accept an optional caller-supplied `session_id`, persisted verbatim instead of an internally generated UUID -- the missing orchestration seam a future WEB-GQR-4 slice needs to generate a session id *before* starting a background-task run, so the page returned to the visitor (and the frontend polling loop that slice adds) can address that exact session immediately, rather than only after the run completes. This slice does not yet use that seam -- `/ask?synthesize=1` still calls `run_guarded_ai_orchestration` without a `session_id`, unchanged. Full local `quality_preflight.py` re-ran green against the bumped commit with zero source changes required (400 tests), confirming no breaking change reached Web's usage. Same PR additionally wired the one concrete gap the bump exposed: `AcquisitionRouteResult.skipped_reason` (added to `knowledge-engine-ai` after Web's previous pin, e.g. when the `max_acquisition_routes` budget is reached) now flows through `research_coverage_presentation.py`'s `AcquisitionRouteRow` into the "Acquisition routes" table's "not attempted" badge, instead of being silently dropped.
 
 **2026-08-30 follow-up (session id generated up front):** uses the seam from the prior follow-up. `/ask?synthesize=1` now generates the session id (`uuid.uuid4()`) itself, before calling `run_guarded_ai_orchestration`, and passes it through `run_ai_orchestration` into `run_research_question`'s `session_id` parameter instead of leaving that function to generate one internally. `WebResearchResult.session_id` (and everywhere on `/ask` that already renders it, e.g. the session-trace section) is unchanged in value and format -- still a UUID4 string -- so this is not user-visible yet. The request/response cycle is still fully synchronous: this slice only makes the identity available to route code *before* the run starts, which is the concrete precondition the next WEB-GQR-4 slice (move the run onto a background task, return a "researching" response immediately, poll `GET /ask/session/{session_id}`) needs and could not do until now. `ai_orchestration.run_ai_orchestration`/`run_guarded_ai_orchestration` both gained an optional `session_id` keyword (default `None`, existing internal-UUID behavior preserved for any other caller) rather than changing their required signature. Regression coverage: `test_ai_orchestration.py::test_run_ai_orchestration_forwards_a_caller_supplied_session_id` and the updated `test_guarded_orchestration_passes_deadline_and_attaches_ai_owned_state` assert the id reaches `run_research_question` unchanged; `test_main.py::test_ask_synthesize_generates_the_session_id_before_the_run_starts` asserts `/ask?synthesize=1` passes a well-formed UUID4 string into `run_guarded_ai_orchestration` before the (mocked) run returns. Full local `quality_preflight.py`-equivalent gate (`ruff format --check`, `ruff check`, `mypy knowledge_engine_web tests`, `pytest`, `pip-audit`) passed: 402 tests (400 pre-existing plus 2 new). Live-smoke-tested via `TestClient` against `GET /` and `GET /ask` after a fresh `poetry install` at the pinned `knowledge-engine-ai` commit (unchanged, `aab9b22`) -- both returned 200. No Core or knowledge-engine-ai change, no pinned-commit change. The remaining WEB-GQR-4 steps (background task, frontend polling loop, live "researching" stage, and persisting enough of the final `ResearchQuestionResult` for the background task's result to be reconstructed after it completes) are still open -- see the prior follow-up's own note and `docs/general_question_research_loop_v1.md` WEB-GQR-4.
+
+## Corpus-free online-evidence preview (incremental, opt-in)
+
+The separate `POST /research/online-evidence` JSON endpoint accepts a single
+`{ "question": "..." }` and is **disabled by default**
+(`KE_WEB_ONLINE_EVIDENCE_ENABLED=false`). When explicitly enabled, it calls
+AI's `ke_client.online_research_evidence()` through a dedicated Web admission
+guard and the Core CLI, with a shared bounded execution deadline and a
+maximum of three sources by default. It requires neither an indexed local
+corpus nor Ollama, and AI cleans its temporary content cache. The response
+retains source status, provider, URLs, excerpts, claim/citation relationships
+and `search_run_id`; unavailable sources are visible. It explicitly declares
+`research_report_complete=false` and content consistency rather than
+scientific verification. It is **not** the final Research Report UX, and
+there is no default Ask-path behavior change. Provider/network Product Reality
+and end-to-end report synthesis remain separate gates.
+
+Independent settings: `KE_WEB_ONLINE_EVIDENCE_REQUEST_TIMEOUT_SECONDS`,
+`KE_WEB_ONLINE_EVIDENCE_MAX_SOURCES`,
+`KE_WEB_ONLINE_EVIDENCE_MAX_CONCURRENT_REQUESTS`,
+`KE_WEB_ONLINE_EVIDENCE_RATE_LIMIT_REQUESTS`, and
+`KE_WEB_ONLINE_EVIDENCE_RATE_LIMIT_WINDOW_SECONDS`. The API fails closed
+when the feature or Core CLI is unavailable, and sanitizes provider errors.

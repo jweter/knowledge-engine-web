@@ -98,6 +98,11 @@ from knowledge_engine_web.mobile_review_store import (
     record_mobile_review,
 )
 from knowledge_engine_web.observability import RequestObservabilityMiddleware
+from knowledge_engine_web.online_evidence_orchestration import (
+    OnlineEvidenceOrchestrationError,
+    evaluate_online_evidence_capability,
+    run_guarded_online_evidence,
+)
 from knowledge_engine_web.relationship_reader import (
     list_relationship_records_for_evidence_record_id,
 )
@@ -1031,6 +1036,46 @@ def submit_mobile_review(session_id: str, submission: MobileReviewSubmission) ->
     )
     payload, _ = _mobile_review_payload(session_id)
     return Response(content=json.dumps(payload, indent=2) + "\n", media_type="application/json")
+
+
+class OnlineEvidenceQuestion(BaseModel):
+    question: str
+
+
+@app.post("/research/online-evidence")
+def online_evidence_preview(payload: OnlineEvidenceQuestion, request: Request) -> dict[str, object]:
+    """Opt-in online retrieval preview; never label it a completed report.
+
+    A separate guard prevents provider requests from consuming Ask/Discover
+    admission slots. Core and AI validate source content before any evidence
+    leaves this boundary; no indexed corpus or Ollama is required.
+    """
+    if not payload.question.strip() or len(payload.question) > 1000:
+        raise HTTPException(
+            status_code=422, detail="Provide a question between 1 and 1000 characters."
+        )
+    settings = Settings()
+    if not evaluate_online_evidence_capability(settings).available:
+        raise HTTPException(
+            status_code=503, detail="Online evidence is unavailable on this deployment."
+        )
+    try:
+        result = run_guarded_online_evidence(
+            settings,
+            payload.question,
+            client_key=request.client.host if request.client else "unknown",
+        )
+    except AIAdmissionError as exc:
+        raise HTTPException(status_code=429, detail=exc.visitor_message) from exc
+    except OnlineEvidenceOrchestrationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "status": "content_checked_retrieval_only",
+        "research_report_complete": False,
+        "validation_scope": "source_content_consistency_not_scientific_truth",
+        "search_run_id": result.search_run_id,
+        "evidence": dataclasses.asdict(result.evidence),
+    }
 
 
 @app.get("/discover", response_class=HTMLResponse)

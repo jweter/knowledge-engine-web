@@ -126,3 +126,11 @@ Decorative UI work should not outrank these requirements.
 - #93 — progressive research UX
 - `docs/general_question_research_loop_v1.md`
 - `docs/federated_discovery_transparency_roadmap.md`
+
+## Incremental Web online-evidence preview (2026-11-02)
+
+A separately guarded, opt-in API preview can expose AI/Core content-checked
+online retrieval without a local indexed corpus or Ollama. It is deliberately
+not a ResearchReport: no synthesis, conclusion matrix, certainty grading,
+durable provider ledger, progressive session, or Monster Product Reality has
+been demonstrated. The default Ask route is unchanged until full acceptance.

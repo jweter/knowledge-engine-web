@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     federated_discovery_ledger_root: str = "data/federated_discovery_runs"
     federated_openalex_api_key: str | None = None
     federated_semantic_scholar_api_key: str | None = None
+    # Separate opt-in corpus-free online-evidence preview. Disabled until a
+    # deployment explicitly accepts provider/network cost and latency.
+    online_evidence_enabled: bool = False
+    online_evidence_request_timeout_seconds: float = Field(default=90.0, gt=0)
+    online_evidence_max_sources: int = Field(default=3, ge=1, le=10)
+    online_evidence_max_concurrent_requests: int = Field(default=1, gt=0)
+    online_evidence_rate_limit_requests: int = Field(default=3, gt=0)
+    online_evidence_rate_limit_window_seconds: float = Field(default=600.0, gt=0)
     discovery_request_timeout_seconds: float = Field(default=60.0, gt=0)
     discovery_max_concurrent_requests: int = Field(default=1, gt=0)
     discovery_rate_limit_requests: int = Field(default=5, gt=0)
