@@ -39,15 +39,23 @@ def _ready(tmp_path: Path, **override: object) -> Settings:
     return Settings(_env_file=None, **payload)
 
 
-def test_a_research_report_requires_a_configured_local_model_even_when_everything_else_is_ready(tmp_path: Path) -> None:
+def test_a_research_report_requires_a_configured_local_model_even_when_everything_else_is_ready(
+    tmp_path: Path,
+) -> None:
     capability = evaluate_ai_capability(_ready(tmp_path, llm_model=None))
 
     assert not capability.available and capability.reason_code == "model_not_configured"
 
 
-def test_the_model_check_comes_first_so_it_hides_every_other_missing_dependency(tmp_path: Path) -> None:
+def test_the_model_check_comes_first_so_it_hides_every_other_missing_dependency(
+    tmp_path: Path,
+) -> None:
     settings = _ready(
-        tmp_path, llm_model=None, sources_path=None, evidence_records_path=None, ke_executable="missing-ke-command"
+        tmp_path,
+        llm_model=None,
+        sources_path=None,
+        evidence_records_path=None,
+        ke_executable="missing-ke-command",
     )
 
     assert evaluate_ai_capability(settings).reason_code == "model_not_configured"
@@ -86,13 +94,19 @@ def test_discovery_prerequisites_are_checked_statically_with_stable_reason_codes
     assert not capability.available and capability.reason_code == reason_code
 
 
-def test_a_discovery_problem_makes_the_whole_report_unavailable_with_the_discovery_reason(tmp_path: Path) -> None:
-    capability = evaluate_ai_capability(_ready(tmp_path, federated_discovery_ledger_root="missing-parent/ledger"))
+def test_a_discovery_problem_makes_the_whole_report_unavailable_with_the_discovery_reason(
+    tmp_path: Path,
+) -> None:
+    capability = evaluate_ai_capability(
+        _ready(tmp_path, federated_discovery_ledger_root="missing-parent/ledger")
+    )
 
     assert not capability.available and capability.reason_code == "ledger_root_unavailable"
 
 
-def test_the_ready_baseline_is_available_and_the_capability_check_creates_no_storage(tmp_path: Path) -> None:
+def test_the_ready_baseline_is_available_and_the_capability_check_creates_no_storage(
+    tmp_path: Path,
+) -> None:
     capability = evaluate_ai_capability(_ready(tmp_path))
 
     assert capability.available and capability.reason_code is None
