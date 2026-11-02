@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -22,12 +23,12 @@ from knowledge_engine_web.config import Settings
 from knowledge_engine_web.discovery_orchestration import evaluate_discovery_capability
 
 
-def _ready(tmp_path: Path, **override: object) -> Settings:
+def _ready(tmp_path: Path, **override: Any) -> Settings:
     sources = tmp_path / "sources.csv"
     evidence = tmp_path / "evidence.jsonl"
     sources.write_text("source_id,title\n", encoding="utf-8")
     evidence.write_text("", encoding="utf-8")
-    payload: dict[str, object] = {
+    payload: dict[str, Any] = {
         "llm_model": "qwen2.5:1.5b",
         "sources_path": str(sources),
         "evidence_records_path": str(evidence),
@@ -88,7 +89,7 @@ def test_the_grounded_completion_policy_asserts_a_model(tmp_path: Path) -> None:
     ],
 )
 def test_discovery_prerequisites_are_checked_statically_with_stable_reason_codes(
-    tmp_path: Path, override: dict[str, object], reason_code: str
+    tmp_path: Path, override: dict[str, Any], reason_code: str
 ) -> None:
     capability = evaluate_discovery_capability(_ready(tmp_path, **override))
 
