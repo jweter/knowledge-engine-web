@@ -134,3 +134,9 @@ online retrieval without a local indexed corpus or Ollama. It is deliberately
 not a ResearchReport: no synthesis, conclusion matrix, certainty grading,
 durable provider ledger, progressive session, or Monster Product Reality has
 been demonstrated. The default Ask route is unchanged until full acceptance.
+
+The preview response also includes a deterministic `source_status_summary`
+(counts by returned-source status and observed provider). Its scope is
+explicitly **returned sources only**, not exhaustive provider-search coverage,
+scientific certainty, or Research Report completion. Unavailable, failed, and
+not-permitted sources remain visible instead of being counted as evidence.

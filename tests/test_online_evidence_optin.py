@@ -132,6 +132,17 @@ def test_route_preserves_unavailable_source_without_inventing_report(
     assert body["research_report_complete"] is False
     assert body["status"] == "content_checked_retrieval_only"
     assert body["search_run_id"] == "run-verified"
+    assert (
+        body["source_status_summary"]["scope"]
+        == "returned_sources_only_not_exhaustive_provider_coverage"
+    )
+    assert body["source_status_summary"]["source_count"] == 1
+    assert body["source_status_summary"]["status_counts"] == {
+        "retrieved": 0,
+        "unavailable": 1,
+        "not_permitted": 0,
+        "failed": 0,
+    }
     assert body["evidence"]["sources"][0]["status"] == "unavailable"
     assert body["evidence"]["sources"][0]["failure_reason"] == "provider unavailable"
     assert body["evidence"]["claims"] == []
@@ -184,3 +195,85 @@ def test_route_rejects_blank_input_without_running_retrieval(
     monkeypatch.setattr(main, "run_guarded_online_evidence", lambda *a, **k: pytest.fail("called"))
     response = TestClient(main.app).post("/research/online-evidence", json={"question": "   "})
     assert response.status_code == 422
+
+
+def test_source_status_summary_preserves_mixed_provider_failures() -> None:
+    evidence = ContentCheckedOnlineEvidence(
+        question="What is known?",
+        sources=(
+            OnlineSource(
+                "a",
+                "https://example.org/a",
+                "pubmed",
+                "2026-11-02T12:00:00+00:00",
+                "retrieved",
+                "a" * 64,
+                None,
+                "A",
+            ),
+            OnlineSource(
+                "b",
+                "https://example.org/b",
+                "pubmed",
+                "2026-11-02T12:00:00+00:00",
+                "unavailable",
+                None,
+                "offline",
+                None,
+            ),
+            OnlineSource(
+                "c",
+                "https://example.org/c",
+                "crossref",
+                "2026-11-02T12:00:00+00:00",
+                "failed",
+                None,
+                "timeout",
+                None,
+            ),
+            OnlineSource(
+                "d",
+                "https://example.org/d",
+                "openalex",
+                "2026-11-02T12:00:00+00:00",
+                "not_permitted",
+                None,
+                "policy",
+                None,
+            ),
+        ),
+        excerpts=(),
+        claims=(),
+    )
+    summary = online.summarize_returned_online_sources(
+        OnlineResearchEvidenceResult(evidence=evidence, search_run_id="run")
+    )
+    assert summary["source_count"] == 4
+    assert summary["status_counts"] == {
+        "retrieved": 1,
+        "unavailable": 1,
+        "not_permitted": 1,
+        "failed": 1,
+    }
+    assert [item["provider"] for item in summary["providers"]] == [
+        "crossref",
+        "openalex",
+        "pubmed",
+    ]
+    assert summary["providers"][2]["status_counts"]["unavailable"] == 1
+    assert summary["providers"][2]["status_counts"]["retrieved"] == 1
+
+
+def test_source_status_summary_does_not_invent_coverage_for_empty_result() -> None:
+    evidence = ContentCheckedOnlineEvidence(
+        question="What is known?",
+        sources=(),
+        excerpts=(),
+        claims=(),
+    )
+    summary = online.summarize_returned_online_sources(
+        OnlineResearchEvidenceResult(evidence=evidence, search_run_id="run")
+    )
+    assert summary["source_count"] == 0
+    assert summary["providers"] == []
+    assert all(value == 0 for value in summary["status_counts"].values())
