@@ -79,3 +79,33 @@ def run_guarded_online_evidence(
             raise OnlineEvidenceOrchestrationError(
                 "Online evidence retrieval or verification failed. No report was produced."
             ) from exc
+
+
+def summarize_returned_online_sources(result: OnlineResearchEvidenceResult) -> dict[str, object]:
+    """Count only sources actually returned by Core, not providers searched.
+
+    These are retrieval statuses, never scientific certainty, exhaustive
+    provider coverage, or a Research Report release gate.
+    """
+    statuses = ("retrieved", "unavailable", "not_permitted", "failed")
+    totals = dict.fromkeys(statuses, 0)
+    by_provider: dict[str, dict[str, int]] = {}
+    for source in result.evidence.sources:
+        if source.status not in totals:
+            raise OnlineEvidenceOrchestrationError("Online evidence has an invalid source status.")
+        totals[source.status] += 1
+        counts = by_provider.setdefault(source.provider, dict.fromkeys(statuses, 0))
+        counts[source.status] += 1
+    return {
+        "scope": "returned_sources_only_not_exhaustive_provider_coverage",
+        "source_count": len(result.evidence.sources),
+        "status_counts": totals,
+        "providers": [
+            {
+                "provider": provider,
+                "source_count": sum(counts.values()),
+                "status_counts": counts,
+            }
+            for provider, counts in sorted(by_provider.items())
+        ],
+    }

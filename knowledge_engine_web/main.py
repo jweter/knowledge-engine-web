@@ -102,6 +102,7 @@ from knowledge_engine_web.online_evidence_orchestration import (
     OnlineEvidenceOrchestrationError,
     evaluate_online_evidence_capability,
     run_guarded_online_evidence,
+    summarize_returned_online_sources,
 )
 from knowledge_engine_web.relationship_reader import (
     list_relationship_records_for_evidence_record_id,
@@ -1082,6 +1083,7 @@ def online_evidence_preview(payload: OnlineEvidenceQuestion, request: Request) -
         "research_report_complete": False,
         "validation_scope": "source_content_consistency_not_scientific_truth",
         "search_run_id": result.search_run_id,
+        "source_status_summary": summarize_returned_online_sources(result),
         "evidence": dataclasses.asdict(result.evidence),
     }
 
