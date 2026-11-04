@@ -15,7 +15,7 @@
       "slices": [
         {
           "id": "web-audit-local-corpus-dependencies",
-          "state": "PLANNED",
+          "state": "VERIFIED_COMPLETE",
           "objective": "Audit /ask and the Research Report flow for mandatory local-corpus or Ollama dependencies, record each one with its file references, and pin each in a characterization test so the orchestration slice removes it deliberately. This slice changes docs and tests only and does not remove dependencies.",
           "acceptance": [
             "docs/web_ask_report_dependency_audit.md lists every mandatory local-corpus or Ollama dependency with file references, or states there is none",
@@ -33,7 +33,12 @@
             "poetry.lock",
             "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
           ],
-          "capability_level": 3
+          "capability_level": 3,
+          "verification": [
+            "PR #224 merged 2026-11-02 as a7cf63cd, 8/8 checks SUCCESS: docs/web_ask_report_dependency_audit.md and tests/test_web_ask_report_dependency_audit.py",
+            "PR #227 merged 2026-11-02 as d6ef561f, 8/8 checks SUCCESS: docs/web_ask_report_dependency_audit.md (every mandatory model/corpus dependency with file references) pinned by tests/test_report_dependency_characterization.py",
+            "Recorded retroactively on 2026-11-04: this slice was delivered by merged work before the engine dispatched it (the capable-builder attempt on the PLANNED slice produced no pull request)."
+          ]
         },
         {
           "id": "web-one-request-report-orchestration",
