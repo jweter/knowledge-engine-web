@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Engine -- Online evidence preview{% endblock %}
+{% block content %}
+<h1>Online evidence preview</h1>
+<p class="disclaimer">
+  Ask one question and retrieve content-checked online sources without a
+  local corpus or Ollama. This is <strong>retrieval only</strong>: it is not
+  a synthesized Research Report, and the checks cover source-content
+  consistency, not scientific truth.
+</p>
+{% if not available %}
+<p class="publication-status-banner" role="status" id="online-evidence-unavailable">
+  Online evidence is not enabled on this deployment.
+</p>
+{% else %}
+<form id="online-evidence-form" method="post" action="/research/online-evidence">
+  <label for="online-evidence-question">Research question</label>
+  <input id="online-evidence-question" name="question" type="text"
+         maxlength="1000" required autocomplete="off">
+  <button type="submit" id="online-evidence-submit">Retrieve evidence</button>
+</form>
+<p id="online-evidence-progress" role="status" aria-live="polite"></p>
+<p id="online-evidence-error" role="alert"></p>
+<section id="online-evidence-results" aria-live="polite" hidden>
+  <h2>Returned sources</h2>
+  <p id="online-evidence-summary" class="disclaimer"></p>
+  <ol id="online-evidence-sources" class="ask-results"></ol>
+  <h2>Claims and citations</h2>
+  <p id="online-evidence-claims-empty" class="disclaimer" hidden>
+    No claims were returned. Absence of claims is not evidence of absence.
+  </p>
+  <ol id="online-evidence-claims" class="ask-results"></ol>
+</section>
+<script src="/static/online_evidence.js" defer></script>
+{% endif %}
+{% endblock %}

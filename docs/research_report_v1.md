@@ -140,3 +140,14 @@ The preview response also includes a deterministic `source_status_summary`
 explicitly **returned sources only**, not exhaustive provider-search coverage,
 scientific certainty, or Research Report completion. Unavailable, failed, and
 not-permitted sources remain visible instead of being counted as evidence.
+
+## One-question online evidence page (2026-11-06)
+
+`GET /research/online` renders a one-question UI over the guarded
+`POST /research/online-evidence` preview: progress text, returned sources
+(provider, status, hash, failure reasons), claims with excerpt citations linked
+to their source cards, and the returned-sources-only status summary. Hidden
+with an "unavailable" notice unless `online_evidence_enabled`. Still retrieval
+only: no synthesis, certainty grading, or Research Report; default Ask is
+unchanged. Remaining: real online-source Product Reality acceptance (roadmap
+slice 3) and AI synthesis.
