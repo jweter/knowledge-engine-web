@@ -277,3 +277,30 @@ def test_source_status_summary_does_not_invent_coverage_for_empty_result() -> No
     assert summary["source_count"] == 0
     assert summary["providers"] == []
     assert all(value == 0 for value in summary["status_counts"].values())
+
+
+def test_page_disabled_by_default_shows_unavailable_without_form(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main, "Settings", lambda: _settings())
+    response = TestClient(main.app).get("/research/online")
+    assert response.status_code == 200
+    assert "not enabled on this deployment" in response.text
+    assert "online-evidence-form" not in response.text
+
+
+def test_page_enabled_labels_retrieval_only_and_loads_script(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: "C:/fake/ke.exe")
+    monkeypatch.setattr(main, "Settings", lambda: _settings(online_evidence_enabled=True))
+    client = TestClient(main.app)
+    response = client.get("/research/online")
+    assert response.status_code == 200
+    assert 'id="online-evidence-form"' in response.text
+    assert "retrieval only" in response.text
+    assert "/static/online_evidence.js" in response.text
+    script = client.get("/static/online_evidence.js")
+    assert script.status_code == 200
+    # Rendered via textContent only; never innerHTML from provider-supplied data.
+    assert "innerHTML" not in script.text

@@ -1043,6 +1043,15 @@ class OnlineEvidenceQuestion(BaseModel):
     question: str
 
 
+@app.get("/research/online", response_class=HTMLResponse)
+def online_evidence_page(request: Request) -> HTMLResponse:
+    """One-question UI for the guarded online-evidence preview (retrieval only)."""
+    available = evaluate_online_evidence_capability(Settings()).available
+    return templates.TemplateResponse(
+        request=request, name="online_evidence.html", context={"available": available}
+    )
+
+
 @app.post("/research/online-evidence")
 def online_evidence_preview(payload: OnlineEvidenceQuestion, request: Request) -> dict[str, object]:
     """Opt-in online retrieval preview; never label it a completed report.
