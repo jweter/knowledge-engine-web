@@ -166,6 +166,51 @@ def live_app_with_research_available(tmp_path: Path) -> Iterator[str]:
 
 
 @pytest.fixture
+def live_app_with_online_evidence(tmp_path: Path) -> Iterator[str]:
+    """Real Web app with the opt-in online-evidence preview capability enabled.
+
+    The capability gate only needs a resolvable ``ke`` executable (the test
+    interpreter stands in); no provider request is ever made because browser
+    tests stub the POST at the network layer.
+    """
+    _, evidence_path = seed_fixture_data(tmp_path)
+    port = free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    env = isolated_server_env(tmp_path, evidence_path, port)
+    env.update(
+        {
+            "KE_WEB_ONLINE_EVIDENCE_ENABLED": "true",
+            "KE_WEB_KE_EXECUTABLE": sys.executable,
+        }
+    )
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "knowledge_engine_web.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    try:
+        wait_until_serving(base_url, process)
+        yield base_url
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+@pytest.fixture
 def live_app_with_alpha_auth(tmp_path: Path) -> Iterator[str]:
     """Same real Web app as `live_app`, with the alpha Basic Auth gate turned on."""
     _, evidence_path = seed_fixture_data(tmp_path)
