@@ -24,7 +24,29 @@
       return (u.protocol === "https:" || u.protocol === "http:") ? u.href : null;
     } catch (e) { return null; }
   }
+  function renderReport(report) {
+    var section = document.getElementById("online-evidence-report");
+    if (!report) { section.hidden = true; return; }
+    document.getElementById("online-evidence-bottom-line").textContent = report.bottom_line;
+    var rows = document.getElementById("online-evidence-conclusions");
+    rows.replaceChildren();
+    report.conclusion_rows.forEach(function (row) {
+      var li = el("li", null, "ask-result-card");
+      li.appendChild(el("p", row.conclusion));
+      li.appendChild(el("p", "Certainty: " + row.certainty + " — " + row.certainty_rationale, "disclaimer"));
+      li.appendChild(el("p", "Supporting excerpts: " + (row.supporting_evidence_ids.join(", ") || "none") +
+        "; contradicting or null: " + (row.contradicting_or_null_evidence_ids.join(", ") || "none"), "disclaimer"));
+      rows.appendChild(li);
+    });
+    var missing = document.getElementById("online-evidence-missing");
+    missing.replaceChildren();
+    report.missing_evidence.concat(report.limitations).forEach(function (t) {
+      missing.appendChild(el("li", t));
+    });
+    section.hidden = false;
+  }
   function render(data) {
+    renderReport(data.report);
     var s = data.source_status_summary;
     var c = s.status_counts;
     summary.textContent = s.source_count + " source(s) returned (" + c.retrieved +

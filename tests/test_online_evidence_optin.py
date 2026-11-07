@@ -304,3 +304,23 @@ def test_page_enabled_labels_retrieval_only_and_loads_script(
     assert script.status_code == 200
     # Rendered via textContent only; never innerHTML from provider-supplied data.
     assert "innerHTML" not in script.text
+
+
+def test_route_includes_deterministic_report_projection(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "Settings", lambda: _settings(online_evidence_enabled=True))
+    monkeypatch.setattr(
+        main,
+        "evaluate_online_evidence_capability",
+        lambda settings: online.OnlineEvidenceCapability(True),
+    )
+    monkeypatch.setattr(main, "run_guarded_online_evidence", lambda *a, **k: _result())
+    client = TestClient(main.app)
+    body = client.post("/research/online-evidence", json={"question": "What is known?"}).json()
+    assert body["research_report_complete"] is False
+    assert body["report_kind"] == "deterministic_projection_no_synthesis"
+    report = body["report"]
+    assert report["session_id"] == "run-verified"
+    assert report["research_state"] == "insufficient_evidence"
+    assert report["conclusion_rows"] == []
+    assert any("src-unavailable unavailable" in m for m in report["missing_evidence"])
+    assert "no LLM synthesis" in " ".join(report["limitations"])

@@ -24,7 +24,7 @@ sqlalchemy = "^2.0.31"
 # import. The pinned AI revision includes GQR grounded completion,
 # ResearchState v2, and Research Report v1's structured answer contract
 # plus fail-closed completed-session integration seam.
-knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "f8c3f0082ab4afc549d9a92b895c21db2e57bf2d" }
+knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "746dfd5bbfadf81259af02702367fc930a54f307" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"

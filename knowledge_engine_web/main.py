@@ -21,6 +21,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from knowledge_engine_ai.copilot.online_report import build_online_research_report
 from knowledge_engine_ai.ke_client import FederatedProviderStatus
 from pydantic import BaseModel
 from sqlalchemy import Engine, create_engine
@@ -1087,9 +1088,18 @@ def online_evidence_preview(payload: OnlineEvidenceQuestion, request: Request) -
         raise HTTPException(status_code=429, detail=detail) from exc
     except OnlineEvidenceOrchestrationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        projected = build_online_research_report(
+            result.evidence, search_run_id=result.search_run_id
+        ).to_dict()
+    except ValueError:
+        # Fail closed: the retrieval evidence is still returned without a projection.
+        projected = None
     return {
         "status": "content_checked_retrieval_only",
         "research_report_complete": False,
+        "report_kind": "deterministic_projection_no_synthesis" if projected else None,
+        "report": projected,
         "validation_scope": "source_content_consistency_not_scientific_truth",
         "search_run_id": result.search_run_id,
         "source_status_summary": summarize_returned_online_sources(result),
