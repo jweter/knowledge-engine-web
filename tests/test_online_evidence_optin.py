@@ -324,3 +324,61 @@ def test_route_includes_deterministic_report_projection(monkeypatch: pytest.Monk
     assert report["conclusion_rows"] == []
     assert any("src-unavailable unavailable" in m for m in report["missing_evidence"])
     assert "no LLM synthesis" in " ".join(report["limitations"])
+
+
+def test_route_reports_measured_stages_without_inventing_progress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main, "Settings", lambda: _settings(online_evidence_enabled=True))
+    monkeypatch.setattr(
+        main,
+        "evaluate_online_evidence_capability",
+        lambda settings: online.OnlineEvidenceCapability(True),
+    )
+    monkeypatch.setattr(main, "run_guarded_online_evidence", lambda *a, **k: _result())
+    body = (
+        TestClient(main.app)
+        .post("/research/online-evidence", json={"question": "What is known?"})
+        .json()
+    )
+    assert [s["stage"] for s in body["stages"]] == [
+        "discovery_retrieval_validation",
+        "deterministic_analysis",
+    ]
+    assert all(s["status"] == "completed" and s["elapsed_ms"] >= 0 for s in body["stages"])
+
+
+def test_route_marks_analysis_failed_closed_when_projection_rejects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main, "Settings", lambda: _settings(online_evidence_enabled=True))
+    monkeypatch.setattr(
+        main,
+        "evaluate_online_evidence_capability",
+        lambda settings: online.OnlineEvidenceCapability(True),
+    )
+    monkeypatch.setattr(main, "run_guarded_online_evidence", lambda *a, **k: _result())
+
+    def reject(*a: object, **k: object) -> object:
+        raise ValueError("bad")
+
+    monkeypatch.setattr(main, "build_online_research_report", reject)
+    body = (
+        TestClient(main.app)
+        .post("/research/online-evidence", json={"question": "What is known?"})
+        .json()
+    )
+    assert body["report"] is None
+    assert body["stages"][1]["status"] == "failed_closed"
+    assert body["evidence"]["sources"]
+
+
+def test_page_has_run_stages_section(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        main,
+        "evaluate_online_evidence_capability",
+        lambda settings: online.OnlineEvidenceCapability(True),
+    )
+    html = TestClient(main.app).get("/research/online").text
+    assert 'id="online-evidence-stages"' in html
+    assert "discarded when it ends" in html
