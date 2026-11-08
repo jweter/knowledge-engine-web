@@ -45,7 +45,23 @@
     });
     section.hidden = false;
   }
+  var stageLabels = {
+    completed: "completed",
+    failed_closed: "failed closed (evidence still shown, no analysis)"
+  };
+  function renderStages(stages) {
+    var list = document.getElementById("online-evidence-stages");
+    list.replaceChildren();
+    (stages || []).forEach(function (st) {
+      list.appendChild(el("li", st.label + " — " + (stageLabels[st.status] || st.status) +
+        " (" + (st.elapsed_ms / 1000).toFixed(1) + " s)"));
+    });
+    list.parentElement.hidden = !(stages && stages.length);
+  }
+  var timer = null;
+  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
   function render(data) {
+    renderStages(data.stages);
     renderReport(data.report);
     var s = data.source_status_summary;
     var c = s.status_counts;
@@ -101,7 +117,13 @@
     if (!question) { errorEl.textContent = "Enter a research question."; input.focus(); return; }
     results.hidden = true;
     submit.disabled = true;
-    progress.textContent = "Searching online sources and checking returned content… this can take up to a couple of minutes.";
+    var t0 = Date.now();
+    var base = "Discovering, retrieving and validating online sources in one backend run (stage detail is reported when it finishes; this can take up to a couple of minutes)";
+    progress.textContent = base + "… 0 s elapsed.";
+    stopTimer();
+    timer = setInterval(function () {
+      progress.textContent = base + "… " + Math.round((Date.now() - t0) / 1000) + " s elapsed.";
+    }, 1000);
     fetch("/research/online-evidence", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -109,6 +131,7 @@
     }).then(function (resp) {
       return resp.json().then(function (body) { return { ok: resp.ok, body: body }; });
     }).then(function (r) {
+      stopTimer();
       if (!r.ok) {
         errorEl.textContent = typeof r.body.detail === "string" ? r.body.detail : "The request could not be completed.";
         progress.textContent = "";
@@ -117,6 +140,7 @@
       progress.textContent = "Retrieval finished. This is retrieval only, not a Research Report.";
       render(r.body);
     }).catch(function () {
+      stopTimer();
       progress.textContent = "";
       errorEl.textContent = "Network error. No evidence was retrieved.";
     }).then(function () { submit.disabled = false; });

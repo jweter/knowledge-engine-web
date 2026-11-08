@@ -151,3 +151,15 @@ with an "unavailable" notice unless `online_evidence_enabled`. Still retrieval
 only: no synthesis, certainty grading, or Research Report; default Ask is
 unchanged. Remaining: real online-source Product Reality acceptance (roadmap
 slice 3) and AI synthesis.
+
+## Run stages on the online evidence page (2026-11-08)
+
+`POST /research/online-evidence` now returns `stages`: the stages that actually
+ran (`discovery_retrieval_validation`, `deterministic_analysis`) with `status`
+and measured `elapsed_ms`. Core exposes discovery, retrieval and validation as
+one blocking run, so Web does not fabricate finer-grained live progress; while
+waiting the page shows only a real elapsed-time counter and states that stage
+detail arrives when the run finishes. Temporary retrieval data lives in a
+`TemporaryDirectory` inside the AI client call and is removed on success or
+failure. Still retrieval only: remaining debt is live per-stage progress (needs
+a Core/AI progress contract), AI synthesis, and Product Reality acceptance.

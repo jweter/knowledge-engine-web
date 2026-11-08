@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -1070,6 +1071,8 @@ def online_evidence_preview(payload: OnlineEvidenceQuestion, request: Request) -
         raise HTTPException(
             status_code=503, detail="Online evidence is unavailable on this deployment."
         )
+    stages: list[dict[str, object]] = []
+    started = time.monotonic()
     try:
         result = run_guarded_online_evidence(
             settings,
@@ -1088,14 +1091,35 @@ def online_evidence_preview(payload: OnlineEvidenceQuestion, request: Request) -
         raise HTTPException(status_code=429, detail=detail) from exc
     except OnlineEvidenceOrchestrationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    retrieval_ms = round((time.monotonic() - started) * 1000)
+    stages.append(
+        {
+            "stage": "discovery_retrieval_validation",
+            "label": "Discovery, retrieval and source-content validation (one Core run)",
+            "status": "completed",
+            "elapsed_ms": retrieval_ms,
+        }
+    )
+    analysis_started = time.monotonic()
     try:
         projected = build_online_research_report(
             result.evidence, search_run_id=result.search_run_id
         ).to_dict()
+        analysis_status = "completed"
     except ValueError:
         # Fail closed: the retrieval evidence is still returned without a projection.
         projected = None
+        analysis_status = "failed_closed"
+    stages.append(
+        {
+            "stage": "deterministic_analysis",
+            "label": "Deterministic evidence analysis (no model synthesis)",
+            "status": analysis_status,
+            "elapsed_ms": round((time.monotonic() - analysis_started) * 1000),
+        }
+    )
     return {
+        "stages": stages,
         "status": "content_checked_retrieval_only",
         "research_report_complete": False,
         "report_kind": "deterministic_projection_no_synthesis" if projected else None,

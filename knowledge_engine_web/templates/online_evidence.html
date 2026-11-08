@@ -22,6 +22,15 @@
 <p id="online-evidence-progress" role="status" aria-live="polite"></p>
 <p id="online-evidence-error" role="alert"></p>
 <section id="online-evidence-results" aria-live="polite" hidden>
+  <section aria-labelledby="online-evidence-stages-heading" hidden>
+    <h2 id="online-evidence-stages-heading">Run stages</h2>
+    <p class="disclaimer">
+      Stages actually completed for this question, with measured durations.
+      Temporary retrieval data is held only for the duration of the run and
+      is discarded when it ends; nothing is stored persistently.
+    </p>
+    <ol id="online-evidence-stages"></ol>
+  </section>
   <section id="online-evidence-report" aria-labelledby="online-evidence-report-heading" hidden>
     <h2 id="online-evidence-report-heading">Evidence summary</h2>
     <p class="disclaimer">
