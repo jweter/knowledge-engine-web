@@ -1046,11 +1046,18 @@ class OnlineEvidenceQuestion(BaseModel):
 
 
 @app.get("/research/online", response_class=HTMLResponse)
-def online_evidence_page(request: Request) -> HTMLResponse:
-    """One-question UI for the guarded online-evidence preview (retrieval only)."""
+def online_evidence_page(request: Request, q: str = "") -> HTMLResponse:
+    """One-question UI for the guarded online-evidence preview (retrieval only).
+
+    ``q`` only pre-fills the form so a refresh or shared link keeps the user's
+    question; it never starts provider requests on page load.
+    """
     available = evaluate_online_evidence_capability(Settings()).available
+    prefill = q.strip()[:1000]
     return templates.TemplateResponse(
-        request=request, name="online_evidence.html", context={"available": available}
+        request=request,
+        name="online_evidence.html",
+        context={"available": available, "prefill_question": prefill},
     )
 
 
@@ -1126,6 +1133,7 @@ def online_evidence_preview(payload: OnlineEvidenceQuestion, request: Request) -
         "report": projected,
         "validation_scope": "source_content_consistency_not_scientific_truth",
         "search_run_id": result.search_run_id,
+        "research_question_id": derive_research_question_id(payload.question),
         "source_status_summary": summarize_returned_online_sources(result),
         "evidence": dataclasses.asdict(result.evidence),
     }

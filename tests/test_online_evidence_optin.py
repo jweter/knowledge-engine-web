@@ -17,6 +17,7 @@ from knowledge_engine_web import main
 from knowledge_engine_web import online_evidence_orchestration as online
 from knowledge_engine_web.ai_guardrails import AIAdmissionError, AIRequestGuard
 from knowledge_engine_web.config import Settings
+from knowledge_engine_web.research_question import derive_research_question_id
 
 
 def _settings(**overrides: Any) -> Settings:
@@ -382,3 +383,31 @@ def test_page_has_run_stages_section(monkeypatch: pytest.MonkeyPatch) -> None:
     html = TestClient(main.app).get("/research/online").text
     assert 'id="online-evidence-stages"' in html
     assert "discarded when it ends" in html
+
+
+def test_route_returns_stable_research_question_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "Settings", lambda: _settings(online_evidence_enabled=True))
+    monkeypatch.setattr(
+        main,
+        "evaluate_online_evidence_capability",
+        lambda settings: online.OnlineEvidenceCapability(True),
+    )
+    monkeypatch.setattr(main, "run_guarded_online_evidence", lambda *a, **k: _result())
+    client = TestClient(main.app)
+    first = client.post("/research/online-evidence", json={"question": "What is known?"}).json()
+    second = client.post("/research/online-evidence", json={"question": "What is known?"}).json()
+    assert first["research_question_id"] == second["research_question_id"]
+    assert first["research_question_id"] == derive_research_question_id("What is known?")
+
+
+def test_page_prefills_question_without_starting_retrieval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: "C:/fake/ke.exe")
+    monkeypatch.setattr(main, "Settings", lambda: _settings(online_evidence_enabled=True))
+    monkeypatch.setattr(
+        main, "run_guarded_online_evidence", lambda *a, **k: pytest.fail("must not run on GET")
+    )
+    response = TestClient(main.app).get("/research/online", params={"q": 'a "b" <i>'})
+    assert response.status_code == 200
+    assert 'value="a &#34;b&#34; &lt;i&gt;"' in response.text
