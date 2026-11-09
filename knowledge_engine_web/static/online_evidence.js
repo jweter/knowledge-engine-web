@@ -62,6 +62,8 @@
   function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
   function render(data) {
     renderStages(data.stages);
+    document.getElementById("online-evidence-question-id").textContent =
+      "Research question ID (stable for this question text): " + data.research_question_id + ".";
     renderReport(data.report);
     var s = data.source_status_summary;
     var c = s.status_counts;
@@ -117,6 +119,9 @@
     if (!question) { errorEl.textContent = "Enter a research question."; input.focus(); return; }
     results.hidden = true;
     submit.disabled = true;
+    try {
+      history.replaceState(null, "", "?q=" + encodeURIComponent(question));
+    } catch (e) { /* URL update is a convenience only */ }
     var t0 = Date.now();
     var base = "Discovering, retrieving and validating online sources in one backend run (stage detail is reported when it finishes; this can take up to a couple of minutes)";
     progress.textContent = base + "… 0 s elapsed.";

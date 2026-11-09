@@ -16,7 +16,8 @@
 <form id="online-evidence-form" method="post" action="/research/online-evidence">
   <label for="online-evidence-question">Research question</label>
   <input id="online-evidence-question" name="question" type="text"
-         maxlength="1000" required autocomplete="off">
+         maxlength="1000" required autocomplete="off"
+         value="{{ prefill_question }}">
   <button type="submit" id="online-evidence-submit">Retrieve evidence</button>
 </form>
 <p id="online-evidence-progress" role="status" aria-live="polite"></p>
@@ -43,6 +44,7 @@
     <h3>Missing evidence and limitations</h3>
     <ul id="online-evidence-missing"></ul>
   </section>
+  <p id="online-evidence-question-id" class="disclaimer"></p>
   <h2>Returned sources</h2>
   <p id="online-evidence-summary" class="disclaimer"></p>
   <ol id="online-evidence-sources" class="ask-results"></ol>
