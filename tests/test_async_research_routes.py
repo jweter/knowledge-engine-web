@@ -106,6 +106,42 @@ def test_async_status_returns_durable_final_presentation_payload(
     assert payload["result"]["progress"]["newly_acquired_evidence_record_ids"] == ["ev-new"]
 
 
+def test_async_status_reports_a_failed_job_so_the_page_stops_polling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WEB-GQR-5 failure drill: once the background worker has closed a job as
+    `failed` (provider rejection, orchestration error, or an unexpected
+    crash -- see `tests/test_research_jobs.py`), the poll route the Ask page
+    relies on must say so plainly (`terminal`, `job_status == "failed"`, a
+    visitor-safe `visitor_error`, no `result`) instead of leaving the visitor
+    polling a session that will never complete."""
+
+    session_db = _enable_async_research(tmp_path, monkeypatch)
+    session_id = "session-failed-research"
+    research_jobs.create_research_job(
+        str(session_db),
+        session_id=session_id,
+        research_question_id="failed-question",
+        question="Does creatine improve maximal strength?",
+    )
+    research_jobs._mark_failed(
+        str(session_db),
+        session_id,
+        "Research Copilot has received too many requests recently. Please wait and try again.",
+    )
+
+    response = TestClient(app).get(f"/ask/session/{session_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["terminal"] is True
+    assert payload["job_status"] == "failed"
+    assert payload["result"] is None
+    assert payload["visitor_error"] == (
+        "Research Copilot has received too many requests recently. Please wait and try again."
+    )
+
+
 def test_refreshing_known_async_session_does_not_start_a_second_job(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -7,6 +7,7 @@ import pytest
 
 from knowledge_engine_web import research_jobs
 from knowledge_engine_web.ai_guardrails import AIAdmissionError
+from knowledge_engine_web.ai_orchestration import AIOrchestrationError
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.observability import logger as request_logger
 
@@ -286,3 +287,117 @@ def test_job_execution_logs_a_terminal_outcome_correlated_with_request_id(
         and "event=research_job_failed" in message
         for message in messages
     )
+
+
+def test_execute_research_job_persists_admission_rejection_as_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WEB-GQR-5 failure drill: a provider admission rejection (e.g. rate limit)
+    raised inside the background worker must leave a durable, pollable
+    `failed` job carrying the caller-safe `visitor_message`, not just a log
+    line -- `/ask/session/{id}` reads this row directly."""
+
+    database_path = tmp_path / "research_sessions.sqlite3"
+    settings = Settings(session_db_path=str(database_path))
+    research_jobs.create_research_job(
+        str(database_path),
+        session_id="session-admission-rejected",
+        research_question_id="question-admission-rejected",
+        question="A research question",
+    )
+
+    def _fail(*_args: object, **_kwargs: object) -> None:
+        raise AIAdmissionError(
+            "rate_limit_reached",
+            "Research Copilot has received too many requests recently. Please wait and try again.",
+        )
+
+    monkeypatch.setattr(research_jobs, "run_guarded_ai_orchestration", _fail)
+
+    research_jobs._execute_research_job(
+        settings, "A research question", "client-key", "session-admission-rejected", None
+    )
+
+    job = research_jobs.read_research_job(str(database_path), "session-admission-rejected")
+    assert job is not None
+    assert job.status == "failed"
+    assert job.terminal
+    assert job.result is None
+    assert job.visitor_error == (
+        "Research Copilot has received too many requests recently. Please wait and try again."
+    )
+    assert not research_jobs.is_research_job_active("session-admission-rejected")
+
+
+def test_execute_research_job_persists_orchestration_error_as_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WEB-GQR-5 failure drill: a Core/provider orchestration failure (e.g. all
+    providers unavailable, Core retrieval failure) must also leave a durable
+    `failed` job rather than hanging the page's poll loop forever."""
+
+    database_path = tmp_path / "research_sessions.sqlite3"
+    settings = Settings(session_db_path=str(database_path))
+    research_jobs.create_research_job(
+        str(database_path),
+        session_id="session-orchestration-failed",
+        research_question_id="question-orchestration-failed",
+        question="A research question",
+    )
+
+    def _fail(*_args: object, **_kwargs: object) -> None:
+        raise AIOrchestrationError("Research Copilot could not complete this request.")
+
+    monkeypatch.setattr(research_jobs, "run_guarded_ai_orchestration", _fail)
+
+    research_jobs._execute_research_job(
+        settings, "A research question", "client-key", "session-orchestration-failed", None
+    )
+
+    job = research_jobs.read_research_job(str(database_path), "session-orchestration-failed")
+    assert job is not None
+    assert job.status == "failed"
+    assert job.terminal
+    assert job.result is None
+    assert job.visitor_error == "Research Copilot could not complete this request."
+    assert not research_jobs.is_research_job_active("session-orchestration-failed")
+
+
+def test_execute_research_job_never_persists_a_raw_unexpected_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unanticipated exception (local LLM crash, unhandled provider
+    response, etc.) must still close the job as `failed` with the fixed,
+    sanitized visitor message -- never the raw exception text, which could
+    carry a path, provider response body, or secret."""
+
+    database_path = tmp_path / "research_sessions.sqlite3"
+    settings = Settings(session_db_path=str(database_path))
+    research_jobs.create_research_job(
+        str(database_path),
+        session_id="session-unexpected-crash",
+        research_question_id="question-unexpected-crash",
+        question="A research question",
+    )
+
+    sensitive_detail = "Bearer sk-live-secret-token at /var/data/research_papers/private.json"
+
+    def _fail(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError(sensitive_detail)
+
+    monkeypatch.setattr(research_jobs, "run_guarded_ai_orchestration", _fail)
+
+    research_jobs._execute_research_job(
+        settings, "A research question", "client-key", "session-unexpected-crash", None
+    )
+
+    job = research_jobs.read_research_job(str(database_path), "session-unexpected-crash")
+    assert job is not None
+    assert job.status == "failed"
+    assert job.terminal
+    assert job.result is None
+    assert job.visitor_error == (
+        "Research mode stopped unexpectedly. The durable session trace remains available."
+    )
+    assert sensitive_detail not in (job.visitor_error or "")
+    assert not research_jobs.is_research_job_active("session-unexpected-crash")
