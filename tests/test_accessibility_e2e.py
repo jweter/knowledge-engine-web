@@ -20,16 +20,21 @@ repository cannot fake without violating that posture; see
 
 Also covers static/reference pages (About, Roadmap, the standalone concept
 preview embedded by Roadmap, Demo, Reports index/view, Unconfirmed Claims,
-Relationship Candidates, paper detail) that need no Research capability.
+Relationship Candidates, paper detail) that need no Research capability, and
+the opt-in online-evidence preview page (empty form and populated-results
+states) behind its own capability fixture.
 """
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from axe_playwright_python.sync_playwright import Axe
-from playwright.sync_api import Page
+from playwright.sync_api import Page, Route
 
 from tests._browser_e2e_support import EVIDENCE_RECORD_ID, QUESTION
+from tests.test_online_evidence_browser_e2e import _payload
 
 pytestmark = pytest.mark.browser_e2e
 
@@ -147,3 +152,24 @@ def test_relationship_candidates_page_has_no_accessibility_violations(
 def test_paper_detail_page_has_no_accessibility_violations(page: Page, live_app: str) -> None:
     page.goto(live_app + "/papers/1")
     _assert_no_enforced_violations(page, "Paper detail")
+
+
+def test_online_evidence_page_has_no_accessibility_violations(
+    page: Page, live_app_with_online_evidence: str
+) -> None:
+    page.goto(live_app_with_online_evidence + "/research/online")
+    _assert_no_enforced_violations(page, "Online evidence preview")
+
+
+def test_online_evidence_results_have_no_accessibility_violations(
+    page: Page, live_app_with_online_evidence: str
+) -> None:
+    def handler(route: Route) -> None:
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(_payload()))
+
+    page.route("**/research/online-evidence", handler)
+    page.goto(live_app_with_online_evidence + "/research/online")
+    page.fill("#online-evidence-question", "does x affect y?")
+    page.click("#online-evidence-submit")
+    page.locator("#online-evidence-results").wait_for(state="visible")
+    _assert_no_enforced_violations(page, "Online evidence preview (populated results)")
