@@ -9,6 +9,7 @@ are asserted on the product path rather than on mocks of it.
 from __future__ import annotations
 
 import json
+import os
 import stat
 import sys
 import tempfile
@@ -91,6 +92,14 @@ def online_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, obj
     fake = tmp_path / "ke"
     fake.write_text(FAKE_KE.format(python=sys.executable))
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+    if os.name == "nt":
+        # Windows cannot execute a shebang script and takes its temp root from TMP/TEMP, not
+        # TMPDIR. Without this the fake is never found (503) and these acceptance tests fail on
+        # every Windows run of the repository preflight.
+        script, fake = fake, tmp_path / "ke.cmd"
+        fake.write_text(f'@"{sys.executable}" "{script}" %*\r\n')
+        monkeypatch.setenv("TMP", str(scratch))
+        monkeypatch.setenv("TEMP", str(scratch))
     log = tmp_path / "ke.log"
     monkeypatch.setenv("FAKE_KE_LOG", str(log))
     monkeypatch.setenv("FAKE_KE_MODE", "ok")
@@ -115,8 +124,18 @@ def _ask() -> object:
     )
 
 
+# Directories that security software on the machine drops into any directory used as a temp
+# root (observed: Norton creates ``_norton_`` in a fresh %TEMP%). They are not the product's
+# data, so they are not the product's leftovers.
+FOREIGN_TEMP_DIRECTORIES = {"_norton_"}
+
+
 def _leftovers(scratch: Path) -> list[Path]:
-    return list(scratch.rglob("*"))
+    return [
+        path
+        for path in scratch.rglob("*")
+        if path.relative_to(scratch).parts[0] not in FOREIGN_TEMP_DIRECTORIES
+    ]
 
 
 def test_online_report_has_citations_uncertainty_and_leaves_no_temp_data(
