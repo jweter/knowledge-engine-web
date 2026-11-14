@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "repository": "jweter/knowledge-engine-web",
+  "open_pull_requests": [
+    {
+      "number": 239,
+      "draft": false,
+      "head": "dependabot/pip/opentelemetry-api-1.45.2",
+      "base": "main"
+    },
+    {
+      "number": 240,
+      "draft": false,
+      "head": "dependabot/docker/ollama/ollama-0.40.16",
+      "base": "main"
+    },
+    {
+      "number": 241,
+      "draft": false,
+      "head": "dependabot/pip/python-runtime-5f24b81c46",
+      "base": "main"
+    },
+    {
+      "number": 242,
+      "draft": false,
+      "head": "dependabot/pip/python-development-ca5962ce2a",
+      "base": "main"
+    },
+    {
+      "number": 243,
+      "draft": true,
+      "head": "claude/gifted-clarke-xkn84o",
+      "base": "main"
+    },
+    {
+      "number": 244,
+      "draft": false,
+      "head": "fix/online-report-acceptance-windows",
+      "base": "main"
+    },
+    {
+      "number": 245,
+      "draft": false,
+      "head": "chore/bump-opentelemetry-api",
+      "base": "main"
+    }
+  ],
+  "open_issue_numbers": [
+    93,
+    107,
+    140,
+    160,
+    220,
+    222
+  ],
+  "product_reality": {
+    "monster_79_rendered_report_acceptance": "PENDING"
+  },
+  "readiness_dimensions": {
+    "implementation": "UNKNOWN",
+    "automated_verification": "UNKNOWN",
+    "integration": "UNKNOWN",
+    "product_reality": "UNKNOWN",
+    "documentation": "UNKNOWN",
+    "security_and_policy": "UNKNOWN"
+  },
+  "rule": "Generated from live GitHub state and committed Product Reality evidence; UNKNOWN is intentional when evidence is insufficient."
+}
