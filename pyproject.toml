@@ -23,8 +23,12 @@ sqlalchemy = "^2.0.31"
 # via SQLAlchemy reflection, never imported), this really is a Python
 # import. The pinned AI revision includes GQR grounded completion,
 # ResearchState v2, and Research Report v1's structured answer contract
-# plus fail-closed completed-session integration seam.
-knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "746dfd5bbfadf81259af02702367fc930a54f307" }
+# plus fail-closed completed-session integration seam. Bumped for the
+# owner-approved 2026-10-25 online-evidence-only `/ask` fallback (see
+# `docs/research_report_v1.md`): the prior pin predates AI's
+# `run_online_research_question` (added in #220, fixed in #223) that
+# fallback calls.
+knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "8805e303d7c5d5bb0681decbd01c61874ee72b3e" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"

@@ -40,7 +40,9 @@ from knowledge_engine_ai.copilot.research_report_integration import (
 )
 from knowledge_engine_ai.copilot.research_state import ResearchStateResult, derive_research_state
 from knowledge_engine_ai.copilot.run_research_question import (
+    OnlineResearchQuestionResult,
     ResearchQuestionResult,
+    run_online_research_question,
     run_research_question,
 )
 from knowledge_engine_ai.llm import OllamaLLM
@@ -55,8 +57,10 @@ from knowledge_engine_ai.sessions.repository import SessionRepository, new_conne
 from knowledge_engine_web.ai_guardrails import AIRequestGuard
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.discovery_orchestration import evaluate_discovery_capability
+from knowledge_engine_web.online_evidence_orchestration import evaluate_online_evidence_capability
 
 _GLOBAL_AI_REQUEST_GUARD = AIRequestGuard()
+_GLOBAL_ONLINE_ASK_GUARD = AIRequestGuard()
 _EXECUTION_TIMEOUT_FRAGMENTS = (
     "configured execution time limit",
     "did not respond within",
@@ -385,6 +389,57 @@ def run_guarded_ai_orchestration(
         )
 
 
+def run_guarded_online_research_answer(
+    settings: Settings,
+    question: str,
+    *,
+    client_key: str,
+    guard: AIRequestGuard | None = None,
+) -> OnlineResearchQuestionResult:
+    """Answer one question from Core's on-demand online evidence, no local corpus/Ollama.
+
+    This is the fallback the owner-approved 2026-10-25 architecture requires when the
+    complete local-corpus/Ollama Research Copilot path above is unavailable (see
+    `docs/research_report_v1.md`'s "Owner-approved architecture" section): a deployment
+    must not require a pre-ingested local corpus. Callers reach this only after the
+    local path has already failed closed -- see `research_jobs._try_online_fallback` --
+    so a deployment where the local path works is unaffected and never calls this.
+
+    The returned report is Core's retrieved, content-checked evidence deterministically
+    projected (`knowledge_engine_ai.copilot.online_report.build_online_research_report`);
+    it is not a synthesized answer, and its `research_state` is capped at `partial_answer`
+    or `insufficient_evidence`. Raises `AIOrchestrationError` with a sanitized message
+    when the online path is unavailable or Core's bridge fails, matching
+    `run_ai_orchestration`'s error contract so one `except AIOrchestrationError` clause
+    covers both paths.
+    """
+
+    capability = evaluate_online_evidence_capability(settings)
+    if not capability.available:
+        raise AIOrchestrationError("Online evidence research is unavailable on this deployment.")
+
+    request_guard = guard if guard is not None else _GLOBAL_ONLINE_ASK_GUARD
+    with request_guard.admit(
+        client_key,
+        max_concurrent_requests=settings.online_evidence_max_concurrent_requests,
+        rate_limit_requests=settings.online_evidence_rate_limit_requests,
+        rate_limit_window_seconds=settings.online_evidence_rate_limit_window_seconds,
+    ):
+        result = run_online_research_question(
+            question,
+            max_sources=settings.online_evidence_max_sources,
+            ke_executable=settings.ke_executable,
+            timeout_seconds=settings.online_evidence_request_timeout_seconds,
+        )
+
+    if not result.available:
+        raise AIOrchestrationError(
+            "Online evidence research could not complete this request. "
+            "Deterministic retrieval results are still shown below."
+        )
+    return result
+
+
 def result_reached_execution_limit(result: _ResearchResultLike) -> bool:
     """Return whether durable workflow state records an execution timeout."""
 
@@ -509,4 +564,5 @@ __all__ = [
     "result_reached_execution_limit",
     "run_ai_orchestration",
     "run_guarded_ai_orchestration",
+    "run_guarded_online_research_answer",
 ]

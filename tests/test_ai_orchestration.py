@@ -9,7 +9,9 @@ from typing import cast
 import pytest
 from knowledge_engine_ai.copilot.discovery_policy import FederatedDiscoveryPolicy
 from knowledge_engine_ai.copilot.grounded_completion import GroundedCompletionPolicy
+from knowledge_engine_ai.copilot.research_report import ResearchReport
 from knowledge_engine_ai.copilot.research_state import ResearchState, ResearchStateResult
+from knowledge_engine_ai.copilot.run_research_question import OnlineResearchQuestionResult
 
 from knowledge_engine_web import ai_orchestration
 from knowledge_engine_web.ai_guardrails import AIRequestGuard
@@ -19,6 +21,7 @@ from knowledge_engine_web.ai_orchestration import (
     result_reached_execution_limit,
     run_ai_orchestration,
     run_guarded_ai_orchestration,
+    run_guarded_online_research_answer,
 )
 from knowledge_engine_web.config import Settings
 
@@ -466,3 +469,83 @@ def test_run_ai_orchestration_rejects_an_unavailable_runtime(tmp_path: Path) -> 
 
     with pytest.raises(AIOrchestrationError, match="unavailable"):
         run_ai_orchestration(settings, "question")
+
+
+def test_online_research_answer_fails_closed_when_feature_disabled() -> None:
+    settings = Settings(_env_file=None, online_evidence_enabled=False)
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("run_online_research_question must not be called when disabled")
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(ai_orchestration, "run_online_research_question", fail)
+        with pytest.raises(AIOrchestrationError, match="unavailable"):
+            run_guarded_online_research_answer(settings, "question", client_key="visitor")
+
+
+def test_online_research_answer_forwards_settings_and_returns_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        online_evidence_enabled=True,
+        ke_executable=sys.executable,
+        online_evidence_max_sources=5,
+        online_evidence_request_timeout_seconds=42.0,
+    )
+    calls: list[dict[str, object]] = []
+
+    report = ResearchReport(
+        schema_version=1,
+        question="question",
+        bottom_line="1 of 1 claims have supporting citations from 1 of 1 sources.",
+        conclusion_rows=(),
+        narrative_sections=(),
+        missing_evidence=(),
+        direct_evidence_summary="Directness was not assessed.",
+        indirect_evidence_summary="Directness was not assessed.",
+        provider_coverage_completeness="complete",
+        degraded_providers=(),
+        provider_statuses=(),
+        indexed_before_run_evidence_ids=(),
+        acquired_during_run_evidence_ids=("online-ev-1",),
+        limitations=("Deterministic projection of Core claims; no LLM synthesis.",),
+        session_id="run-1",
+        research_state="partial_answer",
+    )
+    expected = OnlineResearchQuestionResult(
+        question="question", report=report, search_run_id="run-1", error_code=None
+    )
+
+    def fake_run(question: str, **kwargs: object) -> OnlineResearchQuestionResult:
+        calls.append({"question": question, **kwargs})
+        return expected
+
+    monkeypatch.setattr(ai_orchestration, "run_online_research_question", fake_run)
+
+    result = run_guarded_online_research_answer(settings, "  question  ", client_key="visitor")
+
+    assert result is expected
+    assert calls[0]["question"] == "  question  "
+    assert calls[0]["max_sources"] == 5
+    assert calls[0]["ke_executable"] == sys.executable
+    assert calls[0]["timeout_seconds"] == 42.0
+
+
+def test_online_research_answer_raises_when_bridge_result_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(_env_file=None, online_evidence_enabled=True, ke_executable=sys.executable)
+
+    def fake_run(*_args: object, **_kwargs: object) -> OnlineResearchQuestionResult:
+        return OnlineResearchQuestionResult(
+            question="question",
+            report=None,
+            search_run_id=None,
+            error_code="online_research_bridge_failed",
+        )
+
+    monkeypatch.setattr(ai_orchestration, "run_online_research_question", fake_run)
+
+    with pytest.raises(AIOrchestrationError, match="could not complete"):
+        run_guarded_online_research_answer(settings, "question", client_key="visitor")
