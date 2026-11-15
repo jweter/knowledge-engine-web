@@ -120,7 +120,7 @@ rather than re-deriving the live-server/fixture-data approach.
 
 `tests/test_accessibility_e2e.py` runs [axe-core](https://github.com/dequelabs/axe-core)
 (via `axe-playwright-python`, which vendors `axe.min.js` -- no network access
-needed at test time) against seventeen real, real-Chromium-rendered
+needed at test time) against nineteen real, real-Chromium-rendered
 pages/states: the homepage; the Ask page in both its indexed-hit and no-match
 states; the claim detail page; the graph summary page (`/graph`); the
 Evidence Intelligence dashboard (`/dashboard`); the claims list (`/claims`);
@@ -136,16 +136,21 @@ in its honest "record unavailable" empty state (`/demo` -- the fixture data
 does not include the stable SELECT-trial demo record), the Reports index
 (`/reports`) and one rendered report view (`/reports/graph`), Unconfirmed
 Claims (`/unconfirmed-claims`), Relationship Candidates
-(`/relationship-candidates`), and one paper detail page (`/papers/1`). Each
-test fails on any "critical", "serious", "moderate", or "minor" impact
-violation axe-core reports -- every impact level axe-core distinguishes is
-enforced, not just critical/serious.
+(`/relationship-candidates`), one paper detail page (`/papers/1`), and (this
+run) the opt-in online-evidence preview (`/research/online`) in both its
+empty-form state and its populated-results state (stubbed Core/AI response,
+same contract `tests/test_online_evidence_browser_e2e.py` already exercises
+functionally) -- a separate capability gate from Ask/Discover, reachable the
+same honest way via its own fixture. Each test fails on any "critical",
+"serious", "moderate", or "minor" impact violation axe-core reports -- every
+impact level axe-core distinguishes is enforced, not just critical/serious.
 
-As of this run, all seventeen real pages/states had **zero** axe-core
+As of this run, all nineteen real pages/states had **zero** axe-core
 violations at any impact level -- a genuine, verified result, not an assumed
 pass. This closes real automated-accessibility-evidence gap
 `docs/INDUSTRY_REALITY_CHECK.md` identified, and now covers every page
-reachable without Research/AI capability. It is still only what axe-core's
+reachable without Research/AI capability, plus the separate opt-in
+online-evidence capability. It is still only what axe-core's
 automated ruleset can catch (roughly 30-50% of WCAG 2.2 AA success criteria
 industry-wide). It does not replace a manual keyboard-navigation/
 screen-reader pass, and still does not cover the async-Research progress/
