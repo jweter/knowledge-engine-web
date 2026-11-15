@@ -740,8 +740,16 @@ def ask(
 
     settings = Settings()
     ai_capability = evaluate_ai_capability(settings)
-    synthesis_available = ai_capability.available
     async_research_enabled = settings.async_research_enabled
+    # The owner-approved 2026-10-25 architecture (docs/research_report_v1.md) requires
+    # Ask to still run Research without a pre-ingested local corpus/Ollama. The async job
+    # path's online-evidence-only fallback (research_jobs._try_online_fallback) is what
+    # actually answers that case; routing through the synchronous path below would hit
+    # the same local-capability failure with no fallback, so this only widens
+    # availability when async_research_enabled, matching where the fallback lives.
+    synthesis_available = ai_capability.available or (
+        async_research_enabled and evaluate_online_evidence_capability(settings).available
+    )
     question = q.strip()
     if not question:
         # "q" present in the query string means the visitor actually submitted
