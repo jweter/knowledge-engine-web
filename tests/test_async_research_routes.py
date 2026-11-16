@@ -223,6 +223,70 @@ def test_async_status_reports_a_failed_job_so_the_page_stops_polling(
     )
 
 
+def test_async_status_carries_the_coverage_panel_for_a_degraded_completed_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WEB-GQR-5 failure drills, route level: the durable payload
+    `_presentation_payload` now persists (see `tests/test_research_jobs.py`)
+    must actually reach `/ask/session/{id}`'s JSON response, not just exist
+    inside the sqlite row. Covers three of the eight named failure modes at
+    once -- provider rate limit, all providers unavailable is a sibling case
+    already covered in `test_research_jobs.py`, and overall budget
+    exhausted -- the way a real completed job would actually persist them."""
+
+    session_db = _enable_async_research(tmp_path, monkeypatch)
+    session_id = "session-degraded"
+    research_jobs.create_research_job(
+        str(session_db),
+        session_id=session_id,
+        research_question_id="degraded-question",
+        question="Does creatine improve maximal strength?",
+    )
+    research_jobs._mark_completed(
+        str(session_db),
+        session_id,
+        {
+            "research_state": "provider_degraded",
+            "research_state_reason": "releaseable_partial_answer_with_degraded_provider_coverage",
+            "narrative_releaseable": True,
+            "narrative": "Grounded partial answer",
+            "progress": None,
+            "conversion_funnel": {
+                "acquisition_plan": {"skipped_budget_count": 5},
+                "time_to_first_grounded_information_ms": 500,
+                "time_to_final_report_ms": None,
+            },
+            "coverage_panel": {
+                "federated_discovery_error": None,
+                "provider_rows": [
+                    {
+                        "provider": "semantic_scholar",
+                        "label": "rate limited",
+                        "css_class": "is-degraded",
+                        "reason": "HTTP 429 from Semantic Scholar",
+                        "result_count": 0,
+                    }
+                ],
+                "acquisition_routes": [],
+                "extraction_error": None,
+                "reretrieval_error": None,
+                "grounding_failure_count": 0,
+            },
+        },
+    )
+
+    response = TestClient(app).get(f"/ask/session/{session_id}")
+
+    assert response.status_code == 200
+    payload = response.json()["result"]
+    assert payload["research_state"] == "provider_degraded"
+    assert payload["coverage_panel"]["provider_rows"][0]["label"] == "rate limited"
+    assert payload["coverage_panel"]["provider_rows"][0]["reason"] == (
+        "HTTP 429 from Semantic Scholar"
+    )
+    assert payload["conversion_funnel"]["acquisition_plan"]["skipped_budget_count"] == 5
+
+
 def test_refreshing_known_async_session_does_not_start_a_second_job(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

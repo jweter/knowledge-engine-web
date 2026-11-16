@@ -21,7 +21,7 @@ import sqlite3
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -40,6 +40,7 @@ from knowledge_engine_web.ai_orchestration import (
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.observability import logger as request_logger
 from knowledge_engine_web.online_evidence_orchestration import evaluate_online_evidence_capability
+from knowledge_engine_web.research_coverage_presentation import build_research_coverage_panel
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS web_research_jobs (
@@ -286,6 +287,29 @@ def _execute_research_job(
         )
 
 
+def _coverage_panel_payload(result: WebResearchResult) -> dict[str, Any] | None:
+    """Serialize WEB-GQR-2's coverage panel for the durable async job payload.
+
+    `build_research_coverage_panel` is the one place that already reshapes
+    `DiscoveryAugmentationResult`/`GroundedCompletionResult` for rendering
+    (see `research_coverage_presentation.py`); the synchronous `/ask` path
+    passes the same two objects straight to it. Without this, a completed
+    async job's persisted payload never carried `federated_discovery_error`,
+    per-provider outcome/reason, acquisition-route errors/skipped reasons, or
+    `extraction_error`/`reretrieval_error` -- a provider rate limit, an
+    all-providers-unavailable discovery failure, a license-blocked
+    acquisition route, or an extraction that produced no grounded evidence
+    were silently dropped for every visitor on the async (default-deployment)
+    path even though the synchronous coverage panel already rendered them.
+    `asdict` is safe here: every field on `ResearchCoveragePanel` and its two
+    nested row types is a `str`/`bool`/`int`/`None`/tuple of those, already
+    JSON-serializable.
+    """
+
+    panel = build_research_coverage_panel(result.discovery, result.grounded_completion)
+    return asdict(panel) if panel is not None else None
+
+
 def _presentation_payload(result: WebResearchResult) -> dict[str, Any]:
     """Persist only safe, structured presentation facts from one completed run."""
 
@@ -307,6 +331,7 @@ def _presentation_payload(result: WebResearchResult) -> dict[str, Any]:
         "verification_clean": verification.is_clean if verification is not None else None,
         "progress": progress.to_dict() if progress is not None else None,
         "conversion_funnel": funnel.to_dict() if funnel is not None else None,
+        "coverage_panel": _coverage_panel_payload(result),
         "evidence_source": "local_corpus",
     }
 
@@ -375,6 +400,7 @@ def _online_presentation_payload(
         "verification_clean": None,
         "progress": None,
         "conversion_funnel": None,
+        "coverage_panel": None,
         "evidence_source": "online_evidence_only",
         "online_search_run_id": result.search_run_id,
     }

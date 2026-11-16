@@ -100,8 +100,10 @@
     <p class="trust-label computed">Verified research result</p>
     <h4>Researched answer</h4>
     <p id="async-research-narrative"></p>
+    <p id="async-research-state-explanation" class="trust-warning" hidden></p>
     <dl>
       <dt>Research state</dt><dd id="async-research-state"></dd>
+      <dt>Research state reason</dt><dd id="async-research-state-reason"></dd>
       <dt>Evidence used</dt><dd id="async-research-evidence-counts"></dd>
       <dt>Provider coverage</dt><dd id="async-research-provider-coverage"></dd>
       <dt>Measured research latency</dt><dd id="async-research-latency"></dd>
@@ -109,6 +111,29 @@
     <div id="async-research-limitations-wrap" hidden>
       <h4>Limitations</h4>
       <ul id="async-research-limitations"></ul>
+    </div>
+    <div id="async-research-coverage-wrap" hidden>
+      <h4>Coverage and failure detail</h4>
+      <p class="disclaimer">
+        Every discovery, acquisition, and extraction failure that stopped or degraded this run is
+        listed here rather than hidden -- an empty line below means that stage reported no failure,
+        not that it was skipped silently.
+      </p>
+      <dl>
+        <dt>Federated discovery error</dt><dd id="async-coverage-discovery-error"></dd>
+        <dt>Acquisition budget</dt><dd id="async-coverage-budget"></dd>
+        <dt>Extraction error</dt><dd id="async-coverage-extraction-error"></dd>
+        <dt>Re-retrieval error</dt><dd id="async-coverage-reretrieval-error"></dd>
+        <dt>Grounding failures</dt><dd id="async-coverage-grounding-failures"></dd>
+      </dl>
+      <div id="async-coverage-providers-wrap" hidden>
+        <h5>Provider outcomes</h5>
+        <ul id="async-coverage-providers"></ul>
+      </div>
+      <div id="async-coverage-routes-wrap" hidden>
+        <h5>Acquisition routes</h5>
+        <ul id="async-coverage-routes"></ul>
+      </div>
     </div>
     <div id="async-research-citations-wrap" hidden>
       <h4>Resolved citations</h4>
@@ -540,6 +565,8 @@
     const resultNode = document.getElementById("async-research-result");
     const narrativeNode = document.getElementById("async-research-narrative");
     const stateNode = document.getElementById("async-research-state");
+    const stateReasonNode = document.getElementById("async-research-state-reason");
+    const stateExplanationNode = document.getElementById("async-research-state-explanation");
     const evidenceNode = document.getElementById("async-research-evidence-counts");
     const providerNode = document.getElementById("async-research-provider-coverage");
     const latencyNode = document.getElementById("async-research-latency");
@@ -547,6 +574,37 @@
     const limitationsNode = document.getElementById("async-research-limitations");
     const citationsWrap = document.getElementById("async-research-citations-wrap");
     const citationsNode = document.getElementById("async-research-citations");
+    const coverageWrap = document.getElementById("async-research-coverage-wrap");
+    const coverageDiscoveryErrorNode = document.getElementById("async-coverage-discovery-error");
+    const coverageBudgetNode = document.getElementById("async-coverage-budget");
+    const coverageExtractionErrorNode = document.getElementById("async-coverage-extraction-error");
+    const coverageReretrievalErrorNode = document.getElementById("async-coverage-reretrieval-error");
+    const coverageGroundingFailuresNode = document.getElementById("async-coverage-grounding-failures");
+    const coverageProvidersWrap = document.getElementById("async-coverage-providers-wrap");
+    const coverageProvidersNode = document.getElementById("async-coverage-providers");
+    const coverageRoutesWrap = document.getElementById("async-coverage-routes-wrap");
+    const coverageRoutesNode = document.getElementById("async-coverage-routes");
+
+    // Mirrors the server-rendered synchronous /ask per-state messaging (see
+    // this template's research_state conditional block above) so a visitor
+    // on the async (default-deployment) path gets the same honest
+    // explanation of what each stable research state means, not just the
+    // bare machine-readable state name.
+    const RESEARCH_STATE_MESSAGES = {
+      indexed_answer: "Indexed evidence was sufficient for the grounded answer shown above.",
+      research_required:
+        "Indexed coverage is thin; bounded research is required before a fuller grounded answer can be released.",
+      researching: "Bounded research is still in progress.",
+      partial_answer:
+        "This is a grounded partial answer from indexed evidence. Additional discovered leads did not become the evidence used for this answer.",
+      researched_answer:
+        "Indexed coverage was insufficient, so Research mode broadened the search. Newly acquired literature passed grounded EvidenceRecord promotion, the original question was re-run, and the released answer uses that re-retrieved grounded evidence.",
+      insufficient_evidence:
+        "The bounded research path completed, but it did not produce enough grounded evidence for a releaseable answer.",
+      provider_degraded:
+        "A grounded answer is available, but one or more attempted research providers were incomplete or unavailable -- see the coverage detail below.",
+      blocked: "A required retrieval, grounded-completion, or release gate blocked this research run.",
+    };
 
     const milliseconds = (value) => {
       if (value === null || value === undefined) return "not recorded";
@@ -596,6 +654,67 @@
       citationsWrap.hidden = false;
     };
 
+    const renderCoveragePanel = (panel, acquisitionPlanFunnel) => {
+      if (!coverageWrap) return;
+      if (!panel) {
+        coverageWrap.hidden = true;
+        return;
+      }
+      if (coverageDiscoveryErrorNode) {
+        coverageDiscoveryErrorNode.textContent = text(panel.federated_discovery_error, "none reported");
+      }
+      if (coverageBudgetNode) {
+        const skippedBudgetCount = acquisitionPlanFunnel ? acquisitionPlanFunnel.skipped_budget_count : null;
+        if (skippedBudgetCount) {
+          coverageBudgetNode.textContent = `${skippedBudgetCount} candidate(s) skipped because the acquisition budget was exhausted.`;
+        } else if (panel.acquisition_plan_skipped_reason) {
+          coverageBudgetNode.textContent = `acquisition plan not attempted -- ${panel.acquisition_plan_skipped_reason}`;
+        } else if (panel.acquisition_plan_error) {
+          coverageBudgetNode.textContent = `acquisition plan failed -- ${panel.acquisition_plan_error}`;
+        } else {
+          coverageBudgetNode.textContent = "no acquisition budget exhaustion reported";
+        }
+      }
+      if (coverageExtractionErrorNode) {
+        coverageExtractionErrorNode.textContent = text(panel.extraction_error, "none reported");
+      }
+      if (coverageReretrievalErrorNode) {
+        coverageReretrievalErrorNode.textContent = text(panel.reretrieval_error, "none reported");
+      }
+      if (coverageGroundingFailuresNode) {
+        coverageGroundingFailuresNode.textContent = panel.grounding_failure_count
+          ? `${panel.grounding_failure_count} staged record(s) failed grounding verification and were not promoted.`
+          : "none";
+      }
+      const providers = panel.provider_rows || [];
+      if (coverageProvidersWrap && coverageProvidersNode && providers.length > 0) {
+        coverageProvidersNode.replaceChildren();
+        providers.forEach((row) => {
+          const item = document.createElement("li");
+          item.textContent = `${row.provider}: ${row.label}${row.reason ? ` (${row.reason})` : ""}`;
+          coverageProvidersNode.appendChild(item);
+        });
+        coverageProvidersWrap.hidden = false;
+      } else if (coverageProvidersWrap) {
+        coverageProvidersWrap.hidden = true;
+      }
+      const routes = (panel.acquisition_routes || []).filter(
+        (route) => route.error || route.skipped_reason
+      );
+      if (coverageRoutesWrap && coverageRoutesNode && routes.length > 0) {
+        coverageRoutesNode.replaceChildren();
+        routes.forEach((route) => {
+          const item = document.createElement("li");
+          item.textContent = `${route.route}: ${route.error || route.skipped_reason}`;
+          coverageRoutesNode.appendChild(item);
+        });
+        coverageRoutesWrap.hidden = false;
+      } else if (coverageRoutesWrap) {
+        coverageRoutesWrap.hidden = true;
+      }
+      coverageWrap.hidden = false;
+    };
+
     const renderResult = (result) => {
       if (!resultNode || !result) return;
       const isOnlineOnly = result.evidence_source === "online_evidence_only";
@@ -611,6 +730,16 @@
             : "Research completed, but deterministic verification or the Research ISA close gate did not permit a narrative to be released.";
       }
       if (stateNode) stateNode.textContent = result.research_state || "unknown";
+      if (stateReasonNode) stateReasonNode.textContent = text(result.research_state_reason);
+      if (stateExplanationNode) {
+        const message = RESEARCH_STATE_MESSAGES[result.research_state];
+        if (message) {
+          stateExplanationNode.textContent = message;
+          stateExplanationNode.hidden = false;
+        } else {
+          stateExplanationNode.hidden = true;
+        }
+      }
       if (evidenceNode) {
         evidenceNode.textContent = isOnlineOnly
           ? "Not applicable: answered from online evidence retrieval, not the indexed local corpus. See the Research Report above for cited evidence."
@@ -637,6 +766,7 @@
           : `first grounded information: ${milliseconds(funnel.time_to_first_grounded_information_ms)}; final report: ${milliseconds(funnel.time_to_final_report_ms)}`;
       }
       renderList(limitationsWrap, limitationsNode, progress.limitations || []);
+      renderCoveragePanel(result.coverage_panel || null, funnel.acquisition_plan || null);
       renderCitations(progress.citations || []);
       resultNode.hidden = false;
     };
