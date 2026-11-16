@@ -64,7 +64,7 @@ def test_layer2_renderer_exposes_structured_evidence_and_methodology() -> None:
         assert label in script
 
     assert 'details.id = "research-report-layer2"' in script
-    assert "renderLayer2(block, report)" in script
+    assert "renderLayer2(block, report, evidenceLinksResolvable)" in script
     assert "innerHTML" not in script
 
 
@@ -79,6 +79,15 @@ def test_layer2_evidence_ids_link_to_authoritative_claim_detail() -> None:
     assert "indexed_before_run_evidence_ids" in script
     assert "acquired_during_run_evidence_ids" in script
     assert "innerHTML" not in script
+
+
+def test_layer2_online_evidence_ids_are_not_linked_to_claim_detail() -> None:
+    script = LAYER1_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'evidenceSource !== "online_evidence_only"' in script
+    assert "evidenceLinksResolvable" in script
+    assert "online-evidence excerpt IDs, not local EvidenceRecord IDs" in script
+    assert "payload.result.evidence_source" in script
 
 
 def test_layer2_provider_rows_use_only_contract_fields() -> None:

@@ -30,10 +30,27 @@
     parent.appendChild(list);
   };
 
-  const appendEvidenceLinks = (parent, values, emptyText, className) => {
+  const appendEvidenceLinks = (parent, values, emptyText, className, resolvable = true) => {
     const items = Array.isArray(values) ? values.filter((value) => value !== null && value !== undefined && value !== "") : [];
     if (items.length === 0) {
       appendText(parent, "p", emptyText, "disclaimer");
+      return;
+    }
+    if (!resolvable) {
+      // These IDs are online-evidence excerpt IDs, not stored EvidenceRecord IDs:
+      // `/claims/{id}` only resolves the indexed local corpus and would 404 for
+      // these. No source/excerpt detail page exists to link to instead (the
+      // online path retains no source text, only IDs -- see online_report.py),
+      // so this lists them as plain, non-fabricated text rather than a broken link.
+      appendText(
+        parent,
+        "p",
+        "These are online-evidence excerpt IDs, not local EvidenceRecord IDs; no detail page is available for them.",
+        "disclaimer"
+      );
+      const plainList = element("ul", className);
+      items.forEach((value) => appendText(plainList, "li", value));
+      parent.appendChild(plainList);
       return;
     }
     const list = element("ul", className);
@@ -83,7 +100,7 @@
     tbody.appendChild(tr);
   };
 
-  const renderEvidenceRelationship = (parent, row) => {
+  const renderEvidenceRelationship = (parent, row, evidenceLinksResolvable) => {
     const section = element("section", "research-report-evidence-relationship");
     appendText(section, "h5", row.question_dimension || "Unspecified question dimension");
     appendText(section, "p", `Directness: ${text(row.directness)}`, "trust-label computed");
@@ -93,7 +110,8 @@
       section,
       row.supporting_evidence_ids,
       "No supporting EvidenceRecord IDs were reported for this conclusion.",
-      "research-report-evidence-ids supporting"
+      "research-report-evidence-ids supporting",
+      evidenceLinksResolvable
     );
 
     appendText(section, "h6", "Null / contradictory evidence IDs");
@@ -101,7 +119,8 @@
       section,
       row.contradicting_or_null_evidence_ids,
       "No null or contradictory EvidenceRecord IDs were reported for this conclusion.",
-      "research-report-evidence-ids counter"
+      "research-report-evidence-ids counter",
+      evidenceLinksResolvable
     );
 
     if (row.missing_direct_evidence) {
@@ -152,7 +171,7 @@
     parent.appendChild(table);
   };
 
-  const renderLayer2 = (block, report) => {
+  const renderLayer2 = (block, report, evidenceLinksResolvable) => {
     const details = element("details", "discovery-method-details research-report-layer2");
     details.id = "research-report-layer2";
     const summary = document.createElement("summary");
@@ -166,7 +185,7 @@
     if (rows.length === 0) {
       appendText(details, "p", "No conclusion-level evidence relationships were returned.", "trust-warning is-critical");
     } else {
-      rows.forEach((row) => renderEvidenceRelationship(details, row || {}));
+      rows.forEach((row) => renderEvidenceRelationship(details, row || {}, evidenceLinksResolvable));
     }
 
     appendText(details, "h4", "Direct and indirect evidence summaries");
@@ -181,14 +200,16 @@
       details,
       report.indexed_before_run_evidence_ids,
       "No previously indexed EvidenceRecord IDs were reported.",
-      "research-report-evidence-ids indexed"
+      "research-report-evidence-ids indexed",
+      evidenceLinksResolvable
     );
     appendText(details, "h5", "Acquired during this research run");
     appendEvidenceLinks(
       details,
       report.acquired_during_run_evidence_ids,
       "No newly acquired EvidenceRecord IDs were reported.",
-      "research-report-evidence-ids acquired"
+      "research-report-evidence-ids acquired",
+      evidenceLinksResolvable
     );
 
     renderProviderCoverage(details, report);
@@ -214,8 +235,12 @@
     }
   };
 
-  const renderLayer1 = (resultNode, researchReport) => {
+  const renderLayer1 = (resultNode, researchReport, evidenceSource) => {
     if (!resultNode || document.getElementById("research-report-layer1")) return;
+    // Online-evidence-only answers cite excerpt IDs, not stored EvidenceRecord IDs;
+    // `/claims/{id}` only resolves the latter (knowledge_engine_web/main.py), so
+    // linking an excerpt ID there would 404.
+    const evidenceLinksResolvable = evidenceSource !== "online_evidence_only";
 
     hideCompletedPipelineMetadata(resultNode);
     const block = element("section", "research-report-layer1");
@@ -265,7 +290,7 @@
       );
     }
 
-    renderLayer2(block, report);
+    renderLayer2(block, report, evidenceLinksResolvable);
     resultNode.prepend(block);
   };
 
@@ -290,7 +315,7 @@
         shouldRetry = true;
         return;
       }
-      renderLayer1(resultNode, payload.result.research_report);
+      renderLayer1(resultNode, payload.result.research_report, payload.result.evidence_source);
     } catch (_error) {
       shouldRetry = true;
     } finally {

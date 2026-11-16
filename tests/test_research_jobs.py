@@ -2,14 +2,40 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from knowledge_engine_ai.copilot.research_report import ResearchReport
+from knowledge_engine_ai.copilot.run_research_question import OnlineResearchQuestionResult
 
 from knowledge_engine_web import research_jobs
 from knowledge_engine_web.ai_guardrails import AIAdmissionError
 from knowledge_engine_web.ai_orchestration import AIOrchestrationError
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.observability import logger as request_logger
+
+
+def _online_report(**overrides: object) -> ResearchReport:
+    fields: dict[str, object] = {
+        "schema_version": 1,
+        "question": "A research question",
+        "bottom_line": "1 of 1 claims have supporting citations from 1 of 1 sources.",
+        "conclusion_rows": (),
+        "narrative_sections": (),
+        "missing_evidence": (),
+        "direct_evidence_summary": "Directness was not assessed.",
+        "indirect_evidence_summary": "Directness was not assessed.",
+        "provider_coverage_completeness": "complete",
+        "degraded_providers": (),
+        "provider_statuses": (),
+        "indexed_before_run_evidence_ids": (),
+        "acquired_during_run_evidence_ids": ("online-ev-1",),
+        "limitations": ("Deterministic projection of Core claims; no LLM synthesis.",),
+        "session_id": "search-run-1",
+        "research_state": "partial_answer",
+    }
+    fields.update(overrides)
+    return ResearchReport(**fields)  # type: ignore[arg-type]
 
 
 def test_job_lifecycle_is_durable_across_connections(tmp_path: Path) -> None:
@@ -401,3 +427,137 @@ def test_execute_research_job_never_persists_a_raw_unexpected_exception(
     )
     assert sensitive_detail not in (job.visitor_error or "")
     assert not research_jobs.is_research_job_active("session-unexpected-crash")
+
+
+def test_execute_research_job_falls_back_to_online_evidence_when_local_path_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The owner-approved 2026-10-25 architecture requires `/ask` to still answer when
+    no local corpus/Ollama is configured, provided online evidence is enabled -- see
+    `docs/research_report_v1.md`. A deployment whose local path already works must
+    never reach this fallback (the other failure-drill tests above cover that)."""
+
+    database_path = tmp_path / "research_sessions.sqlite3"
+    settings = Settings(
+        _env_file=None, session_db_path=str(database_path), online_evidence_enabled=True
+    )
+    research_jobs.create_research_job(
+        str(database_path),
+        session_id="session-online-fallback",
+        research_question_id="question-online-fallback",
+        question="A research question",
+    )
+
+    def _local_unavailable(*_args: object, **_kwargs: object) -> None:
+        raise AIOrchestrationError("Research Copilot is unavailable on this deployment.")
+
+    online_calls: list[dict[str, object]] = []
+
+    def _online_answer(
+        settings: object, question: str, **kwargs: object
+    ) -> OnlineResearchQuestionResult:
+        online_calls.append({"question": question, **kwargs})
+        return OnlineResearchQuestionResult(
+            question=question,
+            report=_online_report(question=question),
+            search_run_id="search-run-1",
+            error_code=None,
+        )
+
+    monkeypatch.setattr(research_jobs, "run_guarded_ai_orchestration", _local_unavailable)
+    monkeypatch.setattr(
+        research_jobs,
+        "evaluate_online_evidence_capability",
+        lambda _settings: SimpleNamespace(available=True),
+    )
+    monkeypatch.setattr(research_jobs, "run_guarded_online_research_answer", _online_answer)
+
+    research_jobs._execute_research_job(
+        settings, "A research question", "client-key", "session-online-fallback", None
+    )
+
+    assert online_calls[0]["question"] == "A research question"
+    assert online_calls[0]["client_key"] == "client-key"
+
+    job = research_jobs.read_research_job(str(database_path), "session-online-fallback")
+    assert job is not None
+    assert job.status == "completed"
+    assert job.terminal
+    assert job.visitor_error is None
+    assert job.result is not None
+    assert job.result["evidence_source"] == "online_evidence_only"
+    assert job.result["session_id"] == "session-online-fallback"
+    assert job.result["research_state"] == "partial_answer"
+    assert job.result["narrative_releaseable"] is False
+    assert job.result["progress"] is None
+    assert job.result["conversion_funnel"] is None
+    assert job.result["close_gate"] is None
+    assert job.result["research_report"]["available"] is True
+    assert job.result["research_report"]["report"]["acquired_during_run_evidence_ids"] == [
+        "online-ev-1"
+    ]
+
+
+def test_execute_research_job_online_fallback_is_skipped_when_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Matches the existing failure-drill tests above: when online evidence is not
+    enabled, a local-path failure must still surface the local path's own sanitized
+    error, never attempting (or depending on) the online fallback."""
+
+    database_path = tmp_path / "research_sessions.sqlite3"
+    settings = Settings(session_db_path=str(database_path))
+    research_jobs.create_research_job(
+        str(database_path),
+        session_id="session-no-fallback",
+        research_question_id="question-no-fallback",
+        question="A research question",
+    )
+
+    def _local_unavailable(*_args: object, **_kwargs: object) -> None:
+        raise AIOrchestrationError("Research Copilot is unavailable on this deployment.")
+
+    def _fail(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("the online fallback must not run when online evidence is disabled")
+
+    monkeypatch.setattr(research_jobs, "run_guarded_ai_orchestration", _local_unavailable)
+    monkeypatch.setattr(research_jobs, "run_guarded_online_research_answer", _fail)
+
+    research_jobs._execute_research_job(
+        settings, "A research question", "client-key", "session-no-fallback", None
+    )
+
+    job = research_jobs.read_research_job(str(database_path), "session-no-fallback")
+    assert job is not None
+    assert job.status == "failed"
+    assert job.result is None
+    assert job.visitor_error == "Research Copilot is unavailable on this deployment."
+
+
+def test_online_presentation_payload_never_fabricates_local_session_fields() -> None:
+    report = _online_report()
+    payload = research_jobs._online_presentation_payload(
+        "job-session-1",
+        "A research question",
+        OnlineResearchQuestionResult(
+            question="A research question",
+            report=report,
+            search_run_id="search-run-1",
+            error_code=None,
+        ),
+    )
+
+    assert payload["session_id"] == "job-session-1"
+    assert payload["evidence_source"] == "online_evidence_only"
+    assert payload["online_search_run_id"] == "search-run-1"
+    assert payload["narrative"] is None
+    assert payload["narrative_releaseable"] is False
+    assert payload["progress"] is None
+    assert payload["conversion_funnel"] is None
+    assert payload["close_gate"] is None
+    assert payload["verification_clean"] is None
+    assert payload["research_report"] == {
+        "available": True,
+        "error_code": None,
+        "report": report.to_dict(),
+    }

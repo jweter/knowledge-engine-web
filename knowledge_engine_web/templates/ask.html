@@ -598,28 +598,43 @@
 
     const renderResult = (result) => {
       if (!resultNode || !result) return;
+      const isOnlineOnly = result.evidence_source === "online_evidence_only";
       const progress = result.progress || {};
       const funnel = result.conversion_funnel || {};
       if (narrativeNode) {
-        narrativeNode.textContent = result.narrative_releaseable && result.narrative
-          ? result.narrative
-          : "Research completed, but deterministic verification or the Research ISA close gate did not permit a narrative to be released.";
+        narrativeNode.textContent = isOnlineOnly
+          ? "No local indexed corpus, Ollama, or synthesis model was used on this deployment. " +
+            "The Research Report above is Core's retrieved, content-checked online evidence " +
+            "projected deterministically, not a synthesized narrative."
+          : result.narrative_releaseable && result.narrative
+            ? result.narrative
+            : "Research completed, but deterministic verification or the Research ISA close gate did not permit a narrative to be released.";
       }
       if (stateNode) stateNode.textContent = result.research_state || "unknown";
       if (evidenceNode) {
-        const indexed = (progress.indexed_evidence_record_ids || []).length;
-        const acquired = (progress.newly_acquired_evidence_record_ids || []).length;
-        evidenceNode.textContent = `${indexed} indexed before the run; ${acquired} newly grounded and promoted during the run`;
+        evidenceNode.textContent = isOnlineOnly
+          ? "Not applicable: answered from online evidence retrieval, not the indexed local corpus. See the Research Report above for cited evidence."
+          : (() => {
+              const indexed = (progress.indexed_evidence_record_ids || []).length;
+              const acquired = (progress.newly_acquired_evidence_record_ids || []).length;
+              return `${indexed} indexed before the run; ${acquired} newly grounded and promoted during the run`;
+            })();
       }
       if (providerNode) {
-        const providers = progress.provider_statuses || [];
-        const attempted = providers.filter((provider) => provider.attempted).length;
-        const degraded = providers.filter((provider) => provider.outcome && provider.outcome !== "success").length;
-        const completeness = progress.provider_coverage_completeness || "not recorded";
-        providerNode.textContent = `${attempted} provider(s) attempted; ${degraded} degraded; coverage ${completeness}`;
+        providerNode.textContent = isOnlineOnly
+          ? "See provider coverage in the Research Report above."
+          : (() => {
+              const providers = progress.provider_statuses || [];
+              const attempted = providers.filter((provider) => provider.attempted).length;
+              const degraded = providers.filter((provider) => provider.outcome && provider.outcome !== "success").length;
+              const completeness = progress.provider_coverage_completeness || "not recorded";
+              return `${attempted} provider(s) attempted; ${degraded} degraded; coverage ${completeness}`;
+            })();
       }
       if (latencyNode) {
-        latencyNode.textContent = `first grounded information: ${milliseconds(funnel.time_to_first_grounded_information_ms)}; final report: ${milliseconds(funnel.time_to_final_report_ms)}`;
+        latencyNode.textContent = isOnlineOnly
+          ? "Not recorded for the online-evidence-only path."
+          : `first grounded information: ${milliseconds(funnel.time_to_first_grounded_information_ms)}; final report: ${milliseconds(funnel.time_to_final_report_ms)}`;
       }
       renderList(limitationsWrap, limitationsNode, progress.limitations || []);
       renderCitations(progress.citations || []);

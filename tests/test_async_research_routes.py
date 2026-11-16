@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from knowledge_engine_web import main, research_jobs
 from knowledge_engine_web.ai_orchestration import AICapability
 from knowledge_engine_web.main import app
+from knowledge_engine_web.online_evidence_orchestration import OnlineEvidenceCapability
 
 
 def _enable_async_research(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -23,6 +24,86 @@ def _enable_async_research(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
     )
     monkeypatch.setattr(main, "answer_retrieval", lambda *_args, **_kwargs: [])
     return session_db
+
+
+def test_async_ask_submits_a_job_when_only_online_evidence_is_available(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression for a real gap the online-evidence-only `/ask` fallback left
+    unreachable: `synthesis_available` previously came only from the local-corpus/
+    Ollama `evaluate_ai_capability`, so a deployment with online evidence enabled but
+    no local corpus still showed "Broader Research is unavailable" and never
+    submitted a job -- `research_jobs._try_online_fallback` was unreachable dead code
+    from every real request. This proves a job is now actually submitted in that
+    case; `_execute_research_job`'s own fallback logic is covered separately."""
+
+    session_db = _enable_async_research(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        main,
+        "evaluate_ai_capability",
+        lambda _settings: AICapability(available=False, reason_code="model_not_configured"),
+    )
+    monkeypatch.setattr(
+        main,
+        "evaluate_online_evidence_capability",
+        lambda _settings: OnlineEvidenceCapability(available=True),
+    )
+
+    submitted: list[dict[str, str]] = []
+
+    def fake_submit(settings: object, **kwargs: str) -> research_jobs.ResearchJobView:
+        submitted.append(kwargs)
+        return research_jobs.create_research_job(
+            str(session_db),
+            session_id=kwargs["session_id"],
+            research_question_id=kwargs["research_question_id"],
+            question=kwargs["question"],
+        )
+
+    monkeypatch.setattr(main, "submit_research_job", fake_submit)
+
+    response = TestClient(app).get(
+        "/ask",
+        params={"q": "Does Monster Energy raise blood pressure?", "synthesize": "1"},
+    )
+
+    assert response.status_code == 200
+    assert len(submitted) == 1
+    assert "Research session running" in response.text
+    assert "Broader Research is unavailable" not in response.text
+
+
+def test_async_ask_shows_unavailable_notice_when_neither_path_is_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The prior, unchanged behavior: with no local AI and no online evidence
+    capability, Ask must still fail honestly to retrieval-only rather than
+    submitting a job that can never complete."""
+
+    _enable_async_research(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        main,
+        "evaluate_ai_capability",
+        lambda _settings: AICapability(available=False, reason_code="model_not_configured"),
+    )
+    monkeypatch.setattr(
+        main,
+        "evaluate_online_evidence_capability",
+        lambda _settings: OnlineEvidenceCapability(available=False, reason_code="feature_disabled"),
+    )
+
+    def fail_submit(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("submit_research_job must not be called when no Research path is available")
+
+    monkeypatch.setattr(main, "submit_research_job", fail_submit)
+
+    response = TestClient(app).get(
+        "/ask",
+        params={"q": "Does Monster Energy raise blood pressure?", "synthesize": "1"},
+    )
+
+    assert response.status_code == 200
+    assert "Broader Research is unavailable on this deployment" in response.text
 
 
 def test_async_ask_returns_immediately_with_pollable_session(
