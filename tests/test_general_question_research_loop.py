@@ -135,3 +135,52 @@ def test_ask_template_maps_every_stable_gqr_state_to_visitor_messaging() -> None
     assert "copilot_result.research_state.grounded_completion_attempted" in template
     assert "copilot_result.research_state.promoted_evidence_record_count" in template
     assert "copilot_result.research_state.used_reretrieved_evidence" in template
+
+
+def test_ask_template_renders_async_failure_detail_not_just_the_raw_state() -> None:
+    """WEB-GQR-5 failure drills: the async (default-deployment) polling path must
+    render the same honest per-state explanation and coverage/failure detail the
+    synchronous path's Jinja block above already does, not just the bare machine-
+    readable `research_state` string. See `research_jobs._coverage_panel_payload`
+    and `tests/test_research_jobs.py`/`tests/test_async_research_routes.py` for
+    where that data now comes from."""
+
+    template = (
+        Path(__file__).parents[1] / "knowledge_engine_web" / "templates" / "ask.html"
+    ).read_text(encoding="utf-8")
+
+    # Every stable research state gets its own human-readable explanation,
+    # mirroring RESEARCH_STATE_MESSAGES against the synchronous Jinja block.
+    for state in (
+        "indexed_answer",
+        "research_required",
+        "researching",
+        "partial_answer",
+        "researched_answer",
+        "insufficient_evidence",
+        "provider_degraded",
+        "blocked",
+    ):
+        assert f"{state}:" in template
+
+    assert "result.research_state_reason" in template
+    assert "RESEARCH_STATE_MESSAGES" in template
+
+    # Provider rate limit / one-or-all providers unavailable.
+    assert "panel.federated_discovery_error" in template
+    assert "row.provider" in template and "row.label" in template and "row.reason" in template
+
+    # Source inaccessible / license unavailable.
+    assert "route.error || route.skipped_reason" in template
+
+    # Extraction produces no grounded Evidence Record.
+    assert "panel.extraction_error" in template
+    assert "panel.grounding_failure_count" in template
+
+    # Core retrieval failure path (surfaced via the reason text above) and
+    # re-retrieval failure.
+    assert "panel.reretrieval_error" in template
+
+    # Overall budget exhausted.
+    assert "acquisitionPlanFunnel.skipped_budget_count" in template
+    assert "funnel.acquisition_plan" in template

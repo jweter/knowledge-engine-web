@@ -232,14 +232,69 @@ scientific conclusion.
 
 ### WEB-GQR-5 - Failure drills
 Test and render:
-- provider rate limit;
-- one provider unavailable;
-- all providers unavailable;
-- source inaccessible/license unavailable;
-- extraction produces no grounded Evidence Record;
-- local LLM unavailable;
-- overall budget exhausted;
-- Core retrieval failure.
+- [x] provider rate limit;
+- [x] one provider unavailable;
+- [x] all providers unavailable;
+- [x] source inaccessible/license unavailable;
+- [x] extraction produces no grounded Evidence Record;
+- [x] local LLM unavailable;
+- [x] overall budget exhausted;
+- [x] Core retrieval failure.
+
+Before this slice, WEB-GQR-2's coverage panel (`research_coverage_presentation.py`)
+and its rich per-state Jinja messaging (the `research_state == '...'` block on
+`/ask`) only ever rendered for the **synchronous** Research Copilot path. The
+async job path -- `KE_WEB_ASYNC_RESEARCH_ENABLED=true`, the actual default
+production configuration -- persists a durable presentation payload
+(`research_jobs._presentation_payload`) that a visitor polls via
+`GET /ask/session/{id}` and a small inline script renders; until this slice,
+that payload never carried `DiscoveryAugmentationResult`/
+`GroundedCompletionResult` facts at all, and the script only showed the bare
+`research_state` string with a provider attempted/degraded count -- a provider
+rate limit, an all-providers-unavailable discovery failure, a license-blocked
+acquisition route, a failed extraction, or a blocked Core retrieval were all
+real facts the AI layer already recorded but the async visitor never saw.
+
+This session closed that gap rather than inventing a new contract:
+
+- `research_jobs._coverage_panel_payload` reuses WEB-GQR-2's existing
+  `build_research_coverage_panel(discovery, grounded_completion)` -- the same
+  function the synchronous path already calls -- and serializes it with
+  `dataclasses.asdict` into the async job's `coverage_panel` key
+  (`_presentation_payload`/`_online_presentation_payload`, the latter always
+  `None` since the online-evidence-only path has no discovery/grounded-
+  completion object to summarize).
+- `ask.html`'s inline script gained `RESEARCH_STATE_MESSAGES` (the same eight
+  sentences the synchronous Jinja block already shows per `research_state`),
+  a `research_state_reason` row, and a "Coverage and failure detail" panel
+  rendering `federated_discovery_error`, per-provider outcome/reason,
+  acquisition-route errors/skipped reasons, `extraction_error`/
+  `reretrieval_error`, and grounding-failure counts -- covering provider rate
+  limit, one-or-all providers unavailable, source inaccessible/license
+  unavailable, and extraction producing no grounded Evidence Record.
+- Overall budget exhausted is rendered from the BT-2 conversion funnel's
+  already-persisted `acquisition_plan.skipped_budget_count` (unchanged,
+  already present in `conversion_funnel`; previously computed but never
+  displayed anywhere in the product).
+- Core retrieval failure derives AI's `blocked` state with reason
+  `primary_retrieval_failed`; the new `research_state_reason` row makes that
+  reason visible on the async path the same way the synchronous path's
+  "Research-state details" `<dl>` already did.
+- Local LLM unavailable was already fully covered before this slice:
+  `research_jobs._execute_research_job` catches `AIOrchestrationError` and
+  either falls back to the online-evidence-only path or persists the local
+  path's own sanitized error message as a failed job
+  (`tests/test_research_jobs.py::test_execute_research_job_persists_orchestration_error_as_failed`,
+  `::test_execute_research_job_online_fallback_is_skipped_when_disabled`,
+  `::test_execute_research_job_falls_back_to_online_evidence_when_local_path_unavailable`).
+  No new coverage was needed for this one.
+
+New regression coverage: `tests/test_research_jobs.py` (`TestCoveragePanelPayloadFailureDrills`
+plus the `_presentation_payload`-level tests for a blocked run and budget
+exhaustion), `tests/test_async_research_routes.py`
+(`test_async_status_carries_the_coverage_panel_for_a_degraded_completed_run`),
+and `tests/test_general_question_research_loop.py`
+(`test_ask_template_renders_async_failure_detail_not_just_the_raw_state`).
 
 ## Acceptance test
 

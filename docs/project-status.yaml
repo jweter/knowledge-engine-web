@@ -204,7 +204,7 @@ secondary_track:
   name: "General Question Research Loop v1"
   roadmap_file: "docs/general_question_research_loop_v1.md"
   tracking_issue: "#93"
-  note: "WEB-GQR-0 through WEB-GQR-4 are the execution/progress foundation beneath Research Report v1. Continue GQR work when it directly blocks the report or Monster acceptance. Do not re-open already-completed async/polling work unless a concrete regression is found."
+  note: "WEB-GQR-0 through WEB-GQR-5 are all implemented. WEB-GQR-5 (failure drills) closed this session (2026-11-16): the async job path's durable presentation payload now persists a coverage_panel (reusing WEB-GQR-2's build_research_coverage_panel over the real discovery/grounded-completion objects) and ask.html's polling script renders per-state messaging, provider rate limit/unavailable detail, acquisition-route errors, extraction/reretrieval errors, and BT-2 budget-exhaustion counts that previously only ever rendered on the synchronous path. See docs/general_question_research_loop_v1.md's WEB-GQR-5 section for the full breakdown and tests/test_research_jobs.py, tests/test_async_research_routes.py, and tests/test_general_question_research_loop.py for the new regression coverage. Continue GQR work only if a concrete regression is found; do not re-open already-completed async/polling/failure-drill work."
 
 mobile_product_reality_track:
   name: "Mobile Product Reality"
