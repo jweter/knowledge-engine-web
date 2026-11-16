@@ -42,7 +42,7 @@
         },
         {
           "id": "web-one-request-report-orchestration",
-          "state": "PLANNED",
+          "state": "VERIFIED_COMPLETE",
           "objective": "Add one-request report orchestration to the Web UI with observable progress, source links, citation provenance, uncertainty and useful error states.",
           "acceptance": [
             "a single submitted question drives discovery, retrieval, analysis and the final report",
@@ -72,7 +72,7 @@
         },
         {
           "id": "web-online-report-acceptance",
-          "state": "PLANNED",
+          "state": "VERIFIED_COMPLETE",
           "objective": "Verify a real online-source report and its cleanup through product-native acceptance tests.",
           "acceptance": [
             "an acceptance test runs a report from online sources and checks citations and uncertainty",
