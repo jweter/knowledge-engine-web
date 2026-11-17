@@ -156,6 +156,116 @@
             "web-ask-online-fallback-wiring"
           ],
           "capability_level": 3
+        },
+        {
+          "id": "web-evidence-source-label",
+          "state": "PLANNED",
+          "objective": "Return a short human-readable label for a Research job's evidence_source value, matching case-insensitively after stripping whitespace: \"local_corpus\" maps to \"Local indexed corpus\", \"online_evidence_only\" maps to \"Online evidence only (no local corpus)\", and every other value, including None, the empty string, and any unrecognized string, maps to \"Unknown evidence source\". Supports Ask/Mobile Review provenance disclosure for the completed async Research job payload (evidence_source in research_jobs.py) without needing JavaScript.",
+          "acceptance": [
+            "evidence_source_label returns the exact mapped label for \"local_corpus\" and \"online_evidence_only\", matched case-insensitively and after stripping surrounding whitespace",
+            "evidence_source_label returns \"Unknown evidence source\" for None, the empty string, and any other unrecognized value, never raising",
+            "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
+          ],
+          "allowed_paths": [
+            "knowledge_engine_web/evidence_source_labels.py",
+            "tests/test_evidence_source_labels.py"
+          ],
+          "forbidden_paths": [
+            "engineering/**",
+            ".github/**",
+            "pyproject.toml",
+            "poetry.lock",
+            "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
+          ],
+          "depends_on": [],
+          "capability_level": 1,
+          "runner_requirements": [
+            "code",
+            "local",
+            "offline"
+          ],
+          "acceptance_examples": [
+            {
+              "call": "evidence_source_label(\"local_corpus\")",
+              "expected": "Local indexed corpus",
+              "why": "the only local-corpus value already written by research_jobs.py's presentation payload"
+            },
+            {
+              "call": "evidence_source_label(\"online_evidence_only\")",
+              "expected": "Online evidence only (no local corpus)",
+              "why": "the only online-fallback value already written by research_jobs.py's online presentation payload"
+            },
+            {
+              "call": "evidence_source_label(None)",
+              "expected": "Unknown evidence source",
+              "why": "a session recorded before evidence_source existed must not crash the label lookup"
+            },
+            {
+              "call": "evidence_source_label(\"  ONLINE_EVIDENCE_ONLY  \")",
+              "expected": "Online evidence only (no local corpus)",
+              "why": "matching must be case-insensitive and tolerate incidental surrounding whitespace"
+            },
+            {
+              "call": "evidence_source_label(\"\")",
+              "expected": "Unknown evidence source",
+              "why": "an empty string is a distinct edge from None and must still fail closed to the unknown label"
+            }
+          ]
+        },
+        {
+          "id": "web-research-state-badge",
+          "state": "PLANNED",
+          "objective": "Return a (label, css_class) tuple for a Research Report's research_state, matched case-insensitively after trimming whitespace: researched_answer, partial_answer, insufficient_evidence, blocked and provider_degraded each map to their own fixed label and css_class; every other value, including None, empty string, and any unrecognized string, maps to (\"Unknown\", \"is-unknown\"). Supports a server-rendered certainty badge for Layer 1/Layer 2 rendering without JavaScript.",
+          "acceptance": [
+            "research_state_badge returns the exact (label, css_class) pair for researched_answer, partial_answer, insufficient_evidence, blocked and provider_degraded, matched case-insensitively and after stripping surrounding whitespace",
+            "research_state_badge returns (\"Unknown\", \"is-unknown\") for None, the empty string, and any other unrecognized value, never raising",
+            "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
+          ],
+          "allowed_paths": [
+            "knowledge_engine_web/research_state_badges.py",
+            "tests/test_research_state_badges.py"
+          ],
+          "forbidden_paths": [
+            "engineering/**",
+            ".github/**",
+            "pyproject.toml",
+            "poetry.lock",
+            "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
+          ],
+          "depends_on": [],
+          "capability_level": 1,
+          "runner_requirements": [
+            "code",
+            "local",
+            "offline"
+          ],
+          "acceptance_examples": [
+            {
+              "call": "research_state_badge(\"partial_answer\")",
+              "expected": ["Partial answer", "is-partial"],
+              "why": "the online-evidence-only fallback's research_state is always partial_answer or insufficient_evidence"
+            },
+            {
+              "call": "research_state_badge(\"RESEARCHED_ANSWER\")",
+              "expected": ["Answered", "is-answered"],
+              "why": "AI's research_state values are matched case-insensitively like evidence_source_label"
+            },
+            {
+              "call": "research_state_badge(None)",
+              "expected": ["Unknown", "is-unknown"],
+              "why": "a job record read before research_state is persisted must not crash the badge lookup"
+            },
+            {
+              "call": "research_state_badge(\"totally_unknown_state\")",
+              "expected": ["Unknown", "is-unknown"],
+              "why": "a future AI research_state value must fail closed to Unknown rather than raise"
+            },
+            {
+              "call": "research_state_badge(\"  blocked  \")",
+              "expected": ["Blocked", "is-blocked"],
+              "why": "surrounding whitespace from a stored or serialized value must not change the match"
+            }
+          ]
         }
       ]
     }
