@@ -145,6 +145,8 @@ def test_async_job_payload_carries_structured_report_without_parsing_narrative()
             conversion_funnel_report=None,
             verification=None,
             close_result=SimpleNamespace(status=SimpleNamespace(value="closed")),
+            discovery=None,
+            grounded_completion=None,
         ),
     )
     research_state = cast(

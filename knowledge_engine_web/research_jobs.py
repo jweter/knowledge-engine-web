@@ -21,10 +21,13 @@ import sqlite3
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from knowledge_engine_ai.copilot.research_report_integration import ResearchReportBuildResult
+from knowledge_engine_ai.copilot.run_research_question import OnlineResearchQuestionResult
 
 from knowledge_engine_web.ai_guardrails import AIAdmissionError
 from knowledge_engine_web.ai_orchestration import (
@@ -32,9 +35,12 @@ from knowledge_engine_web.ai_orchestration import (
     WebResearchResult,
     result_reached_execution_limit,
     run_guarded_ai_orchestration,
+    run_guarded_online_research_answer,
 )
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.observability import logger as request_logger
+from knowledge_engine_web.online_evidence_orchestration import evaluate_online_evidence_capability
+from knowledge_engine_web.research_coverage_presentation import build_research_coverage_panel
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS web_research_jobs (
@@ -255,8 +261,13 @@ def _execute_research_job(
         outcome = "completed"
     except AIAdmissionError as exc:
         _mark_failed(settings.session_db_path, session_id, exc.visitor_message)
-    except AIOrchestrationError as exc:
-        _mark_failed(settings.session_db_path, session_id, str(exc))
+    except AIOrchestrationError as local_error:
+        online_payload = _try_online_fallback(settings, question, client_key, session_id)
+        if online_payload is not None:
+            _mark_completed(settings.session_db_path, session_id, online_payload)
+            outcome = "completed"
+        else:
+            _mark_failed(settings.session_db_path, session_id, str(local_error))
     except Exception:
         # Never persist a raw exception, provider response, path, or secret into
         # a visitor-readable job record.
@@ -274,6 +285,29 @@ def _execute_research_job(
             session_id,
             outcome,
         )
+
+
+def _coverage_panel_payload(result: WebResearchResult) -> dict[str, Any] | None:
+    """Serialize WEB-GQR-2's coverage panel for the durable async job payload.
+
+    `build_research_coverage_panel` is the one place that already reshapes
+    `DiscoveryAugmentationResult`/`GroundedCompletionResult` for rendering
+    (see `research_coverage_presentation.py`); the synchronous `/ask` path
+    passes the same two objects straight to it. Without this, a completed
+    async job's persisted payload never carried `federated_discovery_error`,
+    per-provider outcome/reason, acquisition-route errors/skipped reasons, or
+    `extraction_error`/`reretrieval_error` -- a provider rate limit, an
+    all-providers-unavailable discovery failure, a license-blocked
+    acquisition route, or an extraction that produced no grounded evidence
+    were silently dropped for every visitor on the async (default-deployment)
+    path even though the synchronous coverage panel already rendered them.
+    `asdict` is safe here: every field on `ResearchCoveragePanel` and its two
+    nested row types is a `str`/`bool`/`int`/`None`/tuple of those, already
+    JSON-serializable.
+    """
+
+    panel = build_research_coverage_panel(result.discovery, result.grounded_completion)
+    return asdict(panel) if panel is not None else None
 
 
 def _presentation_payload(result: WebResearchResult) -> dict[str, Any]:
@@ -297,6 +331,78 @@ def _presentation_payload(result: WebResearchResult) -> dict[str, Any]:
         "verification_clean": verification.is_clean if verification is not None else None,
         "progress": progress.to_dict() if progress is not None else None,
         "conversion_funnel": funnel.to_dict() if funnel is not None else None,
+        "coverage_panel": _coverage_panel_payload(result),
+        "evidence_source": "local_corpus",
+    }
+
+
+def _try_online_fallback(
+    settings: Settings,
+    question: str,
+    client_key: str,
+    session_id: str,
+) -> dict[str, Any] | None:
+    """Attempt the owner-approved 2026-10-25 online-evidence-only `/ask` path.
+
+    Only reached after the complete local-corpus/Ollama path has already raised
+    `AIOrchestrationError` (see `_execute_research_job`): a deployment whose local path
+    works never reaches this function, so its behavior is unchanged. Returns `None`
+    rather than raising for every unavailable or failed outcome, so the caller always
+    falls back to the local path's own already-sanitized error message instead of a
+    second, possibly conflicting one.
+    """
+
+    if not evaluate_online_evidence_capability(settings).available:
+        return None
+    try:
+        online_result = run_guarded_online_research_answer(
+            settings, question, client_key=client_key
+        )
+        return _online_presentation_payload(session_id, question, online_result)
+    except Exception:
+        return None
+
+
+def _online_presentation_payload(
+    session_id: str,
+    question: str,
+    result: OnlineResearchQuestionResult,
+) -> dict[str, Any]:
+    """Persist the online-evidence-only presentation payload.
+
+    `run_guarded_online_research_answer` raises `AIOrchestrationError` for every
+    outcome where `result.report` would be `None` (invalid request, Core bridge
+    failure, or rejected evidence), so `_try_online_fallback` never calls this with
+    one. Unlike `_presentation_payload`, this path never runs AI's durable session
+    store, Ollama, synthesis, verification, or close gate, so those fields are `None`
+    here rather than fabricated placeholder values; `research_report` reuses the same
+    `ResearchReportBuildResult` shape the local path produces, so existing Layer 1/
+    Layer 2 rendering and Mobile Product Reality evidence counting need no changes to
+    handle it.
+    """
+
+    report = result.report
+    assert report is not None
+    return {
+        "session_id": session_id,
+        "question": question,
+        "research_state": report.research_state,
+        "research_state_reason": (
+            "Answered from on-demand online evidence retrieval; no local indexed "
+            "corpus, Ollama, or synthesis model was used on this deployment."
+        ),
+        "narrative_releaseable": False,
+        "narrative": None,
+        "research_report": ResearchReportBuildResult(report=report, error_code=None).to_dict(),
+        "synthesis_failed": False,
+        "execution_limit_reached": False,
+        "close_gate": None,
+        "verification_clean": None,
+        "progress": None,
+        "conversion_funnel": None,
+        "coverage_panel": None,
+        "evidence_source": "online_evidence_only",
+        "online_search_run_id": result.search_run_id,
     }
 
 

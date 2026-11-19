@@ -2,14 +2,47 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
+from knowledge_engine_ai.copilot.discovery_policy import DiscoveryAugmentationResult
+from knowledge_engine_ai.copilot.grounded_completion import (
+    AcquisitionRouteResult,
+    GroundedCompletionResult,
+)
+from knowledge_engine_ai.copilot.research_report import ResearchReport
+from knowledge_engine_ai.copilot.run_research_question import OnlineResearchQuestionResult
+from knowledge_engine_ai.ke_client import FederatedDiscoveryResult, FederatedProviderStatus
 
 from knowledge_engine_web import research_jobs
 from knowledge_engine_web.ai_guardrails import AIAdmissionError
-from knowledge_engine_web.ai_orchestration import AIOrchestrationError
+from knowledge_engine_web.ai_orchestration import AIOrchestrationError, WebResearchResult
 from knowledge_engine_web.config import Settings
 from knowledge_engine_web.observability import logger as request_logger
+
+
+def _online_report(**overrides: object) -> ResearchReport:
+    fields: dict[str, object] = {
+        "schema_version": 1,
+        "question": "A research question",
+        "bottom_line": "1 of 1 claims have supporting citations from 1 of 1 sources.",
+        "conclusion_rows": (),
+        "narrative_sections": (),
+        "missing_evidence": (),
+        "direct_evidence_summary": "Directness was not assessed.",
+        "indirect_evidence_summary": "Directness was not assessed.",
+        "provider_coverage_completeness": "complete",
+        "degraded_providers": (),
+        "provider_statuses": (),
+        "indexed_before_run_evidence_ids": (),
+        "acquired_during_run_evidence_ids": ("online-ev-1",),
+        "limitations": ("Deterministic projection of Core claims; no LLM synthesis.",),
+        "session_id": "search-run-1",
+        "research_state": "partial_answer",
+    }
+    fields.update(overrides)
+    return ResearchReport(**fields)  # type: ignore[arg-type]
 
 
 def test_job_lifecycle_is_durable_across_connections(tmp_path: Path) -> None:
@@ -401,3 +434,439 @@ def test_execute_research_job_never_persists_a_raw_unexpected_exception(
     )
     assert sensitive_detail not in (job.visitor_error or "")
     assert not research_jobs.is_research_job_active("session-unexpected-crash")
+
+
+def test_execute_research_job_falls_back_to_online_evidence_when_local_path_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The owner-approved 2026-10-25 architecture requires `/ask` to still answer when
+    no local corpus/Ollama is configured, provided online evidence is enabled -- see
+    `docs/research_report_v1.md`. A deployment whose local path already works must
+    never reach this fallback (the other failure-drill tests above cover that)."""
+
+    database_path = tmp_path / "research_sessions.sqlite3"
+    settings = Settings(
+        _env_file=None, session_db_path=str(database_path), online_evidence_enabled=True
+    )
+    research_jobs.create_research_job(
+        str(database_path),
+        session_id="session-online-fallback",
+        research_question_id="question-online-fallback",
+        question="A research question",
+    )
+
+    def _local_unavailable(*_args: object, **_kwargs: object) -> None:
+        raise AIOrchestrationError("Research Copilot is unavailable on this deployment.")
+
+    online_calls: list[dict[str, object]] = []
+
+    def _online_answer(
+        settings: object, question: str, **kwargs: object
+    ) -> OnlineResearchQuestionResult:
+        online_calls.append({"question": question, **kwargs})
+        return OnlineResearchQuestionResult(
+            question=question,
+            report=_online_report(question=question),
+            search_run_id="search-run-1",
+            error_code=None,
+        )
+
+    monkeypatch.setattr(research_jobs, "run_guarded_ai_orchestration", _local_unavailable)
+    monkeypatch.setattr(
+        research_jobs,
+        "evaluate_online_evidence_capability",
+        lambda _settings: SimpleNamespace(available=True),
+    )
+    monkeypatch.setattr(research_jobs, "run_guarded_online_research_answer", _online_answer)
+
+    research_jobs._execute_research_job(
+        settings, "A research question", "client-key", "session-online-fallback", None
+    )
+
+    assert online_calls[0]["question"] == "A research question"
+    assert online_calls[0]["client_key"] == "client-key"
+
+    job = research_jobs.read_research_job(str(database_path), "session-online-fallback")
+    assert job is not None
+    assert job.status == "completed"
+    assert job.terminal
+    assert job.visitor_error is None
+    assert job.result is not None
+    assert job.result["evidence_source"] == "online_evidence_only"
+    assert job.result["session_id"] == "session-online-fallback"
+    assert job.result["research_state"] == "partial_answer"
+    assert job.result["narrative_releaseable"] is False
+    assert job.result["progress"] is None
+    assert job.result["conversion_funnel"] is None
+    assert job.result["close_gate"] is None
+    assert job.result["research_report"]["available"] is True
+    assert job.result["research_report"]["report"]["acquired_during_run_evidence_ids"] == [
+        "online-ev-1"
+    ]
+
+
+def test_execute_research_job_online_fallback_is_skipped_when_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Matches the existing failure-drill tests above: when online evidence is not
+    enabled, a local-path failure must still surface the local path's own sanitized
+    error, never attempting (or depending on) the online fallback."""
+
+    database_path = tmp_path / "research_sessions.sqlite3"
+    settings = Settings(session_db_path=str(database_path))
+    research_jobs.create_research_job(
+        str(database_path),
+        session_id="session-no-fallback",
+        research_question_id="question-no-fallback",
+        question="A research question",
+    )
+
+    def _local_unavailable(*_args: object, **_kwargs: object) -> None:
+        raise AIOrchestrationError("Research Copilot is unavailable on this deployment.")
+
+    def _fail(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("the online fallback must not run when online evidence is disabled")
+
+    monkeypatch.setattr(research_jobs, "run_guarded_ai_orchestration", _local_unavailable)
+    monkeypatch.setattr(research_jobs, "run_guarded_online_research_answer", _fail)
+
+    research_jobs._execute_research_job(
+        settings, "A research question", "client-key", "session-no-fallback", None
+    )
+
+    job = research_jobs.read_research_job(str(database_path), "session-no-fallback")
+    assert job is not None
+    assert job.status == "failed"
+    assert job.result is None
+    assert job.visitor_error == "Research Copilot is unavailable on this deployment."
+
+
+def test_online_presentation_payload_never_fabricates_local_session_fields() -> None:
+    report = _online_report()
+    payload = research_jobs._online_presentation_payload(
+        "job-session-1",
+        "A research question",
+        OnlineResearchQuestionResult(
+            question="A research question",
+            report=report,
+            search_run_id="search-run-1",
+            error_code=None,
+        ),
+    )
+
+    assert payload["session_id"] == "job-session-1"
+    assert payload["evidence_source"] == "online_evidence_only"
+    assert payload["online_search_run_id"] == "search-run-1"
+    assert payload["narrative"] is None
+    assert payload["narrative_releaseable"] is False
+    assert payload["progress"] is None
+    assert payload["conversion_funnel"] is None
+    assert payload["close_gate"] is None
+    assert payload["verification_clean"] is None
+    assert payload["research_report"] == {
+        "available": True,
+        "error_code": None,
+        "report": report.to_dict(),
+    }
+
+
+def _federated_discovery(**overrides: object) -> FederatedDiscoveryResult:
+    fields: dict[str, object] = {
+        "search_run_id": "search-run-1",
+        "query_text": "a research question",
+        "completeness": "partial",
+        "provider_statuses": (),
+        "candidates": (),
+        "provider_disagreements": None,
+        "search_run_created_at": None,
+    }
+    fields.update(overrides)
+    return FederatedDiscoveryResult(**fields)  # type: ignore[arg-type]
+
+
+def _discovery(**overrides: object) -> DiscoveryAugmentationResult:
+    fields: dict[str, object] = {
+        "triggered": True,
+        "trigger_reason": "indexed_coverage_below_minimum",
+        "evidence_record_coverage": 0,
+        "federated_discovery": _federated_discovery(),
+        "federated_discovery_error": None,
+        "federated_discovery_attempted": True,
+    }
+    fields.update(overrides)
+    return DiscoveryAugmentationResult(**fields)  # type: ignore[arg-type]
+
+
+class TestCoveragePanelPayloadFailureDrills:
+    """WEB-GQR-5 failure drills: proves `_coverage_panel_payload` (consumed by the
+    async job's durable presentation payload, see `_presentation_payload` below)
+    actually surfaces each named failure signal rather than silently dropping it.
+    Before this module gained `_coverage_panel_payload`, none of these facts
+    reached a completed async job's persisted `result` at all -- only the
+    synchronous `/ask` path ever built a coverage panel (see
+    `research_coverage_presentation.py`)."""
+
+    def test_provider_rate_limit_is_visible_without_failing_the_whole_run(self) -> None:
+        result = cast(
+            WebResearchResult,
+            SimpleNamespace(
+                discovery=_discovery(
+                    federated_discovery=_federated_discovery(
+                        completeness="partial",
+                        provider_statuses=(
+                            FederatedProviderStatus(
+                                provider="semantic_scholar",
+                                outcome="rate_limited",
+                                attempted=True,
+                                result_count=0,
+                                reason="HTTP 429 from Semantic Scholar",
+                            ),
+                            FederatedProviderStatus(
+                                provider="openalex",
+                                outcome="success",
+                                attempted=True,
+                                result_count=4,
+                                reason=None,
+                            ),
+                        ),
+                    )
+                ),
+                grounded_completion=None,
+            ),
+        )
+
+        panel = research_jobs._coverage_panel_payload(result)
+
+        assert panel is not None
+        assert panel["federated_discovery_error"] is None
+        rows = {row["provider"]: row for row in panel["provider_rows"]}
+        assert rows["semantic_scholar"]["label"] == "rate limited"
+        assert rows["semantic_scholar"]["reason"] == "HTTP 429 from Semantic Scholar"
+        assert rows["openalex"]["label"] == "searched"
+
+    def test_one_provider_unavailable_reports_partial_completeness(self) -> None:
+        result = cast(
+            WebResearchResult,
+            SimpleNamespace(
+                discovery=_discovery(
+                    federated_discovery=_federated_discovery(
+                        completeness="partial",
+                        provider_statuses=(
+                            FederatedProviderStatus(
+                                provider="europe_pmc",
+                                outcome="unavailable",
+                                attempted=True,
+                                result_count=0,
+                                reason="connection timed out",
+                            ),
+                        ),
+                    )
+                ),
+                grounded_completion=None,
+            ),
+        )
+
+        panel = research_jobs._coverage_panel_payload(result)
+
+        assert panel is not None
+        assert panel["completeness"] == "partial"
+        row = panel["provider_rows"][0]
+        assert row["label"] == "unavailable"
+        assert row["reason"] == "connection timed out"
+
+    def test_all_providers_unavailable_surfaces_the_whole_discovery_call_failure(self) -> None:
+        result = cast(
+            WebResearchResult,
+            SimpleNamespace(
+                discovery=_discovery(
+                    federated_discovery=None,
+                    federated_discovery_error="Core federated-discover CLI returned no response",
+                ),
+                grounded_completion=None,
+            ),
+        )
+
+        panel = research_jobs._coverage_panel_payload(result)
+
+        assert panel is not None
+        assert panel["federated_discovery_error"] == (
+            "Core federated-discover CLI returned no response"
+        )
+        assert panel["provider_rows"] == ()
+
+    def test_source_inaccessible_or_license_unavailable_acquisition_route_is_not_hidden(
+        self,
+    ) -> None:
+        result = cast(
+            WebResearchResult,
+            SimpleNamespace(
+                discovery=_discovery(),
+                grounded_completion=GroundedCompletionResult(
+                    attempted=True,
+                    search_run_id="search-run-1",
+                    research_question_id="question-1",
+                    acquisition_routes=(
+                        AcquisitionRouteResult(
+                            route="unpaywall",
+                            candidate_ids=("cand-1",),
+                            attempted=True,
+                            error="license restricted: no open-access full text available",
+                        ),
+                        AcquisitionRouteResult(
+                            route="pmc_oa",
+                            candidate_ids=("cand-2",),
+                            attempted=False,
+                            skipped_reason="source inaccessible: PMC OA FTP unreachable",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        panel = research_jobs._coverage_panel_payload(result)
+
+        assert panel is not None
+        routes = {row["route"]: row for row in panel["acquisition_routes"]}
+        assert routes["unpaywall"]["error"] == (
+            "license restricted: no open-access full text available"
+        )
+        assert routes["pmc_oa"]["skipped_reason"] == ("source inaccessible: PMC OA FTP unreachable")
+
+    def test_extraction_producing_no_grounded_evidence_record_is_visible(self) -> None:
+        result = cast(
+            WebResearchResult,
+            SimpleNamespace(
+                discovery=_discovery(),
+                grounded_completion=GroundedCompletionResult(
+                    attempted=True,
+                    search_run_id="search-run-1",
+                    research_question_id="question-1",
+                    draft_item_count=3,
+                    classified_item_count=3,
+                    staged_record_ids=("staged-1",),
+                    grounded_record_ids=(),
+                    promoted_record_ids=(),
+                    grounding_failures=("staged-1",),
+                    extraction_error="local grounding model returned no verifiable claim",
+                ),
+            ),
+        )
+
+        panel = research_jobs._coverage_panel_payload(result)
+
+        assert panel is not None
+        assert panel["promoted_record_count"] == 0
+        assert panel["grounding_failure_count"] == 1
+        assert panel["extraction_error"] == ("local grounding model returned no verifiable claim")
+
+
+def _fake_completed_web_result(
+    *,
+    research_state_value: str = "researched_answer",
+    research_state_reason: str = "grounded_completion_reretrieval_used_for_releaseable_answer",
+    discovery: DiscoveryAugmentationResult | None = None,
+    grounded_completion: GroundedCompletionResult | None = None,
+    conversion_funnel: object | None = None,
+) -> WebResearchResult:
+    """Build the minimal duck-typed `WebResearchResult` shape `_presentation_payload`
+    reads from, without running the real AI orchestration pipeline. Every attribute
+    it touches is provided explicitly rather than guessed from `WebResearchResult`'s
+    real property delegation, so a future added read raises `AttributeError` here
+    instead of silently passing."""
+
+    research_report = SimpleNamespace(to_dict=lambda: {"research_state": research_state_value})
+    research = SimpleNamespace(
+        progress_report=None,
+        conversion_funnel_report=conversion_funnel,
+        verification=None,
+    )
+    return cast(
+        WebResearchResult,
+        SimpleNamespace(
+            session_id="session-1",
+            question="A research question",
+            research_state=SimpleNamespace(
+                state=SimpleNamespace(value=research_state_value),
+                reason=research_state_reason,
+            ),
+            narrative_releaseable=False,
+            narrative=None,
+            research_report=research_report,
+            synthesis_error=None,
+            workflow=SimpleNamespace(steps=()),
+            close_result=SimpleNamespace(status=SimpleNamespace(value="allowed")),
+            discovery=discovery,
+            grounded_completion=grounded_completion,
+            research=research,
+        ),
+    )
+
+
+def test_presentation_payload_persists_a_populated_coverage_panel() -> None:
+    """Closes the structural gap WEB-GQR-5 found: before `_coverage_panel_payload`
+    existed, `_presentation_payload` (the durable async job result every visitor on
+    the default-deployment async path actually receives) never carried discovery or
+    grounded-completion facts at all, so a provider failure, a blocked acquisition
+    route, or a failed extraction -- all already rendered on the synchronous `/ask`
+    path's coverage panel -- were invisible to an async visitor."""
+
+    result = _fake_completed_web_result(
+        discovery=_discovery(
+            federated_discovery_error="Core federated-discover CLI returned no response"
+        ),
+        grounded_completion=GroundedCompletionResult(
+            attempted=True,
+            search_run_id="search-run-1",
+            research_question_id="question-1",
+            extraction_error="local grounding model returned no verifiable claim",
+        ),
+    )
+
+    payload = research_jobs._presentation_payload(result)
+
+    assert payload["coverage_panel"] is not None
+    assert payload["coverage_panel"]["federated_discovery_error"] == (
+        "Core federated-discover CLI returned no response"
+    )
+    assert payload["coverage_panel"]["extraction_error"] == (
+        "local grounding model returned no verifiable claim"
+    )
+
+
+def test_presentation_payload_persists_core_retrieval_failure_reason_for_a_blocked_run() -> None:
+    """WEB-GQR-5 failure drill: a Core retrieval failure derives AI's `blocked`
+    research state with reason `primary_retrieval_failed` (see
+    `knowledge_engine_ai.copilot.research_state.derive_research_state`); the async
+    job payload must carry that reason through rather than only the bare state."""
+
+    result = _fake_completed_web_result(
+        research_state_value="blocked",
+        research_state_reason="primary_retrieval_failed",
+    )
+
+    payload = research_jobs._presentation_payload(result)
+
+    assert payload["research_state"] == "blocked"
+    assert payload["research_state_reason"] == "primary_retrieval_failed"
+
+
+def test_presentation_payload_persists_acquisition_budget_exhaustion() -> None:
+    """WEB-GQR-5 failure drill: overall budget exhausted. AI's BT-2 conversion
+    funnel already records how many discovered candidates were skipped because the
+    acquisition budget ran out (`AcquisitionPlanFunnel.skipped_budget_count`); the
+    async job payload must preserve that count rather than collapsing the funnel
+    into only its latency fields."""
+
+    funnel = SimpleNamespace(
+        to_dict=lambda: {
+            "acquisition_plan": {"skipped_budget_count": 7},
+            "time_to_first_grounded_information_ms": None,
+            "time_to_final_report_ms": None,
+        }
+    )
+
+    result = _fake_completed_web_result(conversion_funnel=funnel)
+
+    payload = research_jobs._presentation_payload(result)
+
+    assert payload["conversion_funnel"]["acquisition_plan"]["skipped_budget_count"] == 7

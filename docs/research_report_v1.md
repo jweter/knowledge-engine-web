@@ -163,3 +163,39 @@ detail arrives when the run finishes. Temporary retrieval data lives in a
 `TemporaryDirectory` inside the AI client call and is removed on success or
 failure. Still retrieval only: remaining debt is live per-stage progress (needs
 a Core/AI progress contract), AI synthesis, and Product Reality acceptance.
+
+## Default `/ask` falls back to online-evidence-only when the local path is unavailable (2026-11-15)
+
+`/ask`'s real Research job path (`research_jobs._execute_research_job`) now
+implements the owner-approved 2026-10-25 architecture's "must not require a
+pre-ingested local corpus" requirement for the one case it previously left
+unhandled: a deployment with no local corpus/Ollama configured. When the
+complete local-corpus/Ollama Research Copilot path raises
+`AIOrchestrationError` (including the static "unavailable on this deployment"
+case) and `online_evidence_enabled` is on, Web now calls AI's
+`run_online_research_question()` -- the deterministic online-evidence
+`ResearchReport` projection, not a synthesized answer -- and completes the job
+from that report instead of failing it. A deployment whose local path already
+works is unaffected; this is strictly a fallback, attempted only after the
+local path has already failed closed.
+
+The resulting job payload sets `evidence_source: "online_evidence_only"` and
+leaves `progress`, `conversion_funnel`, `close_gate`, and `verification_clean`
+as `None` rather than fabricating local-session values that path never
+produces; `narrative_releaseable` is `False` since no synthesis ran.
+`research_report` reuses the exact `ResearchReportBuildResult` shape the local
+path already produces, so Layer 1/Layer 2 rendering and Mobile Product
+Reality evidence counting handle it with no changes. The legacy progress/
+evidence-count/provider-coverage line in `ask.html` is replaced with an
+explicit "not applicable, see the Research Report above" disclosure for this
+path rather than showing a misleading zero. `knowledge-engine-ai`'s pinned git
+revision was bumped (`pyproject.toml`) to include `run_online_research_question`
+and its same-day invalid-request/bridge-failure classification fix (AI #220,
+#223); the prior pin predated that function.
+
+Remaining debt toward the Monster Energy golden case on this path: the online
+projection's `research_state` is capped at `partial_answer` or
+`insufficient_evidence` (see `knowledge_engine_ai.copilot.online_report`), so
+this fallback alone cannot reach `researched_answer`; the complete local path
+remains the only one that can. Full Monster Product Reality acceptance on
+either path is still undemonstrated.

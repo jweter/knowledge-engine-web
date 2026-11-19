@@ -42,7 +42,7 @@
         },
         {
           "id": "web-one-request-report-orchestration",
-          "state": "PLANNED",
+          "state": "VERIFIED_COMPLETE",
           "objective": "Add one-request report orchestration to the Web UI with observable progress, source links, citation provenance, uncertainty and useful error states.",
           "acceptance": [
             "a single submitted question drives discovery, retrieval, analysis and the final report",
@@ -65,11 +65,14 @@
           "depends_on": [
             "web-audit-local-corpus-dependencies"
           ],
-          "capability_level": 4
+          "capability_level": 4,
+          "verification": [
+            "https://github.com/jweter/knowledge-engine-web/pull/235 merged (capable-builder pull request)"
+          ]
         },
         {
           "id": "web-online-report-acceptance",
-          "state": "PLANNED",
+          "state": "VERIFIED_COMPLETE",
           "objective": "Verify a real online-source report and its cleanup through product-native acceptance tests.",
           "acceptance": [
             "an acceptance test runs a report from online sources and checks citations and uncertainty",
@@ -90,7 +93,179 @@
           "depends_on": [
             "web-one-request-report-orchestration"
           ],
+          "capability_level": 3,
+          "verification": [
+            "https://github.com/jweter/knowledge-engine-web/pull/236 merged (capable-builder pull request)"
+          ]
+        },
+        {
+          "id": "web-ask-online-fallback-wiring",
+          "state": "VERIFIED_COMPLETE",
+          "objective": "Make /ask's default async Research job path fall back to the online-evidence-only report when the local corpus/Ollama path raises AIOrchestrationError and online evidence is enabled, so the default Ask flow does not require a pre-ingested corpus or a configured Ollama model on a deployment that enables online evidence.",
+          "acceptance": [
+            "/ask's async job execution path attempts the online-evidence-only report when the local path is unavailable and online evidence is enabled, and persists it as the job's completed result",
+            "/ask's synthesis-availability check (whether to submit a job at all) also widens to online evidence, not only the local corpus/Ollama check",
+            "the local path's own sanitized error is preserved, never masked by a second online error, when online evidence is unavailable or also fails",
+            "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
+          ],
+          "allowed_paths": [
+            "knowledge_engine_web/**",
+            "tests/**",
+            "docs/**"
+          ],
+          "forbidden_paths": [
+            "engineering/**",
+            ".github/**",
+            "pyproject.toml",
+            "poetry.lock",
+            "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
+          ],
+          "depends_on": [
+            "web-one-request-report-orchestration"
+          ],
+          "capability_level": 4,
+          "verification": [
+            "commit e6c8c0b (PR #247) 'Fall back to online-evidence-only answers when the local corpus/Ollama path is unavailable', merged to main: knowledge_engine_web/research_jobs.py (_try_online_fallback, _online_presentation_payload, _execute_research_job) and knowledge_engine_web/main.py (synthesis_available widened via evaluate_online_evidence_capability)",
+            "tests/test_research_jobs.py::test_execute_research_job_falls_back_to_online_evidence_when_local_path_unavailable and ::test_execute_research_job_online_fallback_is_skipped_when_disabled",
+            "tests/test_async_research_routes.py::test_async_ask_submits_a_job_when_only_online_evidence_is_available and ::test_async_ask_shows_unavailable_notice_when_neither_path_is_configured",
+            "docs/project-status.yaml latest_change_2026_11_15 note and docs/research_report_v1.md's 2026-11-15 section record the design, limitations and pinned knowledge-engine-ai revision"
+          ]
+        },
+        {
+          "id": "web-ask-online-fallback-acceptance",
+          "state": "PLANNED",
+          "objective": "Add a product-native acceptance test for the complete default /ask flow when no local corpus/Ollama is configured: a submitted question starts the real async Research job, the real online-evidence-only fallback runs against a deterministic fake Core CLI subprocess (not a Python-level mock of the fallback itself), the visitor polls GET /ask/session/{id} to a terminal state, and the result shows citations and uncertainty with bounded temp-data cleanup. This slice adds tests only; it does not change production behavior.",
+          "acceptance": [
+            "a test drives the real /ask route (local AI capability genuinely unavailable: no configured model) and the real GET /ask/session/{id} polling route through to a terminal job, with only the external `ke` executable replaced by a deterministic fake and online evidence enabled",
+            "the test asserts the completed session's citations (claim -> excerpt -> source link) and disclosed uncertainty/missing-evidence, and that evidence_source is online_evidence_only",
+            "the test asserts no bounded temp directory, cache, or ledger created by the run survives after the job reaches a terminal state",
+            "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
+          ],
+          "allowed_paths": [
+            "tests/**",
+            "docs/**"
+          ],
+          "forbidden_paths": [
+            "engineering/**",
+            ".github/**",
+            "pyproject.toml",
+            "poetry.lock",
+            "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
+          ],
+          "depends_on": [
+            "web-ask-online-fallback-wiring"
+          ],
           "capability_level": 3
+        },
+        {
+          "id": "web-evidence-source-label",
+          "state": "PLANNED",
+          "objective": "Return a short human-readable label for a Research job's evidence_source value, matching case-insensitively after stripping whitespace: \"local_corpus\" maps to \"Local indexed corpus\", \"online_evidence_only\" maps to \"Online evidence only (no local corpus)\", and every other value, including None, the empty string, and any unrecognized string, maps to \"Unknown evidence source\". Supports Ask/Mobile Review provenance disclosure for the completed async Research job payload (evidence_source in research_jobs.py) without needing JavaScript.",
+          "acceptance": [
+            "evidence_source_label returns the exact mapped label for \"local_corpus\" and \"online_evidence_only\", matched case-insensitively and after stripping surrounding whitespace",
+            "evidence_source_label returns \"Unknown evidence source\" for None, the empty string, and any other unrecognized value, never raising",
+            "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
+          ],
+          "allowed_paths": [
+            "knowledge_engine_web/evidence_source_labels.py",
+            "tests/test_evidence_source_labels.py"
+          ],
+          "forbidden_paths": [
+            "engineering/**",
+            ".github/**",
+            "pyproject.toml",
+            "poetry.lock",
+            "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
+          ],
+          "depends_on": [],
+          "capability_level": 1,
+          "runner_requirements": [
+            "code",
+            "local",
+            "offline"
+          ],
+          "acceptance_examples": [
+            {
+              "call": "evidence_source_label(\"local_corpus\")",
+              "expected": "Local indexed corpus",
+              "why": "the only local-corpus value already written by research_jobs.py's presentation payload"
+            },
+            {
+              "call": "evidence_source_label(\"online_evidence_only\")",
+              "expected": "Online evidence only (no local corpus)",
+              "why": "the only online-fallback value already written by research_jobs.py's online presentation payload"
+            },
+            {
+              "call": "evidence_source_label(None)",
+              "expected": "Unknown evidence source",
+              "why": "a session recorded before evidence_source existed must not crash the label lookup"
+            },
+            {
+              "call": "evidence_source_label(\"  ONLINE_EVIDENCE_ONLY  \")",
+              "expected": "Online evidence only (no local corpus)",
+              "why": "matching must be case-insensitive and tolerate incidental surrounding whitespace"
+            },
+            {
+              "call": "evidence_source_label(\"\")",
+              "expected": "Unknown evidence source",
+              "why": "an empty string is a distinct edge from None and must still fail closed to the unknown label"
+            }
+          ]
+        },
+        {
+          "id": "web-research-state-badge",
+          "state": "PLANNED",
+          "objective": "Return a (label, css_class) tuple for a Research Report's research_state, matched case-insensitively after trimming whitespace: researched_answer, partial_answer, insufficient_evidence, blocked and provider_degraded each map to their own fixed label and css_class; every other value, including None, empty string, and any unrecognized string, maps to (\"Unknown\", \"is-unknown\"). Supports a server-rendered certainty badge for Layer 1/Layer 2 rendering without JavaScript.",
+          "acceptance": [
+            "research_state_badge returns the exact (label, css_class) pair for researched_answer, partial_answer, insufficient_evidence, blocked and provider_degraded, matched case-insensitively and after stripping surrounding whitespace",
+            "research_state_badge returns (\"Unknown\", \"is-unknown\") for None, the empty string, and any other unrecognized value, never raising",
+            "Canonical preflight, required CI checks and review must pass at the exact head; no gate may be weakened."
+          ],
+          "allowed_paths": [
+            "knowledge_engine_web/research_state_badges.py",
+            "tests/test_research_state_badges.py"
+          ],
+          "forbidden_paths": [
+            "engineering/**",
+            ".github/**",
+            "pyproject.toml",
+            "poetry.lock",
+            "docs/OWNER_APPROVED_ROADMAP_2026-10-25.md"
+          ],
+          "depends_on": [],
+          "capability_level": 1,
+          "runner_requirements": [
+            "code",
+            "local",
+            "offline"
+          ],
+          "acceptance_examples": [
+            {
+              "call": "research_state_badge(\"partial_answer\")",
+              "expected": ["Partial answer", "is-partial"],
+              "why": "the online-evidence-only fallback's research_state is always partial_answer or insufficient_evidence"
+            },
+            {
+              "call": "research_state_badge(\"RESEARCHED_ANSWER\")",
+              "expected": ["Answered", "is-answered"],
+              "why": "AI's research_state values are matched case-insensitively like evidence_source_label"
+            },
+            {
+              "call": "research_state_badge(None)",
+              "expected": ["Unknown", "is-unknown"],
+              "why": "a job record read before research_state is persisted must not crash the badge lookup"
+            },
+            {
+              "call": "research_state_badge(\"totally_unknown_state\")",
+              "expected": ["Unknown", "is-unknown"],
+              "why": "a future AI research_state value must fail closed to Unknown rather than raise"
+            },
+            {
+              "call": "research_state_badge(\"  blocked  \")",
+              "expected": ["Blocked", "is-blocked"],
+              "why": "surrounding whitespace from a stored or serialized value must not change the match"
+            }
+          ]
         }
       ]
     }
