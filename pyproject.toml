@@ -28,7 +28,7 @@ sqlalchemy = "^2.0.31"
 # `docs/research_report_v1.md`): the prior pin predates AI's
 # `run_online_research_question` (added in #220, fixed in #223) that
 # fallback calls.
-knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "8805e303d7c5d5bb0681decbd01c61874ee72b3e" }
+knowledge-engine-ai = { git = "https://github.com/jweter/knowledge-engine-ai.git", rev = "db882eed32b79c2e53cfe875b084c36c3de12e3f" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^2.1.0"
