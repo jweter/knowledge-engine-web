@@ -11,8 +11,10 @@ from knowledge_engine_ai.copilot.grounded_completion import (
     AcquisitionRouteResult,
     GroundedCompletionResult,
 )
+from knowledge_engine_ai.copilot.progress_report import ResearchProgressStage
 from knowledge_engine_ai.copilot.research_report import ResearchReport
 from knowledge_engine_ai.copilot.run_research_question import OnlineResearchQuestionResult
+from knowledge_engine_ai.copilot.stage_updates import ResearchStageUpdate
 from knowledge_engine_ai.ke_client import FederatedDiscoveryResult, FederatedProviderStatus
 
 from knowledge_engine_web import research_jobs
@@ -870,3 +872,150 @@ def test_presentation_payload_persists_acquisition_budget_exhaustion() -> None:
     payload = research_jobs._presentation_payload(result)
 
     assert payload["conversion_funnel"]["acquisition_plan"]["skipped_budget_count"] == 7
+
+
+def _stage_update(stage: str, sequence: int, detail: str = "") -> ResearchStageUpdate:
+    return ResearchStageUpdate(
+        schema_version=1,
+        sequence=sequence,
+        session_id="s",
+        stage=ResearchProgressStage(stage),
+        elapsed_ms=sequence * 100,
+        detail=detail,
+    )
+
+
+def test_running_job_exposes_the_stage_ai_just_announced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database_path = tmp_path / "research_sessions.sqlite3"
+    settings = Settings(_env_file=None, session_db_path=str(database_path))
+    research_jobs.create_research_job(
+        str(database_path),
+        session_id="session-stage",
+        research_question_id="question-stage",
+        question="A research question",
+    )
+    seen_while_running: list[dict[str, object] | None] = []
+
+    def _announcing_run(*_args: object, on_stage: object = None, **_kwargs: object) -> None:
+        assert callable(on_stage)
+        on_stage(_stage_update("searching_indexed_evidence", 1))
+        on_stage(_stage_update("acquiring_sources", 2, "acquisition routes: 2"))
+        job = research_jobs.read_research_job(str(database_path), "session-stage")
+        assert job is not None
+        seen_while_running.append(job.current_stage)
+        raise AIAdmissionError("rejected", "Research mode is unavailable right now.")
+
+    monkeypatch.setattr(research_jobs, "run_guarded_ai_orchestration", _announcing_run)
+
+    research_jobs._execute_research_job(settings, "A research question", "k", "session-stage", None)
+
+    assert seen_while_running[0] is not None
+    assert seen_while_running[0]["stage"] == "acquiring_sources"
+    assert seen_while_running[0]["sequence"] == 2
+    assert seen_while_running[0]["detail"] == "acquisition routes: 2"
+    assert seen_while_running[0]["elapsed_ms"] == 200
+
+
+def test_a_late_stage_update_never_overwrites_a_terminal_job(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "research_sessions.sqlite3")
+    research_jobs.create_research_job(
+        database_path,
+        session_id="session-late",
+        research_question_id="question-late",
+        question="A research question",
+    )
+    research_jobs._record_stage(database_path, "session-late", _stage_update("reretrieving", 1))
+    research_jobs._mark_failed(database_path, "session-late", "stopped")
+    research_jobs._record_stage(database_path, "session-late", _stage_update("final_answer", 2))
+
+    job = research_jobs.read_research_job(database_path, "session-late")
+    assert job is not None and job.status == "failed"
+    assert job.current_stage is not None
+    assert job.current_stage["stage"] == "reretrieving"
+
+
+def test_stage_detail_is_length_capped(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "research_sessions.sqlite3")
+    research_jobs.create_research_job(
+        database_path,
+        session_id="session-cap",
+        research_question_id="question-cap",
+        question="A research question",
+    )
+    research_jobs._record_stage(
+        database_path, "session-cap", _stage_update("discovering_sources", 1, "x" * 5000)
+    )
+    job = research_jobs.read_research_job(database_path, "session-cap")
+    assert job is not None and job.current_stage is not None
+    assert len(str(job.current_stage["detail"])) == 200
+
+
+def test_stage_write_failure_is_swallowed(tmp_path: Path) -> None:
+    # An unwritable path must never raise into the research thread.
+    research_jobs._record_stage(
+        str(tmp_path / "missing-dir" / "db.sqlite3"),
+        "session-none",
+        _stage_update("searching_indexed_evidence", 1),
+    )
+
+
+def test_job_before_any_stage_reads_as_no_stage(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "research_sessions.sqlite3")
+    research_jobs.create_research_job(
+        database_path,
+        session_id="session-none",
+        research_question_id="question-none",
+        question="A research question",
+    )
+    job = research_jobs.read_research_job(database_path, "session-none")
+    assert job is not None and job.current_stage is None
+
+
+def test_malformed_stored_stage_reads_as_no_stage(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "research_sessions.sqlite3")
+    research_jobs.create_research_job(
+        database_path,
+        session_id="session-bad",
+        research_question_id="question-bad",
+        question="A research question",
+    )
+    connection = sqlite3.connect(database_path)
+    connection.execute("UPDATE web_research_jobs SET current_stage_json = '{not json'")
+    connection.commit()
+    connection.close()
+    job = research_jobs.read_research_job(database_path, "session-bad")
+    assert job is not None and job.current_stage is None
+
+
+def test_a_pre_existing_database_without_current_stage_is_migrated_on_write(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "research_sessions.sqlite3"
+    connection = sqlite3.connect(database_path)
+    connection.execute(
+        """
+        CREATE TABLE web_research_jobs (
+            session_id TEXT PRIMARY KEY, research_question_id TEXT NOT NULL,
+            question TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL, visitor_error TEXT, result_json TEXT, request_id TEXT
+        )
+        """
+    )
+    connection.execute(
+        "INSERT INTO web_research_jobs VALUES "
+        "('old', 'q', 'Q?', 'running', 't', 't', NULL, NULL, NULL)"
+    )
+    connection.commit()
+    connection.close()
+
+    before = research_jobs.read_research_job(str(database_path), "old")
+    assert before is not None and before.current_stage is None  # column absent: read defensively
+
+    research_jobs._record_stage(
+        str(database_path), "old", _stage_update("validating_extracting_evidence", 3)
+    )
+    after = research_jobs.read_research_job(str(database_path), "old")
+    assert after is not None and after.current_stage is not None
+    assert after.current_stage["stage"] == "validating_extracting_evidence"
