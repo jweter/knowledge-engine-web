@@ -122,7 +122,10 @@ from knowledge_engine_web.research_jobs import (
     submit_research_job,
 )
 from knowledge_engine_web.research_question import derive_research_question_id
-from knowledge_engine_web.research_session_status import read_session_status
+from knowledge_engine_web.research_session_status import (
+    describe_current_stage,
+    read_session_status,
+)
 from knowledge_engine_web.retrieval import SearchResult, answer_retrieval
 from knowledge_engine_web.snapshot_metadata import read_snapshot_metadata
 from knowledge_engine_web.whats_changed import build_whats_changed_summary
@@ -921,6 +924,7 @@ def ask_session_status(session_id: str) -> Response:
             "job_status": job.status,
             "status": view.status if view is not None else job.status,
             "last_completed_stage": view.last_completed_stage if view is not None else None,
+            "current_stage": describe_current_stage(job.current_stage),
             "latest_workflow_node": view.latest_workflow_node if view is not None else None,
             "event_count": view.event_count if view is not None else 0,
             "terminal": job.terminal,

@@ -53,6 +53,45 @@ _STAGE_LABELS: dict[str, str] = {
     "synthesis": "Preparing and verifying a source-grounded answer",
 }
 
+# Live "what is running now" labels, keyed by knowledge-engine-ai's
+# ResearchProgressStage values (announced in flight through `on_stage`). Unlike
+# `_STAGE_LABELS` above (the last *completed* step), these describe the step in progress.
+_CURRENT_STAGE_LABELS: dict[str, str] = {
+    "searching_indexed_evidence": "Searching indexed evidence",
+    "research_required": "Indexed evidence is thin; broader research is needed",
+    "discovering_sources": "Expanding the literature search across scholarly providers",
+    "acquiring_sources": "Acquiring eligible sources",
+    "validating_extracting_evidence": "Validating and extracting grounded evidence",
+    "reretrieving": "Re-checking the question against the enlarged evidence base",
+    "partial_answer": "Partial answer ready; research finished",
+    "final_answer": "Answer ready",
+    "insufficient_evidence": "Research finished; evidence is still insufficient",
+}
+
+
+def describe_current_stage(stage: dict[str, object] | None) -> dict[str, object] | None:
+    """Visitor-facing view of a stored in-flight stage, or ``None`` when unknown.
+
+    Unknown stage names render as ``None`` rather than a guessed label, so a newer AI
+    revision's stage never shows up mislabeled.
+    """
+
+    if not stage:
+        return None
+    name = stage.get("stage")
+    label = _CURRENT_STAGE_LABELS.get(name) if isinstance(name, str) else None
+    if label is None:
+        return None
+    return {
+        "stage": name,
+        "label": label,
+        "sequence": stage.get("sequence"),
+        "elapsed_ms": stage.get("elapsed_ms"),
+        "detail": stage.get("detail") or "",
+        "recorded_at": stage.get("recorded_at"),
+    }
+
+
 # Verbatim from knowledge-engine-ai's SessionStatus.is_terminal_status: a
 # status a session cannot resume from. Duplicated as plain strings rather
 # than importing the enum so this read-only view has no dependency on the
@@ -149,4 +188,4 @@ def read_session_status(session_db_path: str, session_id: str) -> SessionStatusV
     )
 
 
-__all__ = ["SessionStatusView", "read_session_status"]
+__all__ = ["SessionStatusView", "describe_current_stage", "read_session_status"]

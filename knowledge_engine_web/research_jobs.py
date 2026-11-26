@@ -28,6 +28,7 @@ from typing import Any
 
 from knowledge_engine_ai.copilot.research_report_integration import ResearchReportBuildResult
 from knowledge_engine_ai.copilot.run_research_question import OnlineResearchQuestionResult
+from knowledge_engine_ai.copilot.stage_updates import ResearchStageUpdate
 
 from knowledge_engine_web.ai_guardrails import AIAdmissionError
 from knowledge_engine_web.ai_orchestration import (
@@ -52,7 +53,8 @@ CREATE TABLE IF NOT EXISTS web_research_jobs (
     updated_at TEXT NOT NULL,
     visitor_error TEXT,
     result_json TEXT,
-    request_id TEXT
+    request_id TEXT,
+    current_stage_json TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_web_research_jobs_question
     ON web_research_jobs(research_question_id, created_at);
@@ -81,6 +83,9 @@ class ResearchJobView:
     visitor_error: str | None
     result: dict[str, Any] | None
     request_id: str | None = None
+    # Latest in-flight stage AI announced (`stage`, `sequence`, `elapsed_ms`, `detail`,
+    # `recorded_at`); ``None`` before the first announcement or on a pre-migration row.
+    current_stage: dict[str, Any] | None = None
 
     @property
     def terminal(self) -> bool:
@@ -180,6 +185,9 @@ def read_research_job(session_db_path: str, session_id: str) -> ResearchJobView 
     # the column, so read it defensively rather than assuming it is present.
     row_keys = row.keys()
     request_id = row["request_id"] if "request_id" in row_keys else None
+    current_stage = _parse_stage(
+        row["current_stage_json"] if "current_stage_json" in row_keys else None
+    )
     return ResearchJobView(
         session_id=str(row["session_id"]),
         research_question_id=str(row["research_question_id"]),
@@ -190,6 +198,7 @@ def read_research_job(session_db_path: str, session_id: str) -> ResearchJobView 
         visitor_error=str(row["visitor_error"]) if row["visitor_error"] is not None else None,
         result=result,
         request_id=str(request_id) if request_id is not None else None,
+        current_stage=current_stage,
     )
 
 
@@ -256,6 +265,7 @@ def _execute_research_job(
             question,
             client_key=client_key,
             session_id=session_id,
+            on_stage=lambda update: _record_stage(settings.session_db_path, session_id, update),
         )
         _mark_completed(settings.session_db_path, session_id, _presentation_payload(result))
         outcome = "completed"
@@ -406,6 +416,57 @@ def _online_presentation_payload(
     }
 
 
+_MAX_STAGE_DETAIL_CHARS = 200
+
+
+def _parse_stage(raw: object) -> dict[str, Any] | None:
+    """Defensively decode a stored stage; anything malformed reads as no stage."""
+
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _record_stage(session_db_path: str, session_id: str, update: ResearchStageUpdate) -> None:
+    """Persist the stage AI just entered so pollers see what is running *now*.
+
+    Observation only and best effort: it writes only while the job is still queued or
+    running (a late update can never overwrite a terminal job), stores the stage name,
+    sequence, elapsed time and a length-capped detail (counts/trigger text from AI, never
+    a path or secret), and swallows storage errors so a failed write cannot affect the
+    research itself.
+    """
+
+    payload = {
+        "stage": update.stage.value,
+        "sequence": update.sequence,
+        "elapsed_ms": update.elapsed_ms,
+        "detail": update.detail[:_MAX_STAGE_DETAIL_CHARS],
+        "recorded_at": _utc_now(),
+    }
+    try:
+        connection = _new_connection(session_db_path)
+        try:
+            _ensure_schema(connection)
+            connection.execute(
+                """
+                UPDATE web_research_jobs
+                SET current_stage_json = ?, updated_at = ?
+                WHERE session_id = ? AND status IN ('queued', 'running')
+                """,
+                (json.dumps(payload, sort_keys=True), payload["recorded_at"], session_id),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        return
+
+
 def _mark_running(session_db_path: str, session_id: str) -> None:
     _update_job(session_db_path, session_id, status="running")
 
@@ -469,6 +530,8 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
     columns = {row[1] for row in connection.execute("PRAGMA table_info(web_research_jobs)")}
     if "request_id" not in columns:
         connection.execute("ALTER TABLE web_research_jobs ADD COLUMN request_id TEXT")
+    if "current_stage_json" not in columns:
+        connection.execute("ALTER TABLE web_research_jobs ADD COLUMN current_stage_json TEXT")
 
 
 def _utc_now() -> str:

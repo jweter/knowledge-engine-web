@@ -492,3 +492,64 @@ def test_posting_an_invalid_review_value_is_rejected(
     )
 
     assert response.status_code == 400
+
+
+def test_async_status_reports_the_stage_running_right_now(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from knowledge_engine_ai.copilot.progress_report import ResearchProgressStage
+    from knowledge_engine_ai.copilot.stage_updates import ResearchStageUpdate
+
+    session_db = _enable_async_research(tmp_path, monkeypatch)
+    session_id = "session-live-stage"
+    research_jobs.create_research_job(
+        str(session_db),
+        session_id=session_id,
+        research_question_id="live-stage-question",
+        question="Does creatine improve maximal strength?",
+    )
+    research_jobs._mark_running(str(session_db), session_id)
+    research_jobs._record_stage(
+        str(session_db),
+        session_id,
+        ResearchStageUpdate(
+            schema_version=1,
+            sequence=3,
+            session_id=session_id,
+            stage=ResearchProgressStage.ACQUIRING_SOURCES,
+            elapsed_ms=4200,
+            detail="acquisition routes: 2",
+        ),
+    )
+
+    payload = TestClient(app).get(f"/ask/session/{session_id}").json()
+
+    assert payload["terminal"] is False
+    stage = payload["current_stage"]
+    assert stage["stage"] == "acquiring_sources"
+    assert stage["label"] == "Acquiring eligible sources"
+    assert stage["sequence"] == 3
+    assert stage["elapsed_ms"] == 4200
+    assert stage["detail"] == "acquisition routes: 2"
+
+
+def test_async_status_has_no_current_stage_before_any_announcement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session_db = _enable_async_research(tmp_path, monkeypatch)
+    research_jobs.create_research_job(
+        str(session_db),
+        session_id="session-no-stage",
+        research_question_id="no-stage-question",
+        question="Does creatine improve maximal strength?",
+    )
+    payload = TestClient(app).get("/ask/session/session-no-stage").json()
+    assert payload["current_stage"] is None
+
+
+def test_unknown_stage_name_is_never_mislabeled() -> None:
+    from knowledge_engine_web.research_session_status import describe_current_stage
+
+    assert describe_current_stage({"stage": "brand_new_future_stage"}) is None
+    assert describe_current_stage(None) is None
+    assert describe_current_stage({}) is None

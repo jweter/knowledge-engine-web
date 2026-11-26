@@ -45,6 +45,7 @@ from knowledge_engine_ai.copilot.run_research_question import (
     run_online_research_question,
     run_research_question,
 )
+from knowledge_engine_ai.copilot.stage_updates import ResearchStageCallback
 from knowledge_engine_ai.llm import OllamaLLM
 from knowledge_engine_ai.models import EvidenceReport
 from knowledge_engine_ai.orchestrator.close_gate import SessionCloseResult
@@ -262,6 +263,7 @@ def run_ai_orchestration(
     *,
     timeout_seconds: float | None = None,
     session_id: str | None = None,
+    on_stage: ResearchStageCallback | None = None,
 ) -> ResearchQuestionResult:
     """Run one complete durable Research Copilot session.
 
@@ -277,6 +279,9 @@ def run_ai_orchestration(
     starts (see `knowledge_engine_ai.copilot.run_research_question`'s own
     ``session_id`` parameter). Omitting it preserves existing behavior: a UUID
     is generated internally.
+
+    ``on_stage`` is forwarded to AI's observation-only in-flight stage callback (see
+    `knowledge_engine_ai.copilot.stage_updates`); it never changes the research.
     """
 
     capability = evaluate_ai_capability(settings)
@@ -307,6 +312,7 @@ def run_ai_orchestration(
             ke_executable=executable,
             timeout_seconds=timeout_seconds,
             session_id=session_id,
+            on_stage=on_stage,
         )
     except Exception as exc:
         # This integration crosses SQLite, subprocess, writable corpus,
@@ -361,6 +367,7 @@ def run_guarded_ai_orchestration(
     client_key: str,
     guard: AIRequestGuard | None = None,
     session_id: str | None = None,
+    on_stage: ResearchStageCallback | None = None,
 ) -> WebResearchResult:
     """Admit one bounded request and attach AI-owned research/report state.
 
@@ -376,11 +383,15 @@ def run_guarded_ai_orchestration(
         rate_limit_requests=settings.ai_rate_limit_requests,
         rate_limit_window_seconds=settings.ai_rate_limit_window_seconds,
     ):
+        # Only forward an observer when one was supplied, so a caller (or test double)
+        # that predates in-flight stages keeps working unchanged.
+        stage_kwargs = {"on_stage": on_stage} if on_stage is not None else {}
         research = run_ai_orchestration(
             settings,
             question,
             timeout_seconds=settings.ai_request_timeout_seconds,
             session_id=session_id,
+            **stage_kwargs,
         )
         return WebResearchResult(
             research=research,

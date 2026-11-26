@@ -854,6 +854,8 @@
         if (progressNode) {
           if (data.job_status === "queued") {
             progressNode.textContent = `Queued for bounded research${elapsed === null ? "" : ` — ${milliseconds(elapsed)} elapsed`}.`;
+          } else if (data.current_stage && data.current_stage.label) {
+            progressNode.textContent = `Now: ${data.current_stage.label}. Research continues${elapsed === null ? "" : ` — ${milliseconds(elapsed)} elapsed`}.`;
           } else if (data.last_completed_stage) {
             progressNode.textContent = `Last completed: ${data.last_completed_stage}. Research continues${elapsed === null ? "" : ` — ${milliseconds(elapsed)} elapsed`}.`;
           } else {
