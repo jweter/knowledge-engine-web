@@ -128,6 +128,10 @@ def test_online_evidence_route_against_real_fixture_server(
     assert broken["content_sha256"] is None
     assert "500" in broken["failure_reason"]
 
+    huge = sources["doi:10.1/huge"]
+    assert huge["status"] == "failed"
+    assert "exceeds 100000 bytes" in huge["failure_reason"]
+
     # A bare retrieval run never synthesizes claims; Web must not invent any.
     assert evidence["claims"] == []
 
