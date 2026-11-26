@@ -553,3 +553,76 @@ def test_unknown_stage_name_is_never_mislabeled() -> None:
     assert describe_current_stage({"stage": "brand_new_future_stage"}) is None
     assert describe_current_stage(None) is None
     assert describe_current_stage({}) is None
+
+
+def test_async_status_returns_the_labeled_stage_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from knowledge_engine_ai.copilot.progress_report import ResearchProgressStage
+    from knowledge_engine_ai.copilot.stage_updates import ResearchStageUpdate
+
+    session_db = _enable_async_research(tmp_path, monkeypatch)
+    session_id = "session-route-history"
+    research_jobs.create_research_job(
+        str(session_db),
+        session_id=session_id,
+        research_question_id="route-history-question",
+        question="Does creatine improve maximal strength?",
+    )
+    research_jobs._mark_running(str(session_db), session_id)
+    for sequence, stage in enumerate(
+        (
+            ResearchProgressStage.SEARCHING_INDEXED_EVIDENCE,
+            ResearchProgressStage.DISCOVERING_SOURCES,
+        ),
+        start=1,
+    ):
+        research_jobs._record_stage(
+            str(session_db),
+            session_id,
+            ResearchStageUpdate(
+                schema_version=1,
+                sequence=sequence,
+                session_id=session_id,
+                stage=stage,
+                elapsed_ms=sequence * 1000,
+            ),
+        )
+
+    payload = TestClient(app).get(f"/ask/session/{session_id}").json()
+
+    history = payload["current_stage"]["history"]
+    assert [entry["stage"] for entry in history] == [
+        "searching_indexed_evidence",
+        "discovering_sources",
+    ]
+    assert history[0]["label"] == "Searching indexed evidence"
+    assert history[1]["label"] == "Expanding the literature search across scholarly providers"
+    assert [entry["elapsed_ms"] for entry in history] == [1000, 2000]
+
+
+def test_describe_current_stage_history_drops_unknown_and_bad_entries() -> None:
+    from knowledge_engine_web.research_session_status import describe_current_stage
+
+    described = describe_current_stage(
+        {
+            "stage": "acquiring_sources",
+            "history": [
+                {"stage": "brand_new_future_stage", "sequence": 1},
+                "junk",
+                {"stage": "acquiring_sources", "sequence": 2, "elapsed_ms": 5},
+            ],
+        }
+    )
+
+    assert described is not None
+    history = described["history"]
+    assert isinstance(history, list)
+    assert [entry["sequence"] for entry in history] == [2]
+
+
+def test_describe_current_stage_without_history_returns_an_empty_list() -> None:
+    from knowledge_engine_web.research_session_status import describe_current_stage
+
+    described = describe_current_stage({"stage": "reretrieving"})
+    assert described is not None and described["history"] == []
