@@ -417,6 +417,7 @@ def _online_presentation_payload(
 
 
 _MAX_STAGE_DETAIL_CHARS = 200
+_MAX_STAGE_HISTORY = 12
 
 
 def _parse_stage(raw: object) -> dict[str, Any] | None:
@@ -431,6 +432,16 @@ def _parse_stage(raw: object) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def _clean_history(raw: object) -> list[dict[str, Any]]:
+    """Keep only well-formed stored history entries; anything else is dropped."""
+
+    if not isinstance(raw, list):
+        return []
+    return [
+        entry for entry in raw if isinstance(entry, dict) and isinstance(entry.get("stage"), str)
+    ]
+
+
 def _record_stage(session_db_path: str, session_id: str, update: ResearchStageUpdate) -> None:
     """Persist the stage AI just entered so pollers see what is running *now*.
 
@@ -438,10 +449,12 @@ def _record_stage(session_db_path: str, session_id: str, update: ResearchStageUp
     running (a late update can never overwrite a terminal job), stores the stage name,
     sequence, elapsed time and a length-capped detail (counts/trigger text from AI, never
     a path or secret), and swallows storage errors so a failed write cannot affect the
-    research itself.
+    research itself. It also keeps the last ``_MAX_STAGE_HISTORY`` stages entered
+    (``history``: stage, sequence, elapsed_ms) so a poller can show how the run progressed,
+    not only what is running now; a malformed stored value restarts the history.
     """
 
-    payload = {
+    payload: dict[str, Any] = {
         "stage": update.stage.value,
         "sequence": update.sequence,
         "elapsed_ms": update.elapsed_ms,
@@ -452,12 +465,28 @@ def _record_stage(session_db_path: str, session_id: str, update: ResearchStageUp
         connection = _new_connection(session_db_path)
         try:
             _ensure_schema(connection)
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT current_stage_json FROM web_research_jobs "
+                "WHERE session_id = ? AND status IN ('queued', 'running')",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                return
+            previous = _parse_stage(row[0])
+            history = _clean_history(previous.get("history") if previous else None)
+            history.append(
+                {
+                    "stage": payload["stage"],
+                    "sequence": payload["sequence"],
+                    "elapsed_ms": payload["elapsed_ms"],
+                }
+            )
+            payload["history"] = history[-_MAX_STAGE_HISTORY:]
             connection.execute(
-                """
-                UPDATE web_research_jobs
-                SET current_stage_json = ?, updated_at = ?
-                WHERE session_id = ? AND status IN ('queued', 'running')
-                """,
+                "UPDATE web_research_jobs SET current_stage_json = ?, updated_at = ? "
+                "WHERE session_id = ?",
                 (json.dumps(payload, sort_keys=True), payload["recorded_at"], session_id),
             )
             connection.commit()

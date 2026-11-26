@@ -89,7 +89,32 @@ def describe_current_stage(stage: dict[str, object] | None) -> dict[str, object]
         "elapsed_ms": stage.get("elapsed_ms"),
         "detail": stage.get("detail") or "",
         "recorded_at": stage.get("recorded_at"),
+        "history": _describe_history(stage.get("history")),
     }
+
+
+def _describe_history(raw: object) -> list[dict[str, object]]:
+    """Labeled history entries in stored order; unknown stage names and bad rows are dropped."""
+
+    if not isinstance(raw, list):
+        return []
+    described: list[dict[str, object]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("stage")
+        label = _CURRENT_STAGE_LABELS.get(name) if isinstance(name, str) else None
+        if label is None:
+            continue
+        described.append(
+            {
+                "stage": name,
+                "label": label,
+                "sequence": entry.get("sequence"),
+                "elapsed_ms": entry.get("elapsed_ms"),
+            }
+        )
+    return described
 
 
 # Verbatim from knowledge-engine-ai's SessionStatus.is_terminal_status: a

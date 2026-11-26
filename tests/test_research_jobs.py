@@ -1019,3 +1019,131 @@ def test_a_pre_existing_database_without_current_stage_is_migrated_on_write(
     after = research_jobs.read_research_job(str(database_path), "old")
     assert after is not None and after.current_stage is not None
     assert after.current_stage["stage"] == "validating_extracting_evidence"
+
+
+def test_stage_history_grows_in_order(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "research_sessions.sqlite3")
+    research_jobs.create_research_job(
+        database_path,
+        session_id="session-history",
+        research_question_id="question-history",
+        question="A research question",
+    )
+    for sequence, stage in enumerate(
+        ("searching_indexed_evidence", "discovering_sources", "acquiring_sources"), start=1
+    ):
+        research_jobs._record_stage(
+            database_path, "session-history", _stage_update(stage, sequence)
+        )
+
+    job = research_jobs.read_research_job(database_path, "session-history")
+    assert job is not None and job.current_stage is not None
+    assert [entry["stage"] for entry in job.current_stage["history"]] == [
+        "searching_indexed_evidence",
+        "discovering_sources",
+        "acquiring_sources",
+    ]
+    assert [entry["sequence"] for entry in job.current_stage["history"]] == [1, 2, 3]
+    assert job.current_stage["stage"] == "acquiring_sources"
+
+
+def test_stage_history_is_capped_at_the_last_twelve(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "research_sessions.sqlite3")
+    research_jobs.create_research_job(
+        database_path,
+        session_id="session-cap-history",
+        research_question_id="question-cap-history",
+        question="A research question",
+    )
+    for sequence in range(1, 21):
+        research_jobs._record_stage(
+            database_path,
+            "session-cap-history",
+            _stage_update("validating_extracting_evidence", sequence),
+        )
+
+    job = research_jobs.read_research_job(database_path, "session-cap-history")
+    assert job is not None and job.current_stage is not None
+    history = job.current_stage["history"]
+    assert len(history) == 12
+    assert [entry["sequence"] for entry in history] == list(range(9, 21))
+
+
+def test_malformed_stored_history_restarts_cleanly(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "research_sessions.sqlite3")
+    research_jobs.create_research_job(
+        database_path,
+        session_id="session-bad-history",
+        research_question_id="question-bad-history",
+        question="A research question",
+    )
+    connection = sqlite3.connect(database_path)
+    connection.execute(
+        "UPDATE web_research_jobs SET current_stage_json = ?",
+        (json.dumps({"stage": "reretrieving", "history": "not a list"}),),
+    )
+    connection.commit()
+    connection.close()
+
+    research_jobs._record_stage(
+        database_path, "session-bad-history", _stage_update("reretrieving", 7)
+    )
+    job = research_jobs.read_research_job(database_path, "session-bad-history")
+    assert job is not None and job.current_stage is not None
+    assert [entry["sequence"] for entry in job.current_stage["history"]] == [7]
+
+
+def test_history_drops_malformed_entries_but_keeps_valid_ones(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "research_sessions.sqlite3")
+    research_jobs.create_research_job(
+        database_path,
+        session_id="session-mixed-history",
+        research_question_id="question-mixed-history",
+        question="A research question",
+    )
+    connection = sqlite3.connect(database_path)
+    connection.execute(
+        "UPDATE web_research_jobs SET current_stage_json = ?",
+        (
+            json.dumps(
+                {
+                    "stage": "discovering_sources",
+                    "history": [
+                        "junk",
+                        {"no_stage": 1},
+                        {"stage": "discovering_sources", "sequence": 2, "elapsed_ms": 20},
+                    ],
+                }
+            ),
+        ),
+    )
+    connection.commit()
+    connection.close()
+
+    research_jobs._record_stage(
+        database_path, "session-mixed-history", _stage_update("acquiring_sources", 3)
+    )
+    job = research_jobs.read_research_job(database_path, "session-mixed-history")
+    assert job is not None and job.current_stage is not None
+    assert [entry["sequence"] for entry in job.current_stage["history"]] == [2, 3]
+
+
+def test_late_update_after_terminal_does_not_extend_history(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "research_sessions.sqlite3")
+    research_jobs.create_research_job(
+        database_path,
+        session_id="session-late-history",
+        research_question_id="question-late-history",
+        question="A research question",
+    )
+    research_jobs._record_stage(
+        database_path, "session-late-history", _stage_update("reretrieving", 1)
+    )
+    research_jobs._mark_failed(database_path, "session-late-history", "stopped")
+    research_jobs._record_stage(
+        database_path, "session-late-history", _stage_update("final_answer", 2)
+    )
+
+    job = research_jobs.read_research_job(database_path, "session-late-history")
+    assert job is not None and job.current_stage is not None
+    assert [entry["sequence"] for entry in job.current_stage["history"]] == [1]
